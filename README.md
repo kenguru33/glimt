@@ -1,4 +1,4 @@
-# 🛠️ After Install
+# ✨ G L I M T ✨
 
 **After Install** is an opinionated post-installation tool for **Debian Trixie**, designed to streamline and personalize your Linux setup—both in the terminal and on the GNOME desktop. It applies sensible defaults, installs essential tools, and delivers a clean, consistent environment that’s ready to use from the start.
 
