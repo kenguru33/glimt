@@ -21,7 +21,7 @@ To install After Install, simply run the following command in your terminal:
 
 ## ✨ Features
 
-### 💻 Shell & Theme
+### 💻 Shell environment & Theme
 
 - ZSH setup
 - Starship prompt
@@ -31,7 +31,11 @@ To install After Install, simply run the following command in your terminal:
 
 - Git and related essentials
 - Zellij
-- Additional common tools
+- Lazyvim
+- Kubernetes tools (kubens, kubectx, kubectl, k9s)
+- Volta nodejs version management
+- Blackbox as defaul terminal
+- ...
 
 ### 🧩 GNOME Extensions & Configuration
 
@@ -51,6 +55,9 @@ To install After Install, simply run the following command in your terminal:
 - Lens Kubernetes Desktop App
 - 1Password
 - Chrome 
+
+### 🖥️ Drivers
+- Auto Detect Nvidia Gfx Card and install newst driver from nvidia debian package source 
 
 ---
 
