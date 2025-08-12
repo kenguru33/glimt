@@ -61,4 +61,4 @@ To install After Install, simply run the following command in your terminal:
 
 ---
 
-After Install helps you go from a fresh Debian install to a fully personalized, ready-to-work system — fast, clean, and consistent.
+Glimt helps you go from a fresh Debian install to a fully personalized, ready-to-work system — fast, clean, and consistent.
