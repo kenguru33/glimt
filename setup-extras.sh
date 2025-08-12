@@ -10,22 +10,22 @@ FLAGS=()
 
 for arg in "$@"; do
   case "$arg" in
-    --verbose)
-      VERBOSE=true
-      FLAGS+=("$arg")
-      ;;
-    --quiet)
-      VERBOSE=false
-      FLAGS+=("$arg")
-      ;;
-    all|install)
-      ACTION="$arg"
-      ;;
-    *)
-      echo "❌ Unknown argument: $arg"
-      echo "Usage: $0 [--verbose|--quiet] [all|install]"
-      exit 1
-      ;;
+  --verbose)
+    VERBOSE=true
+    FLAGS+=("$arg")
+    ;;
+  --quiet)
+    VERBOSE=false
+    FLAGS+=("$arg")
+    ;;
+  all | install)
+    ACTION="$arg"
+    ;;
+  *)
+    echo "❌ Unknown argument: $arg"
+    echo "Usage: $0 [--verbose|--quiet] [all|install]"
+    exit 1
+    ;;
   esac
 done
 
@@ -37,26 +37,28 @@ mkdir -p "$(dirname "$STATE_FILE")"
 # === Define modules: [name]=binary
 declare -A MODULES=(
   [zellij]="zellij"
-  [1password-cli]="op"
+  [1password - cli]="op"
   [chrome]="google-chrome"
-  [jetbrains-toolbox]="jetbrains-toolbox"
+  [jetbrains - toolbox]="jetbrains-toolbox"
   [lens]="/opt/Lens/lens-desktop"
   [1password]="1password"
   [kitty]="kitty"
   [vscode]="code"
+  [discord]="discord"
   #[gnome-boxes-tune]="$MODULE_DIR/install-gnome-boxes.tune.sh"
 )
 
 # === Optional descriptions
 declare -A MODULE_DESCRIPTIONS=(
   [zellij]="Zellij terminal multiplexer (like tmux)"
-  [1password-cli]="1Password CLI tool (op)"
+  [1password - cli]="1Password CLI tool (op)"
   [chrome]="Google Chrome browser"
-  [jetbrains-toolbox]="JetBrains Toolbox App for IDE management"
+  [jetbrains - toolbox]="JetBrains Toolbox App for IDE management"
   [lens]="Lens Kubernetes IDE"
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
+  [discord]="Voice, video, and text chat platform"
   #[gnome-boxes-tune]="Gnome Boxes (performance tuned)"
 )
 
@@ -135,7 +137,7 @@ main() {
   if [[ -f "$STATE_FILE" ]]; then
     while read -r name; do
       [[ -n "$name" ]] && SELECTED_OLD["$name"]=1
-    done < "$STATE_FILE"
+    done <"$STATE_FILE"
   fi
 
   # Compare and run changed scripts only
@@ -151,16 +153,16 @@ main() {
   done
 
   # Save updated state
-  printf "%s\n" "${!SELECTED_NEW[@]}" > "$STATE_FILE"
+  printf "%s\n" "${!SELECTED_NEW[@]}" >"$STATE_FILE"
 }
 
 # === Entry point ===
 case "$ACTION" in
-  all|install)
-    main
-    ;;
-  *)
-    echo "Usage: $0 [--verbose|--quiet] [all|install]"
-    exit 1
-    ;;
+all | install)
+  main
+  ;;
+*)
+  echo "Usage: $0 [--verbose|--quiet] [all|install]"
+  exit 1
+  ;;
 esac

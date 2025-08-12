@@ -4,10 +4,10 @@ trap 'echo "❌ An error occurred. Exiting." >&2' ERR
 
 # === Config ===
 SCRIPT_NAME="glimt"
+REPO_DIR="$HOME/.glimt"
 EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
 SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
-REPO_DIR="~/glimt"
 VALID_ACTIONS=("update" "module-selection")
 
 # === Functions ===
@@ -29,7 +29,7 @@ acquire_lock() {
     exit 1
   fi
 
-  echo "$$" > "$LOCK_FILE"
+  echo "$$" >"$LOCK_FILE"
   trap 'release_lock' EXIT
 }
 
@@ -66,14 +66,14 @@ run_module_selection() {
 ACTION="${1:-}"
 
 case "$ACTION" in
-  update)
-    run_update
-    ;;
-  module-selection)
-    run_module_selection
-    ;;
-  *)
-    print_usage
-    exit 1
-    ;;
+update)
+  run_update
+  ;;
+module-selection)
+  run_module_selection
+  ;;
+*)
+  print_usage
+  exit 1
+  ;;
 esac
