@@ -55,7 +55,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
-  [discord]="Voice, video, and text chat platform"
+  [discord]="Communication platform"
 )
 
 # --- Helper: check if module script likely needs sudo
