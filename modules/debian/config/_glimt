@@ -1,5 +1,5 @@
 #compdef glimt
-# Minimal zsh completion for `glimt` with optional module for `update`
+# Minimal zsh completion for `glimt` (modules only under modules/debian)
 emulate -L zsh -o no_aliases
 
 : ${GLIMT_ROOT:="$HOME/.glimt"}
@@ -12,7 +12,7 @@ _glimt_modules() {
     print -l -- ${(ps:\n:)_glimt_cache[$key]}
     return
   fi
-  local root="$GLIMT_ROOT/modules"
+  local root="$GLIMT_ROOT/modules/debian"
   local -a files names
   if [[ -d "$root" ]]; then
     files=(${(f)"$(command find "$root" -type f -name 'install-*.sh' 2>/dev/null)"})
@@ -23,16 +23,13 @@ _glimt_modules() {
       [[ -n "$name" ]] && names+="$name"
     done
   fi
-  names=(${(uon)names})                 # unique + sorted
-  _glimt_cache[$key]="${(j:\n:)names}"  # cache
+  names=(${(uon)names})
+  _glimt_cache[$key]="${(j:\n:)names}"
   print -l -- $names
 }
 
-_glimt_subcommands() {
-  print -l -- module-selection update install clean
-}
+_glimt_subcommands() { print -l -- module-selection update install clean }
 
-# ---- main ----
 (( CURRENT == 1 )) && return 0
 
 # first arg: subcommand
@@ -41,16 +38,12 @@ if (( CURRENT == 2 )); then
   return 0
 fi
 
-# route by chosen subcommand
 case ${words[2]} in
   install|clean|update)
-    # glimt install <module>
-    # glimt clean   <module>
-    # glimt update [module]  ← optional module
+    # install <module>, clean <module>, update [module]
     (( CURRENT == 3 )) && compadd -- $(_glimt_modules)
     ;;
   module-selection)
-    # no further args
     ;;
   *)
     ;;

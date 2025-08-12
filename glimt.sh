@@ -8,7 +8,8 @@ REPO_DIR="${REPO_DIR:-$HOME/.glimt}"
 EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
 SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
-VALID_ACTIONS=("update" "module-selection")
+MODULES_DIR="$REPO_DIR/modules/debian"   # ← restrict to modules/debian
+VALID_ACTIONS=("update" "module-selection" "install" "clean")
 
 # === Helpers ===
 print_usage() {
@@ -16,10 +17,12 @@ print_usage() {
 Usage: $SCRIPT_NAME <action> [args...]
 
 Actions:
-  update             → git pull in ~/.glimt and re-run full setup.sh
-  module-selection   → run setup-extras.sh (optional modules)
+  update [module]     → git pull and run installers in modules/debian with 'all', or only <module> if provided
+  install <module>    → run modules/debian/**/install-<module>.sh with 'all'
+  clean <module>      → run modules/debian/**/install-<module>.sh with 'clean'
+  module-selection    → run setup-extras.sh (optional modules UI)
 
-Any extra [args...] after the action are forwarded to the underlying script.
+Note: <module> is the installer basename without "install-" and ".sh".
 EOF
 }
 
@@ -43,6 +46,20 @@ ensure_repo() {
   fi
 }
 
+find_module_script() {
+  local module="$1"
+  find "$MODULES_DIR" -type f -name "install-$module.sh" -print -quit 2>/dev/null || true
+}
+
+run_installer() {
+  local script="$1"
+  local mode="$2"   # all | clean
+  [[ -n "$script" && -f "$script" ]] || { echo "❌ Installer not found."; exit 1; }
+  [[ -x "$script" ]] || { echo "ℹ️  Making installer executable: $script"; chmod +x "$script"; }
+  echo "▶️  $(basename "$script") $mode"
+  ( cd "$REPO_DIR" && bash "$script" "$mode" )
+}
+
 # === Actions ===
 run_update() {
   acquire_lock
@@ -53,13 +70,47 @@ run_update() {
   git -C "$REPO_DIR" fetch --all --prune
   git -C "$REPO_DIR" pull --rebase --stat
 
-  echo "🚀 Running full setup..."
-  if [[ -x "$SETUP_SCRIPT" ]]; then
-    (cd "$REPO_DIR" && exec bash "$SETUP_SCRIPT" "$@")
+  local maybe_module="${1:-}"
+  if [[ -n "$maybe_module" ]]; then
+    local script
+    script="$(find_module_script "$maybe_module")"
+    [[ -n "$script" ]] || { echo "❌ Module not found: $maybe_module"; exit 1; }
+    run_installer "$script" "all"
   else
-    echo "❌ $SETUP_SCRIPT not found or not executable."
-    exit 1
+    echo "🚀 Running all installers in modules/debian with 'all'..."
+    mapfile -t installers < <(find "$MODULES_DIR" -type f -name 'install-*.sh' -print 2>/dev/null | sort)
+    if (( ${#installers[@]} == 0 )); then
+      echo "ℹ️  No installers found under: $MODULES_DIR"
+      return 0
+    fi
+    for script in "${installers[@]}"; do
+      run_installer "$script" "all"
+    done
   fi
+}
+
+run_install() {
+  acquire_lock
+  ensure_repo
+  export GLIMT_ROOT="$REPO_DIR"
+
+  local module="${1:-}"
+  [[ -n "$module" ]] || { echo "Usage: $SCRIPT_NAME install <module>"; exit 2; }
+  local script; script="$(find_module_script "$module")"
+  [[ -n "$script" ]] || { echo "❌ Module not found: $module"; exit 1; }
+  run_installer "$script" "all"
+}
+
+run_clean() {
+  acquire_lock
+  ensure_repo
+  export GLIMT_ROOT="$REPO_DIR"
+
+  local module="${1:-}"
+  [[ -n "$module" ]] || { echo "Usage: $SCRIPT_NAME clean <module>"; exit 2; }
+  local script; script="$(find_module_script "$module")"
+  [[ -n "$script" ]] || { echo "❌ Module not found: $module"; exit 1; }
+  run_installer "$script" "clean"
 }
 
 run_module_selection() {
@@ -69,7 +120,7 @@ run_module_selection() {
 
   echo "🎛️ Running module selection..."
   if [[ -x "$EXTRA_SCRIPT" ]]; then
-    (cd "$REPO_DIR" && exec bash "$EXTRA_SCRIPT" "$@")
+    ( cd "$REPO_DIR" && bash "$EXTRA_SCRIPT" all )
   else
     echo "❌ Missing or non-executable: $EXTRA_SCRIPT"
     exit 1
@@ -78,17 +129,12 @@ run_module_selection() {
 
 # === Entry Point ===
 ACTION="${1:-}"
-shift || true # forward any extra args to the called script
+shift || true
 
 case "$ACTION" in
-update)
-  run_update "$@"
-  ;;
-module-selection)
-  run_module_selection "$@"
-  ;;
-*)
-  print_usage
-  exit 1
-  ;;
+  update)            run_update "${1:-}" ;;
+  install)           run_install "${1:-}" ;;
+  clean)             run_clean "${1:-}" ;;
+  module-selection)  run_module_selection ;;
+  *)                 print_usage; exit 1 ;;
 esac
