@@ -32,7 +32,7 @@ MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
 
-# === Define modules: [name]=binary
+# === Define modules: [name]=binary (or absolute path)
 declare -A MODULES=(
   [zellij]="zellij"
   [1password - cli]="op"
@@ -43,6 +43,9 @@ declare -A MODULES=(
   [kitty]="kitty"
   [vscode]="code"
   [discord]="/usr/share/discord/Discord"
+  # .NET versions share the same 'dotnet' host binary
+  [dotnet8]="dotnet"
+  [dotnet9]="dotnet"
 )
 
 # === Optional descriptions
@@ -56,23 +59,41 @@ declare -A MODULE_DESCRIPTIONS=(
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
   [discord]="Communication platform"
+  [dotnet8]=".NET 8 SDK + runtime"
+  [dotnet9]=".NET 9 SDK + runtime"
 )
 
-# --- Helper: check if module script likely needs sudo
+# --- Helper: check if module script likely needs sudo (heuristic; unchanged)
 needs_sudo() {
   local script="$1"
   local mode="${2:-all}"
   [[ -x "$script" ]] || return 1
 
-  # Probe mode if script supports it
-  if "$script" --requires-sudo "$mode" >/dev/null 2>&1; then
-    return 0
-  fi
-
   # Heuristic search for privileged commands
   grep -Eq \
     '(^|[^[:alnum:]_])(apt(-get)?[[:space:]]+(install|remove|purge)|dpkg[[:space:]]+-i|flatpak[[:space:]]+(install|uninstall)|snap[[:space:]]+(install|remove)|systemctl[[:space:]]+(enable|disable|start|stop)|update-alternatives|(^|[[:space:]])cp[[:space:]]+.*\s/(usr|etc)/|(^|[[:space:]])install[[:space:]]+.*\s/(usr|etc)/)' \
     "$script"
+}
+
+# --- Helper: determine if a module is actually installed right now
+module_installed() {
+  local name="$1"
+  case "$name" in
+  dotnet8)
+    dotnet --list-sdks 2>/dev/null | grep -q '^8\.'
+    ;;
+  dotnet9)
+    dotnet --list-sdks 2>/dev/null | grep -q '^9\.'
+    ;;
+  *)
+    local bin="${MODULES[$name]}"
+    if [[ "$bin" == /* ]]; then
+      [[ -x "$bin" ]]
+    else
+      command -v "$bin" &>/dev/null
+    fi
+    ;;
+  esac
 }
 
 run_module_script() {
@@ -105,13 +126,15 @@ main() {
   declare -A label_to_name=()
   local menu_labels=()
 
+  # Build menu and preselect based on actual installed state
   for name in "${!MODULES[@]}"; do
     all_names+=("$name")
     local label="$name"
     [[ -n "${MODULE_DESCRIPTIONS[$name]}" ]] && label="$name – ${MODULE_DESCRIPTIONS[$name]}"
     menu_labels+=("$label")
     label_to_name["$label"]="$name"
-    command -v "${MODULES[$name]}" &>/dev/null && preselect+=("$label")
+
+    module_installed "$name" && preselect+=("$label")
   done
 
   local SELECTED_ARGS=()
@@ -125,28 +148,31 @@ main() {
   )
 
   declare -A SELECTED_NEW=()
-  declare -A SELECTED_OLD=()
-
   for label in "${selected_labels[@]}"; do
     name="${label_to_name[$label]}"
     SELECTED_NEW["$name"]=1
   done
 
+  # Load prior selections (still written for reference, but we base actions on installed state)
+  declare -A SELECTED_OLD=()
   [[ -f "$STATE_FILE" ]] && while read -r name; do [[ -n "$name" ]] && SELECTED_OLD["$name"]=1; done <"$STATE_FILE"
 
   local requires_sudo=false
   local will_run_any=false
 
-  # First pass: check what will run and if sudo is needed
+  # First pass: decide actions based on "installed now" vs "selected now"
   for name in "${all_names[@]}"; do
-    local was="${SELECTED_OLD[$name]:-}"
     local now="${SELECTED_NEW[$name]:-}"
     local script="$MODULE_DIR/install-$name.sh"
+    local is_installed=false
+    if module_installed "$name"; then is_installed=true; fi
 
-    if [[ "$now" == "1" && "$was" != "1" ]]; then
+    if [[ "$now" == "1" && "$is_installed" == "false" ]]; then
+      # Need to install
       will_run_any=true
       needs_sudo "$script" "all" && requires_sudo=true
-    elif [[ "$now" != "1" && "$was" == "1" ]]; then
+    elif [[ "$now" != "1" && "$is_installed" == "true" ]]; then
+      # Need to clean/uninstall
       will_run_any=true
       needs_sudo "$script" "clean" && requires_sudo=true
     fi
@@ -170,13 +196,15 @@ main() {
     fi
   fi
 
-  # Second pass: run the changes
+  # Second pass: execute actions
   for name in "${all_names[@]}"; do
-    local was="${SELECTED_OLD[$name]:-}"
     local now="${SELECTED_NEW[$name]:-}"
-    if [[ "$now" == "1" && "$was" != "1" ]]; then
+    local is_installed=false
+    if module_installed "$name"; then is_installed=true; fi
+
+    if [[ "$now" == "1" && "$is_installed" == "false" ]]; then
       run_module_script "$name" "all"
-    elif [[ "$now" != "1" && "$was" == "1" ]]; then
+    elif [[ "$now" != "1" && "$is_installed" == "true" ]]; then
       run_module_script "$name" "clean"
     fi
   done
