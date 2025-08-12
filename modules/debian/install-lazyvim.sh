@@ -23,7 +23,7 @@ fi
 install_dependencies() {
   echo "📦 Installing Neovim and related tools..."
   sudo apt update
-  sudo apt install -y neovim git curl unzip ripgrep fd-find fzf
+  sudo apt install -y neovim git curl unzip ripgrep fd-find fzf build-essential
   echo "✅ Dependencies installed."
 }
 
