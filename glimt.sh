@@ -1,51 +1,61 @@
 #!/bin/bash
-set -e
-trap 'echo "❌ An error occurred. Exiting." >&2' ERR
+set -euo pipefail
+trap 'echo "❌ An error occurred at: $BASH_COMMAND" >&2' ERR
 
 # === Config ===
 SCRIPT_NAME="glimt"
-REPO_DIR="$HOME/.glimt"
+REPO_DIR="${REPO_DIR:-$HOME/.glimt}"
 EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
 SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
 VALID_ACTIONS=("update" "module-selection")
 
-# === Functions ===
-
+# === Helpers ===
 print_usage() {
-  echo "Usage: $SCRIPT_NAME <action>"
-  echo
-  echo "Available actions:"
-  echo "  update            → Pull latest changes from Git and re-run full setup"
-  echo "  module-selection  → Run optional extras selector via setup-extra.sh"
-  echo
+  cat <<EOF
+Usage: $SCRIPT_NAME <action> [args...]
+
+Actions:
+  update             → git pull in ~/.glimt and re-run full setup.sh
+  module-selection   → run setup-extras.sh (optional modules)
+
+Any extra [args...] after the action are forwarded to the underlying script.
+EOF
 }
 
 acquire_lock() {
   if [[ -f "$LOCK_FILE" ]]; then
-    echo "🔒 Gimt is already running (lock file exists: $LOCK_FILE)"
-    echo "If this is an error, delete the lock file manually and retry:"
+    echo "🔒 Glimt is already running (lock file exists: $LOCK_FILE)"
+    echo "If this is an error, delete the lock file and retry:"
     echo "  rm -f $LOCK_FILE"
     exit 1
   fi
-
   echo "$$" >"$LOCK_FILE"
-  trap 'release_lock' EXIT
+  trap 'rm -f "$LOCK_FILE"' EXIT
 }
 
-release_lock() {
-  [[ -f "$LOCK_FILE" ]] && rm -f "$LOCK_FILE"
+ensure_repo() {
+  if [[ ! -d "$REPO_DIR" ]]; then
+    echo "❌ Repo directory not found: $REPO_DIR"
+    echo "   Clone your repo there, e.g.:"
+    echo "   git clone <url> \"$REPO_DIR\""
+    exit 1
+  fi
 }
 
+# === Actions ===
 run_update() {
   acquire_lock
+  ensure_repo
+  export GLIMT_ROOT="$REPO_DIR"
 
-  echo "🔄 Updating repository..."
+  echo "🔄 Updating repository in $REPO_DIR..."
+  git -C "$REPO_DIR" fetch --all --prune
   git -C "$REPO_DIR" pull --rebase --stat
 
   echo "🚀 Running full setup..."
   if [[ -x "$SETUP_SCRIPT" ]]; then
-    "$SETUP_SCRIPT"
+    (cd "$REPO_DIR" && exec bash "$SETUP_SCRIPT" "$@")
   else
     echo "❌ $SETUP_SCRIPT not found or not executable."
     exit 1
@@ -53,9 +63,13 @@ run_update() {
 }
 
 run_module_selection() {
+  acquire_lock
+  ensure_repo
+  export GLIMT_ROOT="$REPO_DIR"
+
+  echo "🎛️ Running module selection..."
   if [[ -x "$EXTRA_SCRIPT" ]]; then
-    echo "🎛️ Running module selection..."
-    "$EXTRA_SCRIPT"
+    (cd "$REPO_DIR" && exec bash "$EXTRA_SCRIPT" "$@")
   else
     echo "❌ Missing or non-executable: $EXTRA_SCRIPT"
     exit 1
@@ -64,13 +78,14 @@ run_module_selection() {
 
 # === Entry Point ===
 ACTION="${1:-}"
+shift || true # forward any extra args to the called script
 
 case "$ACTION" in
 update)
-  run_update
+  run_update "$@"
   ;;
 module-selection)
-  run_module_selection
+  run_module_selection "$@"
   ;;
 *)
   print_usage
