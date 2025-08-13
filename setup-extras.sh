@@ -46,6 +46,7 @@ declare -A MODULES=(
   # .NET versions share the same 'dotnet' host binary
   [dotnet8]="dotnet"
   [dotnet9]="dotnet"
+  [gitkraken]="gitkraken"
 )
 
 # === Optional descriptions
@@ -58,9 +59,11 @@ declare -A MODULE_DESCRIPTIONS=(
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
-  [discord]="Communication platform"
+  [discord]="Discord desktop client"
+  [1password - cli]="1Password CLI tool (op)"
   [dotnet8]=".NET 8 SDK + runtime"
   [dotnet9]=".NET 9 SDK + runtime"
+  [gitkraken]="GitKraken Git client"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
