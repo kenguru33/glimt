@@ -35,35 +35,35 @@ mkdir -p "$(dirname "$STATE_FILE")"
 # === Define modules: [name]=binary (or absolute path)
 declare -A MODULES=(
   [zellij]="zellij"
-  [1password - cli]="op"
+  [1password-cli]="op"
   [chrome]="google-chrome"
-  [jetbrains - toolbox]="jetbrains-toolbox"
+  [jetbrains-toolbox]="jetbrains-toolbox"
   [lens]="/opt/Lens/lens-desktop"
   [1password]="1password"
   [kitty]="kitty"
   [vscode]="code"
   [discord]="/usr/share/discord/Discord"
-  # .NET versions share the same 'dotnet' host binary
   [dotnet8]="dotnet"
   [dotnet9]="dotnet"
   [gitkraken]="gitkraken"
+  [docker-rootless]="dockerd-rootless.sh"
 )
 
 # === Optional descriptions
 declare -A MODULE_DESCRIPTIONS=(
   [zellij]="Zellij terminal multiplexer (like tmux)"
-  [1password - cli]="1Password CLI tool (op)"
+  [1password-cli]="1Password CLI tool (op)"
   [chrome]="Google Chrome browser"
-  [jetbrains - toolbox]="JetBrains Toolbox App for IDE management"
+  [jetbrains-toolbox]="JetBrains Toolbox App for IDE management"
   [lens]="Lens Kubernetes IDE"
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
   [discord]="Discord desktop client"
-  [1password - cli]="1Password CLI tool (op)"
   [dotnet8]=".NET 8 SDK + runtime"
   [dotnet9]=".NET 9 SDK + runtime"
   [gitkraken]="GitKraken Git client"
+  [docker-rootless]="Docker Rootless"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)

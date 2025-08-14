@@ -61,7 +61,7 @@ log_recent_unit() {
 deps() {
   echo "📦 Installing prerequisites…"
   sudo apt update
-  sudo apt install -y uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
+  sudo apt install -y rsync uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
   # For cloning/running the extension installer
   sudo apt install -y git || true
 }
@@ -282,9 +282,10 @@ clean() {
   echo "🧽 Removing cached extension repo…"
   rm -rf "$HOME/.cache/glimt-rootless-ext" 2>/dev/null || true
 
-  echo "🗑 Optional package removal (manual):"
-  echo "    sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras"
-  echo "    sudo apt autoremove -y"
+  echo "🗑 Package removal:"
+  sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras
+  sudo apt autoremove -y
+  
   reload_shell_hint
 }
 
