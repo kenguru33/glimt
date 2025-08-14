@@ -48,6 +48,7 @@ declare -A MODULES=(
   [gitkraken]="gitkraken"
   [docker-rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
+  [brave]="brave-browser"
 )
 
 # === Optional descriptions
@@ -66,6 +67,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [gitkraken]="GitKraken Git client"
   [docker-rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
+  [brave]="Brave browser"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)

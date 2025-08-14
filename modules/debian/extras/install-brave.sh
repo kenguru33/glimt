@@ -2,11 +2,11 @@
 set -euo pipefail
 trap 'echo "❌ Error on line $LINENO" >&2' ERR
 
-MODULE_NAME="chrome"
+MODULE_NAME="brave"
 ACTION="${1:-all}"
 
-KEYRING="/etc/apt/keyrings/google-chrome.gpg"
-LISTFILE="/etc/apt/sources.list.d/google-chrome.list"
+KEYRING="/etc/apt/keyrings/brave-browser.gpg"
+LISTFILE="/etc/apt/sources.list.d/brave-browser-release.list"
 
 require_sudo() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -23,32 +23,32 @@ is_debian() {
 deps() {
   echo "🔧 [$MODULE_NAME] Installing dependencies…"
   apt-get update -y
-  apt-get install -y ca-certificates curl gnupg
+  apt-get install -y apt-transport-https curl gnupg
   install -d -m 0755 /etc/apt/keyrings
 }
 
 install_repo() {
-  echo "➕ [$MODULE_NAME] Adding Google Chrome APT repo…"
+  echo "➕ [$MODULE_NAME] Adding Brave APT repo…"
   if [[ ! -f "$KEYRING" ]]; then
-    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub |
-      gpg --dearmor -o "$KEYRING"
+    curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
+      -o "$KEYRING"
     chmod 0644 "$KEYRING"
   fi
 
-  echo "deb [arch=amd64 signed-by=$KEYRING] https://dl.google.com/linux/chrome/deb/ stable main" \
+  echo "deb [arch=amd64 signed-by=$KEYRING] https://brave-browser-apt-release.s3.brave.com/ stable main" \
     >"$LISTFILE"
   chmod 0644 "$LISTFILE"
 }
 
 remove_repo() {
-  echo "➖ [$MODULE_NAME] Removing Google Chrome APT repo…"
+  echo "➖ [$MODULE_NAME] Removing Brave APT repo…"
   rm -f "$LISTFILE" "$KEYRING"
 }
 
 install_pkg() {
-  echo "📦 [$MODULE_NAME] Installing google-chrome-stable…"
+  echo "📦 [$MODULE_NAME] Installing brave-browser…"
   apt-get update -y
-  apt-get install -y google-chrome-stable
+  apt-get install -y brave-browser
 }
 
 config() {
@@ -56,8 +56,8 @@ config() {
 }
 
 clean() {
-  echo "🧹 [$MODULE_NAME] Purging Chrome and repo…"
-  apt-get purge -y google-chrome-stable || true
+  echo "🧹 [$MODULE_NAME] Purging Brave and repo…"
+  apt-get purge -y brave-browser || true
   remove_repo || true
   apt-get update -y || true
   apt-get autoremove -y || true
