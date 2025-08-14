@@ -49,7 +49,9 @@ declare -A MODULES=(
   [docker-rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
   [brave]="brave-browser"
-  [navicat]="$HOME/.local/bin/navicat"
+  [helm]="helm"
+  [spotify]="spotify"
+  [navicat]="navicat"
 )
 
 # === Optional descriptions
@@ -70,6 +72,8 @@ declare -A MODULE_DESCRIPTIONS=(
   [lazydocker]="LazyDocker terminal UI for Docker"
   [brave]="Brave browser"
   [navicat]="Navicat Premium"
+  [helm]="Helm package manager for Kubernetes"
+  [spotify]="Spotify desktop client"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
