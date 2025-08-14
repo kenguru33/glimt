@@ -2,7 +2,7 @@
 # modules/debian/docker-rootless.sh
 # Glimt module: Install Docker in ROOTLESS mode for the current user.
 # - Installs engine (dockerd), CLI, and rootless extras from Docker's repo
-# - Disables the system daemon/socket (we use a systemd *user* service)
+# - Disables/masks the system daemon/socket (rootful) so rootless can run
 # - Self-heals common failures (subuid/subgid, helpers, half-installs)
 # - Writes env with *numeric* UID and applies it to the current shell
 # - Zsh: ONLY copies modules/debian/config/docker-rootless.zsh → ~/.zsh/config/docker-rootless.zsh
@@ -16,25 +16,24 @@ trap 'echo "❌ docker-rootless: error on line $LINENO" >&2' ERR
 MODULE_NAME="docker-rootless"
 ACTION="${1:-all}"
 
-# === Config (override with env) ===
-DOCKER_CHANNEL_CODENAME_DEFAULT="trixie" # fallback if VERSION_CODENAME missing
+# === Config (override with env) ==========================================
+DOCKER_CHANNEL_CODENAME_DEFAULT="trixie"                          # fallback if VERSION_CODENAME missing
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
+
+# Zsh snippet copy (copy only; no edits to user rc files)
 ZSH_SRC="${ZSH_SRC:-$GLIMT_ROOT/modules/debian/config/docker-rootless.zsh}"
 ZSH_DIR="${ZSH_DIR:-$HOME/.zsh/config}"
 ZSH_TARGET="${ZSH_TARGET:-$ZSH_DIR/docker-rootless.zsh}"
 
-# GNOME extension repo + branch (uses its own manage.sh)
+# GNOME extension (use its own manage.sh)
 GNOME_EXT_REPO="${GNOME_EXT_REPO:-https://github.com/kenguru33/rootless-docker-gnome-extension.git}"
 GNOME_EXT_BRANCH="${GNOME_EXT_BRANCH:-main}"
 GNOME_EXT_CACHE="${GNOME_EXT_CACHE:-$HOME/.cache/glimt-rootless-ext/repo}"
 
-# === Debian-only guard ===
+# === Debian-only guard ====================================================
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
-  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || {
-    echo "❌ Debian only."
-    exit 1
-  }
+  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || { echo "❌ Debian only."; exit 1; }
 else
   echo "❌ Cannot detect OS."
   exit 1
@@ -49,7 +48,7 @@ LIST="/etc/apt/sources.list.d/docker.list"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 
-# --- Helpers -------------------------------------------------------------
+# --- Helpers --------------------------------------------------------------
 
 log_recent_unit() {
   local unit="$1" lines="${2:-80}"
@@ -61,7 +60,7 @@ log_recent_unit() {
 deps() {
   echo "📦 Installing prerequisites…"
   sudo apt update
-  sudo apt install -y rsync uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
+  sudo apt install -y uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
   # For cloning/running the extension installer
   sudo apt install -y git || true
 }
@@ -97,7 +96,7 @@ write_user_env() {
   local UID_NUM
   UID_NUM="$(id -u)"
   mkdir -p "$HOME/.config/environment.d"
-  cat >"$HOME/.config/environment.d/docker-rootless.conf" <<EOF
+  cat > "$HOME/.config/environment.d/docker-rootless.conf" <<EOF
 XDG_RUNTIME_DIR=/run/user/${UID_NUM}
 DOCKER_HOST=unix:///run/user/${UID_NUM}/docker.sock
 EOF
@@ -143,6 +142,31 @@ copy_zsh_config() {
   echo "✅ Copied Zsh snippet → $ZSH_TARGET"
 }
 
+reload_shell_hint() {
+  if [[ "${XDG_SESSION_TYPE:-}" == "x11" ]]; then
+    echo "🔄 GNOME on Xorg: Alt+F2 → r → Enter to reload."
+  else
+    echo "🔄 GNOME on Wayland: log out and back in to reload the shell."
+  fi
+}
+
+# --- Rootful Docker guard -------------------------------------------------
+
+ensure_rootful_docker_off() {
+  echo "🛑 Ensuring rootful Docker is stopped/disabled/masked…"
+  # Stop if running
+  sudo systemctl stop docker.service docker.socket 2>/dev/null || true
+  # Disable so it doesn't come back at boot
+  sudo systemctl disable docker.service docker.socket 2>/dev/null || true
+  # Mask to block socket activation
+  sudo systemctl mask docker.service docker.socket 2>/dev/null || true
+  # Remove legacy socket if present
+  sudo rm -f /var/run/docker.sock 2>/dev/null || true
+  echo "✅ Rootful Docker is disabled and socket removed (if present)."
+}
+
+# --- Start once then stop/disable (rootless) -----------------------------
+
 start_user_docker_service_once() {
   echo "▶️  Starting user docker.service (temporary check)…"
   systemctl --user daemon-reload || true
@@ -152,7 +176,7 @@ start_user_docker_service_once() {
     return 1
   fi
 
-  # Wait a bit for the socket, then verify
+  # Wait for the socket, then verify
   for _ in {1..10}; do
     if docker info >/dev/null 2>&1; then break; fi
     sleep 1
@@ -163,14 +187,6 @@ start_user_docker_service_once() {
   systemctl --user stop docker || true
   systemctl --user disable docker || true
   echo "ℹ️ Start it on demand with: systemctl --user start docker"
-}
-
-reload_shell_hint() {
-  if [[ "${XDG_SESSION_TYPE:-}" == "x11" ]]; then
-    echo "🔄 GNOME on Xorg: Alt+F2 → r → Enter to reload."
-  else
-    echo "🔄 GNOME on Wayland: log out and back in to reload the shell."
-  fi
 }
 
 # --- GNOME extension via its own manage.sh -------------------------------
@@ -188,13 +204,36 @@ fetch_ext_repo() {
   fi
 }
 
+enable_ext_with_gsettings() {
+  # $1 = extension UUID
+  local uuid="$1"
+  if [[ -z "$uuid" ]]; then
+    echo "⚠️ No UUID provided to enable_ext_with_gsettings"; return 1
+  fi
+
+  # Read current list
+  local cur new
+  cur="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo "[]")"
+
+  # If already present, nothing to do
+  if [[ "$cur" == *"'$uuid'"* ]]; then
+    echo "ℹ️ GNOME extension already enabled via gsettings: $uuid"
+    return 0
+  fi
+
+  # Append UUID to the list (works even when list is empty)
+  new="${cur%]*}, '$uuid']"
+  # Handle case when cur is [] (avoid leading comma)
+  [[ "$cur" == "[]" ]] && new="['$uuid']"
+
+  gsettings set org.gnome.shell enabled-extensions "$new"
+  echo "✅ Enabled GNOME extension via gsettings: $uuid"
+}
+
+
 install_gnome_extension() {
   echo "🧩 Installing GNOME extension (manage.sh) from: $GNOME_EXT_REPO ($GNOME_EXT_BRANCH)"
-  command -v git >/dev/null 2>&1 || {
-    echo "⚠️ git missing; installing…"
-    sudo apt install -y git
-  }
-
+  command -v git >/dev/null 2>&1 || { echo "⚠️ git missing; installing…"; sudo apt install -y git; }
   fetch_ext_repo "$GNOME_EXT_REPO" "$GNOME_EXT_BRANCH" "$GNOME_EXT_CACHE"
 
   if [[ ! -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
@@ -202,14 +241,28 @@ install_gnome_extension() {
     return 1
   fi
 
-  (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install)
+  ( cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install )
+
+  # ⬇️ NEW: read UUID from metadata.json and enable via gsettings
+  local uuid=""
+  if command -v jq >/dev/null 2>&1; then
+    uuid="$(jq -r '.uuid' "$GNOME_EXT_CACHE/metadata.json" 2>/dev/null || true)"
+  else
+    uuid="$(grep -oE '\"uuid\"\\s*:\\s*\"[^\"]+\"' "$GNOME_EXT_CACHE/metadata.json" 2>/dev/null | sed -E 's/.*\"uuid\"\\s*:\\s*\"([^\"]+)\".*/\1/')"
+  fi
+  if [[ -n "$uuid" ]]; then
+    enable_ext_with_gsettings "$uuid"
+  else
+    echo "⚠️ Could not parse UUID from metadata.json; skipping gsettings enable."
+  fi
+
   reload_shell_hint
 }
 
 uninstall_gnome_extension() {
   if [[ -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
     echo "🗑 Uninstalling GNOME extension via manage.sh…"
-    (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh uninstall || true)
+    ( cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh uninstall || true )
   else
     echo "ℹ️ Extension repo cache not found; skipping manage.sh uninstall."
   fi
@@ -225,8 +278,8 @@ install() {
   echo "🐳 Installing Docker engine + CLI + rootless extras (no system daemon)…"
   sudo apt install -y docker-ce docker-ce-cli docker-ce-rootless-extras
 
-  # Ensure the privileged system daemon/socket are NOT running
-  sudo systemctl disable --now docker.service docker.socket || true
+  # Make sure rootful is *really* off before rootless setup
+  ensure_rootful_docker_off
 
   ensure_subids
   write_user_env
@@ -256,6 +309,9 @@ config() {
   apply_env_now
   systemctl --user daemon-reload || true
 
+  # Make sure rootful is *really* off before reconfiguring rootless
+  ensure_rootful_docker_off
+
   # Copy Zsh snippet (only copy, no sourcing edits)
   copy_zsh_config
 
@@ -282,25 +338,17 @@ clean() {
   echo "🧽 Removing cached extension repo…"
   rm -rf "$HOME/.cache/glimt-rootless-ext" 2>/dev/null || true
 
-  echo "🗑 Package removal:"
-  sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras
-  sudo apt autoremove -y
-  
+  echo "🗑 Optional package removal (manual):"
+  echo "    sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras"
+  echo "    sudo apt autoremove -y"
   reload_shell_hint
 }
 
 case "$ACTION" in
-deps) deps ;;
-install) install ;;
-config) config ;;
-clean) clean ;;
-all)
-  deps
-  install
-  config
-  ;;
-*)
-  echo "Usage: $0 {all|deps|install|config|clean}"
-  exit 1
-  ;;
+  deps)    deps ;;
+  install) install ;;
+  config)  config ;;
+  clean)   clean ;;
+  all)     deps; install; config ;;
+  *) echo "Usage: $0 {all|deps|install|config|clean}"; exit 1 ;;
 esac
