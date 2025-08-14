@@ -47,6 +47,7 @@ declare -A MODULES=(
   [dotnet9]="dotnet"
   [gitkraken]="gitkraken"
   [docker-rootless]="dockerd-rootless.sh"
+  [lazydocker]="lazydocker"
 )
 
 # === Optional descriptions
@@ -64,6 +65,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [dotnet9]=".NET 9 SDK + runtime"
   [gitkraken]="GitKraken Git client"
   [docker-rootless]="Docker Rootless"
+  [lazydocker]="LazyDocker terminal UI for Docker"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
