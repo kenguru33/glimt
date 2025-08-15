@@ -67,6 +67,7 @@ config_gnome() {
   gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_DEST"
   gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_DEST"
   gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+  gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
   gsettings set org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'
 
   echo "✅ GNOME configuration applied."
@@ -79,6 +80,7 @@ clean_config() {
   gsettings reset org.gnome.desktop.background picture-uri
   gsettings reset org.gnome.desktop.background picture-uri-dark
   gsettings reset org.gnome.desktop.interface color-scheme
+  gsettings reset org.gnome.desktop.interface gtk-theme
   gsettings reset org.gnome.desktop.wm.preferences button-layout
 
   if [[ -f "$WALLPAPER_DEST" ]]; then
@@ -102,25 +104,25 @@ show_help() {
 
 # === Entry point ===
 case "$ACTION" in
-  all)
-    install_dependencies
-    install_config
-    config_gnome
-    ;;
-  deps)
-    install_dependencies
-    ;;
-  install)
-    install_config
-    ;;
-  config)
-    config_gnome
-    ;;
-  clean)
-    clean_config
-    ;;
-  *)
-    show_help
-    exit 1
-    ;;
+all)
+  install_dependencies
+  install_config
+  config_gnome
+  ;;
+deps)
+  install_dependencies
+  ;;
+install)
+  install_config
+  ;;
+config)
+  config_gnome
+  ;;
+clean)
+  clean_config
+  ;;
+*)
+  show_help
+  exit 1
+  ;;
 esac
