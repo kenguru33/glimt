@@ -7,7 +7,7 @@
 # - Writes env with *numeric* UID and applies it to the current shell
 # - Zsh: ONLY copies modules/debian/config/docker-rootless.zsh → ~/.zsh/config/docker-rootless.zsh
 # - Verifies rootless daemon by starting it once, then stops & disables it
-# - Installs GNOME extension by running the repo's own manage.sh
+# - Installs GNOME extension by running the repo's own manage.sh and enables it
 # - Pattern: all | deps | install | config | clean
 
 set -euo pipefail
@@ -83,13 +83,14 @@ ensure_repo() {
 }
 
 ensure_subids() {
+  local target_user="${SUDO_USER:-$USER}"
   local need=0
-  grep -q "^$USER:" /etc/subuid || need=1
-  grep -q "^$USER:" /etc/subgid || need=1
+  grep -q "^$target_user:" /etc/subuid || need=1
+  grep -q "^$target_user:" /etc/subgid || need=1
   if [[ $need -eq 1 ]]; then
-    echo "🆔 Adding subuid/subgid ranges for $USER…"
-    sudo usermod --add-subuids 100000-165536 "$USER"
-    sudo usermod --add-subgids 100000-165536 "$USER"
+    echo "🆔 Adding subuid/subgid ranges for $target_user…"
+    sudo usermod --add-subuids 100000-165536 "$target_user"
+    sudo usermod --add-subgids 100000-165536 "$target_user"
     echo "ℹ️ subuid/subgid updated. You may need to log out/in if start continues to fail."
   fi
 }
@@ -113,7 +114,7 @@ apply_env_now() {
 cleanup_half_installed() {
   echo "🧽 Cleaning any half-installed rootless setup…"
   /usr/bin/dockerd-rootless-setuptool.sh uninstall -f >/dev/null 2>&1 || true
-  /usr/bin/rootlesskit rm -rf "$HOME/.local/share/docker" >/dev/null 2>&1 || true
+  rm -rf "$HOME/.local/share/docker" >/dev/null 2>&1 || true
   rm -f "$HOME/.config/systemd/user/docker.service" >/dev/null 2>&1 || true
   systemctl --user daemon-reload || true
 }
@@ -207,31 +208,104 @@ fetch_ext_repo() {
   fi
 }
 
-enable_ext_with_gsettings() {
-  # $1 = extension UUID
-  local uuid="$1"
-  if [[ -z "$uuid" ]]; then
-    echo "⚠️ No UUID provided to enable_ext_with_gsettings"
-    return 1
+# --- NEW: robust enabling helpers ----------------------------------------
+
+ensure_user_extensions_allowed() {
+  # Enable user extensions if globally disabled
+  if command -v gsettings >/dev/null 2>&1; then
+    if gsettings get org.gnome.shell disable-user-extensions 2>/dev/null | grep -q true; then
+      gsettings set org.gnome.shell disable-user-extensions false || true
+    fi
+  fi
+}
+
+parse_uuid_from_metadata() {
+  # $1 = path to metadata.json
+  local md="$1"
+  [[ -f "$md" ]] || return 1
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.uuid // empty' "$md" 2>/dev/null
+  else
+    grep -oE '"uuid"\s*:\s*"[^"]+"' "$md" | sed -E 's/.*"uuid"\s*:\s*"([^"]+)".*/\1/'
+  fi
+}
+
+detect_extension_uuid() {
+  # Heuristics to find the installed extension UUID after manage.sh install
+  local uuid=""
+
+  # 1) Any metadata.json in repo (root or first subdir)
+  local md
+  md="$(find "$GNOME_EXT_CACHE" -maxdepth 2 -type f -name metadata.json 2>/dev/null | head -n1 || true)"
+  if [[ -n "$md" ]]; then
+    uuid="$(parse_uuid_from_metadata "$md")"
   fi
 
-  # Read current list
+  # 2) If still empty, search user's extensions by keyword
+  if [[ -z "$uuid" ]]; then
+    md="$(grep -rilE 'uuid|rootless|docker' "$HOME/.local/share/gnome-shell/extensions"/*/metadata.json 2>/dev/null | head -n1 || true)"
+    if [[ -n "$md" ]]; then
+      uuid="$(parse_uuid_from_metadata "$md")"
+    fi
+  fi
+
+  # 3) As a last resort, try gnome-extensions list and pick a sensible match
+  if [[ -z "$uuid" ]] && command -v gnome-extensions >/dev/null 2>&1; then
+    uuid="$(gnome-extensions list 2>/dev/null | grep -E 'rootless|docker' | head -n1 || true)"
+  fi
+
+  [[ -n "$uuid" ]] && echo "$uuid"
+}
+
+enable_ext_with_gsettings() {
+  local uuid="$1"
+  [[ -n "$uuid" ]] || {
+    echo "⚠️ enable_ext_with_gsettings: missing UUID"
+    return 1
+  }
+  command -v gsettings >/dev/null 2>&1 || {
+    echo "⚠️ gsettings not available"
+    return 1
+  }
   local cur new
   cur="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo "[]")"
-
-  # If already present, nothing to do
-  if [[ "$cur" == *"'$uuid'"* ]]; then
-    echo "ℹ️ GNOME extension already enabled via gsettings: $uuid"
+  [[ "$cur" == *"'$uuid'"* ]] && {
+    echo "ℹ️ Already enabled via gsettings: $uuid"
     return 0
+  }
+  new="${cur%]*}, '$uuid']"
+  [[ "$cur" == "[]" ]] && new="['$uuid']"
+  gsettings set org.gnome.shell enabled-extensions "$new"
+  echo "✅ Enabled via gsettings: $uuid"
+}
+
+enable_extension() {
+  local uuid="$1"
+  [[ -n "$uuid" ]] || {
+    echo "⚠️ enable_extension: missing UUID"
+    return 1
+  }
+
+  ensure_user_extensions_allowed
+
+  if command -v gext >/dev/null 2>&1; then
+    if gext enable "$uuid"; then
+      echo "✅ Enabled via gext: $uuid"
+      return 0
+    fi
+  fi
+  if command -v gnome-extensions >/dev/null 2>&1; then
+    if gnome-extensions enable "$uuid"; then
+      echo "✅ Enabled via gnome-extensions: $uuid"
+      return 0
+    fi
   fi
 
-  # Append UUID to the list (works even when list is empty)
-  new="${cur%]*}, '$uuid']"
-  # Handle case when cur is [] (avoid leading comma)
-  [[ "$cur" == "[]" ]] && new="['$uuid']"
-
-  gsettings set org.gnome.shell enabled-extensions "$new"
-  echo "✅ Enabled GNOME extension via gsettings: $uuid"
+  # Last resort
+  enable_ext_with_gsettings "$uuid" || {
+    echo "⚠️ Could not enable extension automatically. UUID: $uuid"
+    return 1
+  }
 }
 
 install_gnome_extension() {
@@ -249,17 +323,13 @@ install_gnome_extension() {
 
   (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install)
 
-  # ⬇️ NEW: read UUID from metadata.json and enable via gsettings
-  local uuid=""
-  if command -v jq >/dev/null 2>&1; then
-    uuid="$(jq -r '.uuid' "$GNOME_EXT_CACHE/metadata.json" 2>/dev/null || true)"
-  else
-    uuid="$(grep -oE '\"uuid\"\\s*:\\s*\"[^\"]+\"' "$GNOME_EXT_CACHE/metadata.json" 2>/dev/null | sed -E 's/.*\"uuid\"\\s*:\\s*\"([^\"]+)\".*/\1/')"
-  fi
+  # Detect UUID robustly and enable
+  local uuid
+  uuid="$(detect_extension_uuid || true)"
   if [[ -n "$uuid" ]]; then
-    enable_ext_with_gsettings "$uuid"
+    enable_extension "$uuid" || true
   else
-    echo "⚠️ Could not parse UUID from metadata.json; skipping gsettings enable."
+    echo "⚠️ Could not determine extension UUID; skipping enable step."
   fi
 
   reload_shell_hint
@@ -306,7 +376,7 @@ install() {
   # Start once to verify, then stop & disable (user controls start)
   start_user_docker_service_once
 
-  # Install GNOME extension via its own manage.sh
+  # Install + enable GNOME extension via its own manage.sh
   install_gnome_extension
 }
 
