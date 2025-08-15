@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -e
-trap 'echo "❌ An error occurred. Exiting." >&2' ERR
+set -Eeo pipefail
+trap 'echo "❌ Failed: $BASH_COMMAND (line $LINENO, file ${BASH_SOURCE[0]})" >&2' ERR
 
 SCRIPT_NAME="bootstrap.sh"
 REPO_URL="https://github.com/kenguru33/glimt.git"
@@ -19,33 +19,18 @@ NO_COLOR=0
 # === Parse arguments ===
 for arg in "$@"; do
   case "$arg" in
-  -v | --verbose) VERBOSE=1 ;;
-  branch=*) BRANCH="${arg#branch=}" ;;
-  --light)
-    THEME_AUTO=0
-    THEME_OVERRIDE="light"
-    ;;
-  --dark)
-    THEME_AUTO=0
-    THEME_OVERRIDE="dark"
-    ;;
-  --no-color) NO_COLOR=1 ;;
-  *)
-    echo "❌ Unknown argument: $arg"
-    echo "Usage: $SCRIPT_NAME [--verbose] [branch=branchname] [--light|--dark] [--no-color]"
-    exit 1
-    ;;
+    -v|--verbose) VERBOSE=1 ;;
+    branch=*)     BRANCH="${arg#branch=}" ;;
+    --light)      THEME_AUTO=0; THEME_OVERRIDE="light" ;;
+    --dark)       THEME_AUTO=0; THEME_OVERRIDE="dark"  ;;
+    --no-color)   NO_COLOR=1 ;;
+    *)
+      echo "❌ Unknown argument: $arg"
+      echo "Usage: $SCRIPT_NAME [--verbose] [branch=branchname] [--light|--dark] [--no-color]"
+      exit 1
+      ;;
   esac
 done
-
-# === Verbose helper ===
-run() {
-  if [[ "$VERBOSE" -eq 1 ]]; then
-    "$@"
-  else
-    "$@" >/dev/null 2>&1
-  fi
-}
 
 [[ "$VERBOSE" -eq 1 ]] && {
   echo "🔍 Verbose mode enabled"
@@ -62,7 +47,7 @@ else
 fi
 
 # === Prevent root execution ===
-if [ "$(id -u)" -eq 0 ]; then
+if [[ "$(id -u)" -eq 0 ]]; then
   echo "❌ Do not run as root. Use a normal user."
   exit 1
 fi
@@ -73,54 +58,28 @@ _supports_color() {
 }
 
 _detect_bg_theme() {
-  # explicit override
   if [[ -n "$THEME_OVERRIDE" ]]; then
-    echo "$THEME_OVERRIDE"
-    return
+    echo "$THEME_OVERRIDE"; return
   fi
-  # heuristic via COLORFGBG (common in many terminals)
   if [[ -n "$COLORFGBG" ]]; then
     local bg="${COLORFGBG##*;}"
     if [[ "$bg" =~ ^[0-9]+$ ]]; then
-      ((bg >= 8)) && {
-        echo "light"
-        return
-      } || {
-        echo "dark"
-        return
-      }
+      (( bg >= 8 )) && { echo "light"; return; } || { echo "dark"; return; }
     fi
   fi
-  # fallback
   echo "dark"
 }
 
 _set_palette() {
   if ! _supports_color; then
-    CYAN=""
-    GOLD=""
-    WHITE=""
-    DIM=""
-    RESET=""
+    CYAN=""; GOLD=""; WHITE=""; DIM=""; RESET=""
     return
   fi
-
   local theme="$(_detect_bg_theme)"
-
   if [[ "$theme" == "light" ]]; then
-    # light background: darker inks
-    CYAN="\033[1;36m" # bold cyan
-    GOLD="\033[33m"   # normal yellow/gold
-    WHITE="\033[30m"  # black (for readable body text)
-    DIM="\033[2m"
-    RESET="\033[0m"
+    CYAN="\033[1;36m"; GOLD="\033[33m";    WHITE="\033[30m";  DIM="\033[2m"; RESET="\033[0m"
   else
-    # dark background: bright inks
-    CYAN="\033[1;96m"  # bright cyan
-    GOLD="\033[1;93m"  # bright yellow/gold
-    WHITE="\033[1;97m" # bright white
-    DIM="\033[2m"
-    RESET="\033[0m"
+    CYAN="\033[1;96m"; GOLD="\033[1;93m";  WHITE="\033[1;97m"; DIM="\033[2m"; RESET="\033[0m"
   fi
 }
 
@@ -128,7 +87,6 @@ print_banner() {
   clear || true
   _set_palette
   local theme="$(_detect_bg_theme)"
-
   echo -e "
       ${GOLD}🌟   ✨${RESET}
    ${GOLD}✨${RESET}   ${CYAN}G L I M T${RESET}     ${GOLD}🌟${RESET}
@@ -142,6 +100,33 @@ print_banner() {
     ${CYAN}Branch:${RESET} ${WHITE}$BRANCH${RESET}
     ${CYAN}Theme:${RESET}  ${WHITE}${theme}${RESET}${DIM} (override with --light/--dark)${RESET}
 "
+}
+
+# === Quiet runner: silent on success; on failure, show the real stderr ===
+run() {
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    "$@"
+  else
+    if ! "$@" 1>/dev/null; then
+      echo "❌ Command failed: $*" >&2
+      # Re-run without stdout suppression so you see the error/stderr
+      "$@"
+      exit 1
+    fi
+  fi
+}
+
+# (Optional) apt helper with same behavior
+apt_quiet() {
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    sudo apt "$@"
+  else
+    if ! sudo apt "$@" 1>/dev/null; then
+      echo "❌ apt $* failed" >&2
+      sudo apt "$@"
+      exit 1
+    fi
+  fi
 }
 
 # === Require sudo (install philosophy) ===
@@ -159,17 +144,14 @@ require_sudo() {
   # Use /dev/tty to avoid accidental non-interactive cancellation
   read -rp "    Proceed with setup? [y/N]: " confirm </dev/tty || true
   case "$confirm" in
-  [yY][eE][sS] | [yY])
-    echo ""
-    echo -e "    ${CYAN}🛡 Enter Your Sudo Password${RESET}"
-    echo -e "    ${WHITE}This is required to continue setup...${RESET}"
-    echo ""
-    ;;
-  *)
-    echo -e "    ${GOLD}⚠️ Setup cancelled by user.${RESET}"
-    exit 0
-    ;;
+    [yY][eE][sS]|[yY]) ;;
+    *) echo -e "    ${GOLD}⚠️  Setup cancelled by user.${RESET}"; exit 0 ;;
   esac
+
+  echo ""
+  echo -e "    ${CYAN}🛡 Enter Your Sudo Password${RESET}"
+  echo -e "    ${WHITE}This is required to continue setup...${RESET}"
+  echo ""
 
   if ! sudo -v >/dev/null 2>&1; then
     echo ""
@@ -191,8 +173,9 @@ install_repo() {
     if command -v apt-get >/dev/null 2>&1; then
       run sudo apt-get update
       run sudo apt-get install -y git
+      # or: apt_quiet update -y; apt_quiet install -y git
     else
-      echo "❌ 'git' is required but not found, and apt-get is unavailable."
+      echo "❌ 'git' is required but not found, and apt-get is unavailable." >&2
       exit 1
     fi
   fi
@@ -211,11 +194,16 @@ install_repo() {
 run_installer() {
   cd "$REPO_DIR"
   if [[ ! -f "setup.sh" ]]; then
-    echo "❌ setup.sh not found in $REPO_DIR"
+    echo "❌ setup.sh not found in $REPO_DIR" >&2
     ls -la "$REPO_DIR"
     exit 1
   fi
-  bash setup.sh
+  # Pass through verbose if requested
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    bash setup.sh --verbose
+  else
+    bash setup.sh
+  fi
 }
 
 # === MAIN ===
