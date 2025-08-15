@@ -6,7 +6,8 @@ MODULE_NAME="chrome"
 ACTION="${1:-all}"
 
 KEYRING="/etc/apt/keyrings/google-chrome.gpg"
-LISTFILE="/etc/apt/sources.list.d/google-chrome.list"
+SOURCES="/etc/apt/sources.list.d/google-chrome.sources"
+DEFAULTS="/etc/default/google-chrome"
 
 require_sudo() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -27,22 +28,44 @@ deps() {
   install -d -m 0755 /etc/apt/keyrings
 }
 
+write_defaults() {
+  # Hindrer at Google legger global nøkkel i trusted.gpg.d eller reaktiverer repo etter dist-upgrade
+  mkdir -p "$(dirname "$DEFAULTS")"
+  cat >"$DEFAULTS" <<'EOF'
+repo_add_once=false
+repo_reenable_on_distupgrade=false
+EOF
+  chmod 0644 "$DEFAULTS"
+}
+
 install_repo() {
   echo "➕ [$MODULE_NAME] Adding Google Chrome APT repo…"
-  if [[ ! -f "$KEYRING" ]]; then
-    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub |
-      gpg --dearmor -o "$KEYRING"
-    chmod 0644 "$KEYRING"
-  fi
 
-  echo "deb [arch=amd64 signed-by=$KEYRING] https://dl.google.com/linux/chrome/deb/ stable main" \
-    >"$LISTFILE"
-  chmod 0644 "$LISTFILE"
+  # (Re)last alltid nøkkelen for å sikre riktig subkey-sett
+  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub |
+    gpg --dearmor -o "$KEYRING".tmp
+  install -m 0644 "$KEYRING".tmp "$KEYRING"
+  rm -f "$KEYRING".tmp
+
+  # Bytt til .sources-format med Signed-By
+  cat >"$SOURCES" <<EOF
+Types: deb
+URIs: https://dl.google.com/linux/chrome/deb
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: $KEYRING
+EOF
+  chmod 0644 "$SOURCES"
+
+  write_defaults
 }
 
 remove_repo() {
   echo "➖ [$MODULE_NAME] Removing Google Chrome APT repo…"
-  rm -f "$LISTFILE" "$KEYRING"
+  rm -f "$SOURCES"
+  rm -f "$KEYRING"
+  rm -f "$DEFAULTS"
 }
 
 install_pkg() {
