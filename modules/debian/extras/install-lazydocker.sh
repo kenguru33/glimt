@@ -12,6 +12,8 @@ BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 WRAPPER="${WRAPPER:-$BIN_DIR/lazydocker-rootless}"
 DESKTOP_FILE="${DESKTOP_FILE:-$HOME/.local/share/applications/lazydocker.desktop}"
 
+export PATH=$HOME/.local/bin:$PATH
+
 # --- Debian-only guard -------------------------------------------------------
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release

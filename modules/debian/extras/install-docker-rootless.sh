@@ -17,7 +17,7 @@ MODULE_NAME="docker-rootless"
 ACTION="${1:-all}"
 
 # === Config (override with env) ==========================================
-DOCKER_CHANNEL_CODENAME_DEFAULT="trixie"                          # fallback if VERSION_CODENAME missing
+DOCKER_CHANNEL_CODENAME_DEFAULT="trixie" # fallback if VERSION_CODENAME missing
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 
 # Zsh snippet copy (copy only; no edits to user rc files)
@@ -33,7 +33,10 @@ GNOME_EXT_CACHE="${GNOME_EXT_CACHE:-$HOME/.cache/glimt-rootless-ext/repo}"
 # === Debian-only guard ====================================================
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
-  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || { echo "❌ Debian only."; exit 1; }
+  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || {
+    echo "❌ Debian only."
+    exit 1
+  }
 else
   echo "❌ Cannot detect OS."
   exit 1
@@ -60,7 +63,7 @@ log_recent_unit() {
 deps() {
   echo "📦 Installing prerequisites…"
   sudo apt update
-  sudo apt install -y uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
+  sudo apt install -y rsync uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
   # For cloning/running the extension installer
   sudo apt install -y git || true
 }
@@ -96,7 +99,7 @@ write_user_env() {
   local UID_NUM
   UID_NUM="$(id -u)"
   mkdir -p "$HOME/.config/environment.d"
-  cat > "$HOME/.config/environment.d/docker-rootless.conf" <<EOF
+  cat >"$HOME/.config/environment.d/docker-rootless.conf" <<EOF
 XDG_RUNTIME_DIR=/run/user/${UID_NUM}
 DOCKER_HOST=unix:///run/user/${UID_NUM}/docker.sock
 EOF
@@ -208,7 +211,8 @@ enable_ext_with_gsettings() {
   # $1 = extension UUID
   local uuid="$1"
   if [[ -z "$uuid" ]]; then
-    echo "⚠️ No UUID provided to enable_ext_with_gsettings"; return 1
+    echo "⚠️ No UUID provided to enable_ext_with_gsettings"
+    return 1
   fi
 
   # Read current list
@@ -230,10 +234,12 @@ enable_ext_with_gsettings() {
   echo "✅ Enabled GNOME extension via gsettings: $uuid"
 }
 
-
 install_gnome_extension() {
   echo "🧩 Installing GNOME extension (manage.sh) from: $GNOME_EXT_REPO ($GNOME_EXT_BRANCH)"
-  command -v git >/dev/null 2>&1 || { echo "⚠️ git missing; installing…"; sudo apt install -y git; }
+  command -v git >/dev/null 2>&1 || {
+    echo "⚠️ git missing; installing…"
+    sudo apt install -y git
+  }
   fetch_ext_repo "$GNOME_EXT_REPO" "$GNOME_EXT_BRANCH" "$GNOME_EXT_CACHE"
 
   if [[ ! -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
@@ -241,7 +247,7 @@ install_gnome_extension() {
     return 1
   fi
 
-  ( cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install )
+  (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install)
 
   # ⬇️ NEW: read UUID from metadata.json and enable via gsettings
   local uuid=""
@@ -262,7 +268,7 @@ install_gnome_extension() {
 uninstall_gnome_extension() {
   if [[ -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
     echo "🗑 Uninstalling GNOME extension via manage.sh…"
-    ( cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh uninstall || true )
+    (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh uninstall || true)
   else
     echo "ℹ️ Extension repo cache not found; skipping manage.sh uninstall."
   fi
@@ -345,10 +351,17 @@ clean() {
 }
 
 case "$ACTION" in
-  deps)    deps ;;
-  install) install ;;
-  config)  config ;;
-  clean)   clean ;;
-  all)     deps; install; config ;;
-  *) echo "Usage: $0 {all|deps|install|config|clean}"; exit 1 ;;
+deps) deps ;;
+install) install ;;
+config) config ;;
+clean) clean ;;
+all)
+  deps
+  install
+  config
+  ;;
+*)
+  echo "Usage: $0 {all|deps|install|config|clean}"
+  exit 1
+  ;;
 esac
