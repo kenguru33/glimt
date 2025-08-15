@@ -2,38 +2,34 @@
 set -eu
 
 ACTION="${1:-all}"
-
 REPO_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 
-SRC_GEN="$REPO_ROOT/modules/debian/config/50-wayland-apps"
-SRC_ENVD="$REPO_ROOT/modules/debian/config/10-electron.conf"
-
-DEST_GEN_DIR="$HOME/.config/systemd/user-environment-generators"
-DEST_GEN="$DEST_GEN_DIR/50-wayland-apps"
-
+SRC_ENVD="$REPO_ROOT/modules/debian/config/10-wayland.conf"
 DEST_ENVD_DIR="$HOME/.config/environment.d"
-DEST_ENVD="$DEST_ENVD_DIR/10-electron.conf"
+DEST_ENVD="$DEST_ENVD_DIR/10-wayland.conf"
 
-deps() {
-    :
-}
+deps() { :; }
 
 install() {
-    mkdir -p "$DEST_GEN_DIR" "$DEST_ENVD_DIR"
-    cp "$SRC_GEN" "$DEST_GEN"
-    chmod 755 "$DEST_GEN"
-    if [ -f "$SRC_ENVD" ]; then
-        cp "$SRC_ENVD" "$DEST_ENVD"
-        chmod 644 "$DEST_ENVD"
-    fi
+    mkdir -p "$DEST_ENVD_DIR"
+    cp "$SRC_ENVD" "$DEST_ENVD"
+    chmod 644 "$DEST_ENVD"
 }
 
 config() {
-    :
+    # Load into current shell and import into systemd --user session
+    if [ -f "$DEST_ENVD" ]; then
+        set -a
+        . "$DEST_ENVD"
+        set +a
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --user import-environment $(cut -d= -f1 "$DEST_ENVD") || true
+        fi
+    fi
 }
 
 clean() {
-    rm -f "$DEST_GEN" "$DEST_ENVD" 2>/dev/null || true
+    rm -f "$DEST_ENVD" 2>/dev/null || true
 }
 
 case "$ACTION" in
