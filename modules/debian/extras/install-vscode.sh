@@ -1,110 +1,111 @@
-#!/bin/bash
-set -e
-trap 'echo "ERROR ❌ An error occurred. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'echo "❌ Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="vscode"
 ACTION="${1:-all}"
 
-# === Detect OS ===
-if [[ -f /etc/os-release ]]; then
+KEYRING="/etc/apt/keyrings/microsoft-vscode.gpg"
+SOURCES="/etc/apt/sources.list.d/vscode.sources"
+
+require_sudo() {
+  if [[ "$(id -u)" -ne 0 ]]; then
+    exec sudo -E -- "$0" "$ACTION"
+  fi
+}
+
+is_debian() {
+  [[ -r /etc/os-release ]] || return 1
   . /etc/os-release
-else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
-  exit 1
-fi
+  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]]
+}
 
-# === Step 1: Dependencies ===
-install_dependencies() {
-  echo "🔧 Installing dependencies..."
+deps() {
+  echo "🔧 [$MODULE_NAME] Installing dependencies…"
+  apt-get update -y -qq
+  apt-get install -y ca-certificates curl gnupg
+  install -d -m 0755 /etc/apt/keyrings
+}
 
-  if command -v apt &>/dev/null; then
-    sudo apt update -qq
-    sudo apt install -y curl gnupg
-  else
-    echo "❌ Unsupported package manager. Only Debian-based systems are supported."
+install_repo() {
+  echo "➕ [$MODULE_NAME] Adding Microsoft VS Code APT repo…"
+
+  # Fjern gamle lister/nøkler for å unngå duplikater og gammelt oppsett
+  rm -f /etc/apt/sources.list.d/vscode.list \
+    /etc/apt/sources.list.d/code.list \
+    /usr/share/keyrings/microsoft.gpg
+
+  # (Re)last alltid nøkkelen, i tilfelle den er rotert
+  curl -fsSL https://packages.microsoft.com/keys/microsoft.asc |
+    gpg --dearmor -o "$KEYRING".tmp
+  install -m 0644 "$KEYRING".tmp "$KEYRING"
+  rm -f "$KEYRING".tmp
+
+  # Bruk .sources-format + Signed-By, og lås til aktuell arkitektur
+  cat >"$SOURCES" <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/code
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: $KEYRING
+EOF
+  chmod 0644 "$SOURCES"
+}
+
+remove_repo() {
+  echo "➖ [$MODULE_NAME] Removing VS Code APT repo…"
+  rm -f "$SOURCES" "$KEYRING"
+}
+
+install_pkg() {
+  echo "📦 [$MODULE_NAME] Installing code…"
+  apt-get update -y -qq
+  apt-get install -y code
+}
+
+config() {
+  echo "⚙️  [$MODULE_NAME] No extra VS Code config yet (using package defaults)."
+  # Legg evt. utvidelser/innstillinger her senere:
+  # su - "$SUDO_USER" -c "code --install-extension ms-python.python --force || true"
+}
+
+clean() {
+  echo "🧹 [$MODULE_NAME] Purging VS Code and repo…"
+  apt-get purge -y code || true
+  remove_repo || true
+  apt-get update -y -qq || true
+  apt-get autoremove -y || true
+}
+
+all() {
+  deps
+  install_repo
+  install_pkg
+  config
+  echo "✅ [$MODULE_NAME] Done."
+}
+
+main() {
+  is_debian || {
+    echo "❌ Debian-based systems only."
     exit 1
-  fi
-
-  echo "✅ Dependencies installed."
+  }
+  require_sudo
+  case "$ACTION" in
+  deps) deps ;;
+  install)
+    install_repo
+    install_pkg
+    ;;
+  config) config ;;
+  clean) clean ;;
+  all) all ;;
+  *)
+    echo "Usage: $0 [all|deps|install|config|clean]"
+    exit 2
+    ;;
+  esac
 }
 
-# === Step 2: Install VS Code ===
-install_vscode() {
-  echo "🖥️ Installing VS Code..."
-
-  if command -v code >/dev/null 2>&1; then
-    echo "✅ VS Code is already installed."
-    return
-  fi
-
-  if [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]]; then
-    echo "🧹 Cleaning conflicting sources..."
-    sudo rm -f /etc/apt/sources.list.d/code.list
-    sudo rm -f /etc/apt/sources.list.d/vscode.list
-    sudo rm -f /etc/apt/keyrings/microsoft.gpg
-    sudo rm -f /usr/share/keyrings/microsoft.gpg
-
-    echo "➕ Adding Microsoft GPG key and repo..."
-    sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc |
-      gpg --dearmor | sudo tee /etc/apt/keyrings/microsoft.gpg >/dev/null
-
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" |
-      sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
-
-    sudo apt update -qq
-    sudo apt install -y code
-  else
-    echo "❌ Unsupported OS: $ID. Only Debian-based systems are supported."
-    exit 1
-  fi
-
-  echo "✅ VS Code installed."
-}
-
-# === Step 3: Clean ===
-cleanup() {
-  echo "🧹 Cleaning up VS Code..."
-
-  sudo rm -f /tmp/vscode.deb
-
-  if command -v code &>/dev/null; then
-    sudo apt remove --purge -y code
-    sudo rm -f /etc/apt/sources.list.d/vscode.list
-    sudo rm -f /etc/apt/sources.list.d/code.list
-    sudo rm -f /etc/apt/keyrings/microsoft.gpg
-    sudo rm -f /usr/share/keyrings/microsoft.gpg
-  fi
-
-  echo "✅ Cleanup complete."
-}
-
-# === Help ===
-show_help() {
-  echo "Usage: $0 [all|deps|install|clean]"
-  echo ""
-  echo "  all       Install dependencies + VS Code"
-  echo "  deps      Install only required tools (curl, gpg)"
-  echo "  install   Add repo + install VS Code"
-  echo "  clean     Remove VS Code and repo/key"
-}
-
-# === Entry Point ===
-case "$ACTION" in
-all)
-  install_dependencies
-  install_vscode
-  ;;
-deps)
-  install_dependencies
-  ;;
-install)
-  install_vscode
-  ;;
-clean)
-  cleanup
-  ;;
-*)
-  show_help
-  ;;
-esac
+main
