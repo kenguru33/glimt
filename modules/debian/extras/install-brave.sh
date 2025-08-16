@@ -52,7 +52,53 @@ install_pkg() {
 }
 
 config() {
-  echo "⚙️  [$MODULE_NAME] No extra config. Using package defaults."
+  echo "⚙️  [$MODULE_NAME] Creating per-user launcher override (StartupNotify=false)…"
+
+  # Resolve invoking user (not root) and home
+  TARGET_USER="${SUDO_USER:-$USER}"
+  TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  [[ -n "$TARGET_HOME" && -d "$TARGET_HOME" ]] || {
+    echo "❌ Could not resolve home for $TARGET_USER"; return 1; }
+
+  SRC_DESKTOP="/usr/share/applications/brave-browser.desktop"
+  DEST_DIR="$TARGET_HOME/.local/share/applications"
+  DEST_DESKTOP="$DEST_DIR/brave-browser.desktop"
+
+  install -d -m 0755 "$DEST_DIR"
+
+  if [[ -f "$SRC_DESKTOP" ]]; then
+    cp -f "$SRC_DESKTOP" "$DEST_DESKTOP"
+  else
+    # Fallback minimal launcher if system file isn't present yet
+    cat >"$DEST_DESKTOP" <<'EOF'
+[Desktop Entry]
+Version=1.0
+Name=Brave Browser
+GenericName=Web Browser
+Comment=Browse the Web
+Exec=/usr/bin/brave-browser %U
+Terminal=false
+Icon=brave-browser
+Type=Application
+Categories=Network;WebBrowser;
+StartupWMClass=brave-browser
+EOF
+  fi
+
+  # Ensure StartupNotify=false (replace if present, else append)
+  if grep -q '^StartupNotify=' "$DEST_DESKTOP"; then
+    sed -i 's/^StartupNotify=.*/StartupNotify=false/' "$DEST_DESKTOP"
+  else
+    printf '\nStartupNotify=false\n' >> "$DEST_DESKTOP"
+  fi
+
+  chown "$TARGET_USER:$TARGET_USER" "$DEST_DESKTOP"
+  chmod 0644 "$DEST_DESKTOP"
+
+  # Refresh desktop database (ignore if missing)
+  sudo -u "$TARGET_USER" update-desktop-database "$DEST_DIR" >/dev/null 2>&1 || true
+
+  echo "✅ [$MODULE_NAME] Override saved at: $DEST_DESKTOP (StartupNotify=false)."
 }
 
 clean() {
@@ -72,24 +118,15 @@ all() {
 }
 
 main() {
-  is_debian || {
-    echo "❌ Debian-based systems only."
-    exit 1
-  }
+  is_debian || { echo "❌ Debian-based systems only."; exit 1; }
   require_sudo
   case "$ACTION" in
-  deps) deps ;;
-  install)
-    install_repo
-    install_pkg
-    ;;
-  config) config ;;
-  clean) clean ;;
-  all) all ;;
-  *)
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 2
-    ;;
+    deps) deps ;;
+    install) install_repo; install_pkg ;;
+    config) config ;;
+    clean) clean ;;
+    all) all ;;
+    *) echo "Usage: $0 [all|deps|install|config|clean]"; exit 2 ;;
   esac
 }
 
