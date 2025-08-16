@@ -75,8 +75,56 @@ install_pkg() {
 }
 
 config() {
-  echo "⚙️  [$MODULE_NAME] No extra config. Using package defaults."
+  echo "⚙️  [$MODULE_NAME] Forcing instant dock icon (StartupNotify=false)…"
+
+  # Resolve the real user/home even when running with sudo
+  TARGET_USER="${SUDO_USER:-$USER}"
+  TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  [[ -n "$TARGET_HOME" && -d "$TARGET_HOME" ]] || {
+    echo "❌ Could not resolve home for $TARGET_USER"; return 1; }
+
+  SRC_DESKTOP="/usr/share/applications/google-chrome.desktop"
+  DEST_DIR="$TARGET_HOME/.local/share/applications"
+  DEST_DESKTOP="$DEST_DIR/google-chrome.desktop"
+
+  install -d -m 0755 "$DEST_DIR"
+
+  if [[ -f "$SRC_DESKTOP" ]]; then
+    cp -f "$SRC_DESKTOP" "$DEST_DESKTOP"
+  else
+    # Fallback minimal launcher if the system one isn't there yet
+    cat >"$DEST_DESKTOP" <<'EOF'
+[Desktop Entry]
+Version=1.0
+Name=Google Chrome
+GenericName=Web Browser
+Comment=Access the Internet
+Exec=/usr/bin/google-chrome-stable %U
+Terminal=false
+Icon=google-chrome
+Type=Application
+Categories=Network;WebBrowser;
+StartupWMClass=Google-chrome
+EOF
+  fi
+
+  # Ensure StartupNotify=false (replace if present, append if missing)
+  if grep -q '^StartupNotify=' "$DEST_DESKTOP"; then
+    sed -i 's/^StartupNotify=.*/StartupNotify=false/' "$DEST_DESKTOP"
+  else
+    printf '\nStartupNotify=false\n' >> "$DEST_DESKTOP"
+  fi
+
+  chown "$TARGET_USER:$TARGET_USER" "$DEST_DESKTOP"
+  chmod 0644 "$DEST_DESKTOP"
+
+  # Refresh desktop db for that user (ignore if tool missing)
+  sudo -u "$TARGET_USER" update-desktop-database "$DEST_DIR" >/dev/null 2>&1 || true
+
+  echo "✅ [$MODULE_NAME] Created override at $DEST_DESKTOP with StartupNotify=false."
+  echo "   Tip: If the change doesn’t reflect immediately, re-open the app grid."
 }
+
 
 clean() {
   echo "🧹 [$MODULE_NAME] Purging Chrome and repo…"
