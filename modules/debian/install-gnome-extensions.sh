@@ -128,6 +128,9 @@ config_extensions() {
   if command -v dconf &>/dev/null; then
     dconf write /org/gnome/shell/extensions/blur-my-shell/panel/override-background-dynamically false || true
   fi
+
+  echo "🪟 Tiling Shell"
+  gsettings set org.gnome.shell.extensions.tilingshell snap-assistant-threshold "5"
 }
 
 clean_extensions() {
