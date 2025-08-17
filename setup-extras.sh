@@ -51,6 +51,7 @@ declare -A MODULES=(
   [brave]="brave-browser"
   [spotify]="spotify"
   [navicat]="navicat"
+  [virtualization-suite]="/usr/bin/gnome-boxes"  # Main binary for virtualization suite
 )
 
 # === Optional descriptions
@@ -72,6 +73,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [brave]="Brave browser"
   [navicat]="Navicat Premium"
   [spotify]="Spotify desktop client"
+  [virtualization-suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
