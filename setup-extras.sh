@@ -36,7 +36,6 @@ mkdir -p "$(dirname "$STATE_FILE")"
 declare -A MODULES=(
   [zellij]="zellij"
   [1password-cli]="op"
-  [chrome]="google-chrome"
   [jetbrains-toolbox]="jetbrains-toolbox"
   [lens]="/opt/Lens/lens-desktop"
   [1password]="1password"
@@ -62,7 +61,6 @@ declare -A MODULES=(
 declare -A MODULE_DESCRIPTIONS=(
   [zellij]="Zellij terminal multiplexer (like tmux)"
   [1password-cli]="1Password CLI tool (op)"
-  [chrome]="Google Chrome browser"
   [jetbrains-toolbox]="JetBrains Toolbox App for IDE management"
   [lens]="Lens Kubernetes IDE"
   [1password]="1Password Desktop GUI"
