@@ -55,6 +55,7 @@ declare -A MODULES=(
   [ytmusic]="ytm"
   [outlook]="outlook"
   [teams]="teams"
+  [chatgpt]="chatgpt"
 )
 
 # === Optional descriptions
@@ -80,6 +81,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [ytmusic]="YouTube Music PWA (web app in Chrome)"
   [outlook]="Outlook Web App (web app in Chrome)"
   [teams]="Microsoft Teams PWA (web app in Chrome)"
+  [chatgpt]="ChatGPT PWA (web app in Chrome)"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
