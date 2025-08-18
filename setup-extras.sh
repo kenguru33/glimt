@@ -52,6 +52,10 @@ declare -A MODULES=(
   [spotify]="spotify"
   [navicat]="navicat"
   [virtualization-suite]="/usr/bin/gnome-boxes"  # Main binary for virtualization suite
+  [notion]="notion"
+  [ytmusic]="ytm"
+  [outlook]="outlook"
+  [teams]="teams"
 )
 
 # === Optional descriptions
@@ -74,6 +78,10 @@ declare -A MODULE_DESCRIPTIONS=(
   [navicat]="Navicat Premium"
   [spotify]="Spotify desktop client"
   [virtualization-suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
+  [notion]="Notion app (web app in Chrome)"
+  [ytmusic]="YouTube Music PWA (web app in Chrome)"
+  [outlook]="Outlook Web App (web app in Chrome)"
+  [teams]="Microsoft Teams PWA (web app in Chrome)"
 )
 
 # --- Helper: check if module script likely needs sudo (heuristic; unchanged)
