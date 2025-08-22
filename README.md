@@ -6,7 +6,7 @@
 
 ## 📥 Install
 
-To install After Install, simply run the following command in your terminal:
+To install Glimt, simply run the following command in your terminal:
 
 ```bash
  bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
@@ -35,7 +35,13 @@ To install After Install, simply run the following command in your terminal:
 - Kubernetes tools (kubens, kubectx, kubectl, k9s)
 - Volta nodejs version management
 - Blackbox as defaul terminal
-- ...
+- Docker Rootless setup
+- LazyDocker
+- 1Password CLI
+- Azure CLI
+- Glimt CLI
+- Dotnet Core 8
+- Dotnet Core 9
 
 ### 🧩 GNOME Extensions & Configuration
 
@@ -54,10 +60,33 @@ To install After Install, simply run the following command in your terminal:
 - Jetbrains Toolboox
 - Lens Kubernetes Desktop App
 - 1Password
-- Chrome 
+- Chrome
+- Brave
+- Navicat
+- Spotify
+- Virtualzation Suite with Gnome Boxes
+- Gitkraken
 
 ### 🖥️ Drivers
-- Auto Detect Nvidia Gfx Card and install newst driver from nvidia debian package source 
+
+- Auto Detect Nvidia Gfx Card and install newst driver from nvidia debian package source
+
+---
+
+### 🧰 Glimt CLI Tools
+
+Supports autocomplete.
+
+```bash
+# install module - Press tab for autocomplete
+glimt install <module>
+# clean module - Press tab for autocomplete
+glimt clean <module>
+# Module selection menu
+glimt module-selection
+# Update glimt
+glimt update
+```
 
 ---
 
