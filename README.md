@@ -19,6 +19,10 @@ To install Glimt, simply run the following command in your terminal:
 
 ---
 
+<img src="./screenshot.png" alt="Alt text for image" width="400">
+
+---
+
 ## ✨ Features
 
 ### 💻 Shell environment & Theme
