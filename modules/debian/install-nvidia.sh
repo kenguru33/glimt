@@ -1,144 +1,201 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ NVIDIA CUDA driver installation failed. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'echo "❌ NVIDIA CUDA installation failed." >&2' ERR
 
-MODULE_NAME="nvidia-cuda"
 ACTION="${1:-all}"
+shift || true
 
-# === Check for NVIDIA GPU ===
-check_nvidia_gpu() {
-  if ! lspci | grep -i nvidia > /dev/null; then
-    echo "⚠️ No NVIDIA GPU detected. Skipping CUDA driver installation."
-    exit 0
-  fi
-}
-check_nvidia_gpu
+HEADLESS=false
+FORCE_DKMS=false
+PIN_DRIVER=false
 
-# === Detect OS Version and Set DISTRO ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  case "$VERSION_CODENAME" in
-    trixie)
-      DISTRO="debian12" # Fallback until NVIDIA provides debian13 repo
-      ;;
-    *)
-      DISTRO="$VERSION_CODENAME"
-      ;;
+for arg in "$@"; do
+  case "$arg" in
+  --headless | --server) HEADLESS=true ;;
+  --force-dkms) FORCE_DKMS=true ;;
+  --pin-driver) PIN_DRIVER=true ;;
   esac
-else
-  echo "❌ Cannot detect OS version."
+done
+
+log() { echo -e "➡️  $*"; }
+warn() { echo -e "⚠️  $*" >&2; }
+die() {
+  echo -e "❌ $*" >&2
   exit 1
+}
+
+# ==========================================================
+# GPU check
+# ==========================================================
+if ! lspci | grep -qi nvidia; then
+  warn "No NVIDIA GPU detected — exiting."
+  exit 0
 fi
 
+# ==========================================================
+# OS detection
+# ==========================================================
+. /etc/os-release || die "Cannot detect OS"
+
+case "$VERSION_CODENAME" in
+bookworm) CUDA_DISTRO="debian12" ;;
+trixie) CUDA_DISTRO="debian13" ;;
+*) die "Unsupported Debian version: $VERSION_CODENAME" ;;
+esac
+
 ARCH="x86_64"
-KEYRING_PKG="cuda-keyring_1.1-1_all.deb"
-KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/${DISTRO}/${ARCH}/${KEYRING_PKG}"
-REPO_LIST="/etc/apt/sources.list.d/cuda-${DISTRO}-${ARCH}.list"
-ALT_KEY_URL="https://developer.download.nvidia.com/compute/cuda/repos/${DISTRO}/${ARCH}/cuda-archive-keyring.gpg"
-ALT_KEY_PATH="/usr/share/keyrings/cuda-archive-keyring.gpg"
+CUDA_BASE="https://developer.download.nvidia.com/compute/cuda/repos/${CUDA_DISTRO}/${ARCH}"
 
-# === Step: deps ===
+# ==========================================================
+# deps
+# ==========================================================
 deps() {
-  echo "📦 Installing prerequisites..."
-  sudo apt update
-  sudo apt install -y wget gnupg linux-headers-$(uname -r)
+  log "Installing base dependencies…"
+  apt update
+  apt install -y \
+    wget gnupg build-essential dkms \
+    linux-image-amd64 linux-headers-amd64 \
+    mokutil openssl
 }
 
-# === Step: preconfig ===
+# ==========================================================
+# CUDA repo + keyring (MANDATORY)
+# ==========================================================
 preconfig() {
-  echo "🔑 Downloading NVIDIA CUDA keyring..."
+  log "Installing NVIDIA CUDA keyring…"
+  tmp=$(mktemp -d)
+  cd "$tmp"
 
-  if wget -q "$KEYRING_URL"; then
-    echo "📥 Installing keyring package..."
-    sudo dpkg -i "$KEYRING_PKG"
-    rm -f "$KEYRING_PKG"
-  else
-    echo "⚠️ Fallback: Installing GPG key manually..."
-    wget -q "$ALT_KEY_URL" -O cuda-archive-keyring.gpg
-    sudo mv cuda-archive-keyring.gpg "$ALT_KEY_PATH"
-    echo "📄 Adding CUDA APT repository..."
-    echo "deb [signed-by=$ALT_KEY_PATH] https://developer.download.nvidia.com/compute/cuda/repos/${DISTRO}/${ARCH}/ /" \
-      | sudo tee "$REPO_LIST" > /dev/null
-  fi
+  wget -q "${CUDA_BASE}/cuda-keyring_1.1-1_all.deb"
+  dpkg -i cuda-keyring_1.1-1_all.deb
 
-  echo "🔄 Updating package lists..."
-  sudo apt update
+  cd /
+  rm -rf "$tmp"
+  apt update
 }
 
-# === Step: install ===
+# ==========================================================
+# Secure Boot MOK automation
+# ==========================================================
+secureboot() {
+  if ! mokutil --sb-state 2>/dev/null | grep -qi enabled; then
+    return 0
+  fi
+
+  log "Secure Boot enabled — preparing MOK enrollment…"
+  MOK_DIR="/root/nvidia-mok"
+  mkdir -p "$MOK_DIR"
+  cd "$MOK_DIR"
+
+  if [[ ! -f MOK.key ]]; then
+    openssl req -new -x509 -newkey rsa:2048 \
+      -keyout MOK.key -out MOK.crt -nodes -days 3650 \
+      -subj "/CN=NVIDIA Kernel Modules/"
+    openssl x509 -outform DER -in MOK.crt -out MOK.der
+  fi
+
+  mokutil --import MOK.der || true
+  warn "You MUST enroll the MOK on next reboot (blue screen)."
+}
+
+# ==========================================================
+# install
+# ==========================================================
 install() {
-  echo "💠 Installing proprietary CUDA driver..."
-  sudo apt -V install -y cuda-drivers
+  log "Installing NVIDIA driver packages…"
+
+  if $FORCE_DKMS; then
+    apt install -y nvidia-kernel-open-dkms cuda-drivers
+  else
+    apt install -y cuda-drivers
+  fi
 }
 
-# === Step: config ===
-config() {
-  echo "🔧 Enabling Wayland in GDM3..."
+# ==========================================================
+# APT pinning
+# ==========================================================
+pin_driver() {
+  $PIN_DRIVER || return 0
 
-  GDM_CONF="/etc/gdm3/daemon.conf"
-  if sudo grep -q "^#WaylandEnable=false" "$GDM_CONF"; then
-    sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=true/' "$GDM_CONF"
-  elif sudo grep -q "^WaylandEnable=false" "$GDM_CONF"; then
-    sudo sed -i 's/^WaylandEnable=false/WaylandEnable=true/' "$GDM_CONF"
-  elif ! sudo grep -q "^WaylandEnable=" "$GDM_CONF"; then
-    sudo sed -i '/^\[daemon\]/a WaylandEnable=true' "$GDM_CONF"
-  fi
+  log "Pinning NVIDIA driver version…"
+  VERSION=$(dpkg-query -W -f='${Version}\n' nvidia-driver 2>/dev/null | head -n1 || true)
+  [[ -n "$VERSION" ]] || warn "Could not detect driver version for pinning."
 
-  echo "🛡️ Overriding NVIDIA udev rule to keep Wayland enabled..."
-  RULE_PATH="/etc/udev/rules.d/99-nvidia-wayland.rules"
-  sudo tee "$RULE_PATH" > /dev/null <<EOF
-# Allow Wayland with NVIDIA by overriding upstream rule
+  cat >/etc/apt/preferences.d/nvidia-pin <<EOF
+Package: nvidia-driver* cuda-drivers* nvidia-kernel-* libnvidia-*
+Pin: version *
+Pin-Priority: 1001
+EOF
+}
+
+# ==========================================================
+# Desktop / Wayland config
+# ==========================================================
+config_desktop() {
+  $HEADLESS && return 0
+
+  log "Configuring Wayland (GDM)…"
+  GDM="/etc/gdm3/daemon.conf"
+
+  sed -i 's/^#WaylandEnable=false/WaylandEnable=true/' "$GDM" 2>/dev/null || true
+  sed -i 's/^WaylandEnable=false/WaylandEnable=true/' "$GDM" 2>/dev/null || true
+
+  cat >/etc/udev/rules.d/99-nvidia-wayland.rules <<EOF
 ENV{NVIDIA_DRIVER_CAPABILITIES}="all"
 EOF
 
-  echo "🔃 Reloading udev rules..."
-  sudo udevadm control --reload-rules
-  sudo udevadm trigger
-
-  echo "🧯 Disabling NVIDIA persistence mode (better for suspend)..."
-  sudo systemctl disable --now nvidia-persistenced.service 2>/dev/null || true
-  sudo nvidia-smi -pm 0 >/dev/null 2>&1 || true
-
-  echo "💤 Enabling NVIDIA suspend/resume services (no --now to avoid black screen)..."
-  sudo systemctl enable nvidia-suspend.service nvidia-resume.service || true
-
-  echo "🔁 Please reboot to apply all NVIDIA + Wayland changes."
+  udevadm control --reload-rules
+  udevadm trigger
 }
 
+# ==========================================================
+# Install-time verification (NO runtime checks)
+# ==========================================================
+verify_install() {
+  log "Verifying NVIDIA installation (pre-reboot)…"
 
-# === Step: clean ===
-clean() {
-  echo "🧹 Cleaning up NVIDIA APT sources and keyrings..."
-  sudo rm -f "$REPO_LIST" "$ALT_KEY_PATH" || true
-  sudo apt update || true
+  if ! command -v nvidia-smi >/dev/null; then
+    die "nvidia-smi not installed (userspace missing)"
+  fi
 
-  echo "↩️ Reverting NVIDIA suspend + persistence settings..."
-  # Stop using the suspend hooks
-  sudo systemctl disable --now nvidia-suspend.service nvidia-resume.service 2>/dev/null || true
-  # Restore persistence daemon (optional; safe default)
-  sudo systemctl enable --now nvidia-persistenced.service 2>/dev/null || true
-  # Best effort turn persistence back on (won’t error if unsupported)
-  sudo nvidia-smi -pm 1 >/dev/null 2>&1 || true
+  if ! find /lib/modules -type f -name 'nvidia*.ko*' | grep -q .; then
+    die "NVIDIA kernel modules not found on disk"
+  fi
 
-  echo "🧽 Removed NVIDIA suspend config and restored persistence."
+  log "Installation verified. Reboot required."
 }
 
-# === Entrypoint ===
+# ==========================================================
+# Post-reboot verification
+# ==========================================================
+verify_runtime() {
+  log "Post-reboot NVIDIA runtime verification…"
+
+  command -v nvidia-smi >/dev/null || die "nvidia-smi missing"
+  nvidia-smi || die "NVIDIA driver not functional"
+
+  lsmod | grep -qi nvidia || die "NVIDIA kernel module not loaded"
+
+  log "NVIDIA driver fully operational."
+}
+
+# ==========================================================
+# Entrypoint
+# ==========================================================
 case "$ACTION" in
-  all)
-    deps
-    preconfig
-    install
-    config
-    ;;
-  deps) deps ;;
-  preconfig) preconfig ;;
-  install) install ;;
-  config) config ;;
-  clean) clean ;;
-  *)
-    echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|preconfig|install|config|clean]"
-    exit 1
-    ;;
+all)
+  deps
+  preconfig
+  secureboot
+  install
+  pin_driver
+  config_desktop
+  verify_install
+  ;;
+verify)
+  verify_runtime
+  ;;
+*)
+  die "Usage: $0 {all|verify} [--headless|--server] [--force-dkms] [--pin-driver]"
+  ;;
 esac
