@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/debian/install-spotify.sh
-# Glimt module: Install Spotify for Debian using the official APT repository.
+# Glimt module: Install Spotify using Flatpak (Flathub)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
@@ -9,7 +9,10 @@ MODULE_NAME="spotify"
 ACTION="${1:-all}"
 
 log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die() { printf "ERROR: %s\n" "$*" >&2; exit 1; }
+die() {
+  printf "ERROR: %s\n" "$*" >&2
+  exit 1
+}
 
 # ---- Debian-only guard ----
 deb_guard() {
@@ -21,54 +24,55 @@ deb_guard() {
   fi
 }
 
-# ---- Config ----
-KEY_URL="https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg"
-KEYRING_DIR="/etc/apt/keyrings"
-KEYRING_FILE="$KEYRING_DIR/spotify.gpg"
-LIST_FILE="/etc/apt/sources.list.d/spotify.list"
-APT_LINE='deb [arch=amd64 signed-by=/etc/apt/keyrings/spotify.gpg] https://repository.spotify.com stable non-free'
-
-require_amd64() {
-  local arch
-  arch="$(dpkg --print-architecture)"
-  [[ "$arch" == "amd64" ]] || die "Spotify repo only ships amd64. Detected arch: $arch"
-}
+# ---- Flatpak / Flathub ----
+FLATPAK_APP_ID="com.spotify.Client"
+FLATHUB_REMOTE="flathub"
+FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
 
 install_deps() {
-  log "Installing dependencies (sudo): curl, gpg, ca-certificates, apt-transport-https"
+  log "Installing Flatpak dependencies"
   sudo apt-get update -y
-  sudo apt-get install -y --no-install-recommends curl gpg ca-certificates apt-transport-https
+  sudo apt-get install -y --no-install-recommends flatpak ca-certificates
 }
 
-setup_repo() {
-  log "Configuring Spotify APT repository (keyrings + signed-by)"
-  require_amd64
-  sudo install -d -m 0755 "$KEYRING_DIR"
-  curl -fsSL "$KEY_URL" | sudo gpg --dearmor --yes -o "$KEYRING_FILE"
-  sudo chmod 0644 "$KEYRING_FILE"
-
-  echo "$APT_LINE" | sudo tee "$LIST_FILE" >/dev/null
-  sudo chmod 0644 "$LIST_FILE"
+ensure_flathub() {
+  if flatpak remote-list --columns=name | grep -qx "$FLATHUB_REMOTE"; then
+    log "Flathub remote already configured"
+  else
+    log "Adding Flathub remote"
+    sudo flatpak remote-add --if-not-exists \
+      "$FLATHUB_REMOTE" \
+      "$FLATHUB_URL"
+  fi
 }
 
 install_spotify() {
-  setup_repo
-  log "Installing spotify-client"
-  sudo apt-get update -y
-  sudo apt-get install -y spotify-client
+  ensure_flathub
+
+  if flatpak info "$FLATPAK_APP_ID" &>/dev/null; then
+    log "Spotify already installed (Flatpak)"
+    return
+  fi
+
+  log "Installing Spotify via Flatpak"
+  sudo flatpak install -y "$FLATHUB_REMOTE" "$FLATPAK_APP_ID"
 }
 
 configure_spotify() {
-  # Placeholder for any future tweaks (desktop integration, MIME, etc.)
+  # Placeholder for future tweaks:
+  # - filesystem permissions
+  # - PulseAudio / PipeWire overrides
+  # - GPU / Wayland tweaks
   true
 }
 
 clean_spotify() {
-  log "Removing spotify-client and repository"
-  sudo apt-get remove -y --purge spotify-client || true
-  sudo rm -f "$LIST_FILE" || true
-  sudo rm -f "$KEYRING_FILE" || true
-  sudo apt-get update -y || true
+  log "Removing Spotify Flatpak"
+  sudo flatpak uninstall -y "$FLATPAK_APP_ID" || true
+
+  log "Removing unused Flatpak runtimes"
+  sudo flatpak uninstall -y --unused || true
+
   log "Clean complete."
 }
 
@@ -76,28 +80,28 @@ clean_spotify() {
 deb_guard
 
 case "$ACTION" in
-  deps)
-    install_deps
-    ;;
-  install)
-    install_deps
-    install_spotify
-    ;;
-  config)
-    configure_spotify
-    ;;
-  clean)
-    clean_spotify
-    ;;
-  all)
-    install_deps
-    install_spotify
-    configure_spotify
-    ;;
-  *)
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 1
-    ;;
+deps)
+  install_deps
+  ;;
+install)
+  install_deps
+  install_spotify
+  ;;
+config)
+  configure_spotify
+  ;;
+clean)
+  clean_spotify
+  ;;
+all)
+  install_deps
+  install_spotify
+  configure_spotify
+  ;;
+*)
+  echo "Usage: $0 [all|deps|install|config|clean]"
+  exit 1
+  ;;
 esac
 
 log "Done: $ACTION"
