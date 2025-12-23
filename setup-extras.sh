@@ -136,6 +136,23 @@ module_installed() {
   esac
 }
 
+# --- Helper: run a command with (optional) spinner
+run_with_spinner() {
+  local title="$1"
+  shift
+
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" || ! command -v gum >/dev/null 2>&1 ]]; then
+    echo "▶️  $title"
+    "$@"
+  else
+    # If gum fails for any reason, fall back to running the command directly
+    if ! gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+      echo "▶️  $title"
+      "$@"
+    fi
+  fi
+}
+
 run_module_script() {
   local name="$1"
   local mode="$2"
@@ -154,7 +171,7 @@ run_module_script() {
     bash "$script" "$mode" "${FLAGS[@]}"
     [[ "$mode" == "clean" ]] && echo "🧹 Cleaned: $label" || echo "✅ Finished: $label"
   else
-    gum spin --spinner dot --title "Running $label..." -- bash -c "bash \"$script\" \"$mode\" ${FLAGS[*]}" >/dev/null
+    run_with_spinner "Running $label..." bash "$script" "$mode" "${FLAGS[@]}"
     [[ "$mode" == "clean" ]] && gum style --foreground 8 "✔️  $label cleaned" ||
       gum style --foreground 10 "✔️  $label finished"
   fi

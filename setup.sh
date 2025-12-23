@@ -103,6 +103,24 @@ ensure_deps() {
 }
 ensure_deps
 
+# === Helper: run a command with (optional) spinner ===
+run_with_spinner() {
+  local title="$1"
+  shift
+
+  # Allow disabling spinners (e.g. if they render poorly) via env, or if gum is missing
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" || ! command -v gum >/dev/null 2>&1 ]]; then
+    echo "▶️  $title"
+    "$@"
+  else
+    # If gum fails for any reason, fall back to running the command directly
+    if ! gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+      echo "▶️  $title"
+      "$@"
+    fi
+  fi
+}
+
 # === Splash Screen ===
 clear
 cat <<"EOF"
@@ -186,16 +204,16 @@ PRIORITY_MODULES=(
 # Run priority modules first (if present & executable)
 for p in "${PRIORITY_MODULES[@]}"; do
   script="$TARGET_DIR/$p"
-  if [[ -x "$script" ]]; then
-    if $VERBOSE; then
-      echo "▶️  Running (priority): $p"
-      "$script" all
-      echo "✅ Finished: $p"
-    else
-      gum spin --spinner dot --title "Running $p..." -- "$script" all >/dev/null
-      gum style --foreground 10 "✔️  $p finished"
-    fi
-  else
+      if [[ -x "$script" ]]; then
+        if $VERBOSE; then
+          echo "▶️  Running (priority): $p"
+          "$script" all
+          echo "✅ Finished: $p"
+        else
+          run_with_spinner "Running $p..." "$script" all
+          gum style --foreground 10 "✔️  $p finished"
+        fi
+      else
     echo "⚠️  Priority module not found or not executable: $script"
   fi
 done
@@ -211,7 +229,7 @@ find "$TARGET_DIR" -maxdepth 1 -type f -name "*.sh" -executable \
         "$script" all
         echo "✅ Finished: $MODULE_NAME"
       else
-        gum spin --spinner dot --title "Running $MODULE_NAME..." -- "$script" all >/dev/null
+        run_with_spinner "Running $MODULE_NAME..." "$script" all
         gum style --foreground 10 "✔️  $MODULE_NAME finished"
       fi
     done
