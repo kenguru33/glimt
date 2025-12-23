@@ -141,7 +141,7 @@ run_with_spinner() {
   local title="$1"
   shift
 
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" || ! command -v gum >/dev/null 2>&1 ]]; then
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" ]] || ! command -v gum >/dev/null 2>&1; then
     echo "▶️  $title"
     "$@"
   else

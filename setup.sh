@@ -109,7 +109,7 @@ run_with_spinner() {
   shift
 
   # Allow disabling spinners (e.g. if they render poorly) via env, or if gum is missing
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" || ! command -v gum >/dev/null 2>&1 ]]; then
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" ]] || ! command -v gum >/dev/null 2>&1; then
     echo "▶️  $title"
     "$@"
   else
