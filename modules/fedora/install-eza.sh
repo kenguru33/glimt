@@ -15,13 +15,14 @@ TARGET_FILE="$CONFIG_DIR/eza.zsh"
 deps() {
   echo "📦 Installing eza..."
   sudo dnf makecache -y
-  # eza might not be in default repos, try copr or install from source
-  if ! sudo dnf install -y eza 2>/dev/null; then
-    echo "⚠️  eza not in default repos. Installing from copr..."
-    sudo dnf copr enable -y eza-community/eza
-    sudo dnf install -y eza
+  if sudo dnf install -y eza; then
+    echo "✅ eza installed from Fedora repos."
+  else
+    echo "❌ Failed to install eza from Fedora repos."
+    echo "   The previous COPR-based installation path is no longer reliable (HTTP 404)."
+    echo "   Please install eza manually from upstream or an alternative source, then re-run this script with 'config'."
+    exit 1
   fi
-  echo "✅ eza installed."
 }
 
 # === Step: install ===
