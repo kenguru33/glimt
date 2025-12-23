@@ -28,9 +28,28 @@ done
 
 ACTION="${ACTION:-all}"
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
-MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
+
+# === OS Detection ===
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  OS_ID="$ID"
+  OS_ID_LIKE="${ID_LIKE:-}"
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+# Determine modules directory based on OS
+if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
+  MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
+elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
+  MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
+else
+  echo "❌ Unsupported OS: $OS_ID"
+  exit 1
+fi
 
 # === Define modules: [name]=binary (or absolute path)
 declare -A MODULES=(
