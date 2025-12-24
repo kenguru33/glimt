@@ -26,7 +26,7 @@ else
 fi
 
 # === Dependencies ===
-DEPS=(git curl)
+DEPS=(git curl git-credential-libsecret)
 
 install_dependencies() {
   echo "🔧 Installing required dependencies..."
@@ -115,7 +115,17 @@ configure_git() {
   sudo -u "$REAL_USER" git config --global user.name "$name"
   sudo -u "$REAL_USER" git config --global user.email "$email"
   sudo -u "$REAL_USER" git config --global init.defaultBranch "$branch"
-  sudo -u "$REAL_USER" git config --global credential.helper store
+  
+  # Use libsecret (GNOME Keyring) for secure credential storage on Fedora
+  if command -v git-credential-libsecret >/dev/null 2>&1; then
+    sudo -u "$REAL_USER" git config --global credential.helper libsecret
+    echo "🔐 Using libsecret (GNOME Keyring) for credential storage"
+  else
+    # Fallback to cache if libsecret is not available
+    sudo -u "$REAL_USER" git config --global credential.helper 'cache --timeout=3600'
+    echo "⚠️  libsecret not available, using credential cache (1 hour timeout)"
+  fi
+  
   sudo -u "$REAL_USER" git config --global core.editor "$editor"
   sudo -u "$REAL_USER" git config --global pull.rebase "$rebase"
   sudo -u "$REAL_USER" git config --global color.ui auto

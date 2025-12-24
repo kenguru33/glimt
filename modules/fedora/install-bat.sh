@@ -59,17 +59,37 @@ config_bat() {
 
   sudo -u "$REAL_USER" mkdir -p "$BAT_THEME_DIR"
 
+  # Use curl if available (more reliable), otherwise fall back to wget
   for variant in "${THEME_VARIANTS[@]}"; do
-    sudo -u "$REAL_USER" wget -q -O "$BAT_THEME_DIR/Catppuccin ${variant}.tmTheme" \
-      "$THEME_REPO_BASE/Catppuccin%20${variant}.tmTheme"
+    local theme_file="$BAT_THEME_DIR/Catppuccin ${variant}.tmTheme"
+    local theme_url="$THEME_REPO_BASE/Catppuccin%20${variant}.tmTheme"
+    
+    if command -v curl >/dev/null 2>&1; then
+      sudo -u "$REAL_USER" curl -fsSL -o "$theme_file" "$theme_url" || {
+        echo "⚠️  Failed to download Catppuccin ${variant} theme"
+        continue
+      }
+    elif command -v wget >/dev/null 2>&1; then
+      sudo -u "$REAL_USER" wget --quiet --output-document="$theme_file" "$theme_url" || {
+        echo "⚠️  Failed to download Catppuccin ${variant} theme"
+        continue
+      }
+    else
+      echo "❌ Neither curl nor wget found. Cannot download themes."
+      exit 1
+    fi
   done
 
   echo "🧹 Rebuilding theme cache..."
-  sudo -u "$REAL_USER" bat cache --build
+  sudo -u "$REAL_USER" bat cache --build || {
+    echo "⚠️  Failed to rebuild theme cache (themes may still work)"
+  }
 
   echo "⚙️ Setting default theme: $BAT_THEME_NAME"
   sudo -u "$REAL_USER" sh -c "echo '--theme=\"$BAT_THEME_NAME\"' > '$BAT_CONFIG_FILE'"
   chown -R "$REAL_USER:$REAL_USER" "$BAT_CONFIG_DIR"
+  
+  echo "✅ Catppuccin themes installed successfully"
 }
 
 # === Step: clean ===
