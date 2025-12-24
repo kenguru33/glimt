@@ -6,7 +6,7 @@ MODULE_NAME="lazyvim"
 ACTION="${1:-all}"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
 REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER)"
+HOME_DIR="$(eval echo "~$REAL_USER")"
 NVIM_DIRS=(
   "$HOME_DIR/.config/nvim"
   "$HOME_DIR/.local/share/nvim"
@@ -46,7 +46,7 @@ install_lazyvim() {
   done
 
   echo "📥 Cloning LazyVim starter..."
-  sudo -u "$REAL_USER" git clone https://github.com/LazyVim/starter "$HOME_DIR/.config/nvim"
+  sudo -u "$REAL_USER" sh -c "cd '$HOME_DIR' && git clone https://github.com/LazyVim/starter .config/nvim"
   sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.config/nvim/.git"
   chown -R "$REAL_USER:$REAL_USER" "$HOME_DIR/.config/nvim"
   echo "✅ LazyVim installed."
@@ -58,7 +58,7 @@ config_lazyvim() {
   echo "🎨 Adding Catppuccin theme plugin..."
   PLUGIN_DIR="$HOME_DIR/.config/nvim/lua/plugins"
   sudo -u "$REAL_USER" mkdir -p "$PLUGIN_DIR"
-  sudo -u "$REAL_USER" cat > "$PLUGIN_DIR/catppuccin.lua" <<'EOF'
+  sudo -u "$REAL_USER" sh -c "cat > '$PLUGIN_DIR/catppuccin.lua'" <<'EOF'
 return {
   "catppuccin/nvim",
   name = "catppuccin",
