@@ -17,20 +17,46 @@ fedora_guard() {
   }
 }
 
-RPM_URL="https://brave-browser-apt-release.s3.brave.com/brave-browser.rpm"
-TMP_RPM="/tmp/brave-browser-latest.rpm"
+BRAVE_REPO="/etc/yum.repos.d/brave-browser.repo"
 
 deps() {
   echo "🔧 [$MODULE_NAME] Installing dependencies…"
   sudo dnf makecache -y
-  sudo dnf install -y curl
+  sudo dnf install -y dnf-plugins-core curl
 }
 
 install_pkg() {
-  echo "📦 [$MODULE_NAME] Installing Brave browser via RPM…"
-  curl -L "$RPM_URL" -o "$TMP_RPM"
-  sudo dnf install -y "$TMP_RPM"
-  rm -f "$TMP_RPM"
+  echo "📦 [$MODULE_NAME] Installing Brave browser via repository…"
+  
+  if command -v brave-browser &>/dev/null; then
+    echo "✅ Brave browser is already installed."
+    return
+  fi
+  
+  echo "🔑 Importing GPG key..."
+  sudo rpm --import https://brave-browser-apt-release.s3.brave.com/brave-core.asc
+  
+  echo "📁 Adding Brave repository..."
+  if [[ -f "$BRAVE_REPO" ]]; then
+    echo "ℹ️  Brave repository already exists, removing old one..."
+    sudo rm -f "$BRAVE_REPO"
+  fi
+  
+  sudo tee "$BRAVE_REPO" > /dev/null <<EOF
+[brave-browser]
+name=Brave Browser
+baseurl=https://brave-browser-apt-release.s3.brave.com/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://brave-browser-apt-release.s3.brave.com/brave-core.asc
+EOF
+
+  echo "🔄 Updating package lists..."
+  sudo dnf makecache -y
+
+  echo "⬇️ Installing Brave browser..."
+  sudo dnf install -y brave-browser
+
   echo "✅ Brave browser installed."
 }
 
@@ -41,6 +67,11 @@ config() {
 clean() {
   echo "🧹 [$MODULE_NAME] Removing Brave…"
   sudo dnf remove -y brave-browser || true
+  if [[ -f "$BRAVE_REPO" ]]; then
+    sudo rm -f "$BRAVE_REPO"
+    sudo dnf makecache -y
+  fi
+  echo "✅ Brave browser removed."
 }
 
 all() {
