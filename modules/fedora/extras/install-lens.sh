@@ -19,45 +19,45 @@ if [[ "$OS_ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]];
   exit 1
 fi
 
-# Determine architecture
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64)
-    RPM_URL="https://downloads.k8slens.dev/releases/Lens-latest.x86_64.rpm"
-    TMP_RPM="/tmp/Lens-latest.x86_64.rpm"
-    ;;
-  aarch64)
-    RPM_URL="https://downloads.k8slens.dev/releases/Lens-latest.aarch64.rpm"
-    TMP_RPM="/tmp/Lens-latest.aarch64.rpm"
-    ;;
-  *)
-    echo "❌ Unsupported architecture: $ARCH"
-    exit 1
-    ;;
-esac
+# Lens repository configuration
+LENS_REPO="/etc/yum.repos.d/lens.repo"
+LENS_KEY="/etc/pki/rpm-gpg/RPM-GPG-KEY-lens"
 
 install_deps() {
   echo "📦 Installing dependencies..."
   sudo dnf makecache -y
-  sudo dnf install -y curl
+  sudo dnf install -y curl gnupg2
 }
 
 install_lens() {
-  echo "📦 Installing Lens Desktop (RPM)..."
+  echo "📦 Installing Lens Desktop..."
 
   if command -v lens-desktop &>/dev/null || command -v lens &>/dev/null; then
     echo "✅ Lens is already installed."
     return
   fi
 
-  echo "⬇️ Downloading Lens RPM..."
-  curl -L "$RPM_URL" -o "$TMP_RPM"
+  echo "🔑 Importing GPG key..."
+  curl -fsSL https://downloads.k8slens.dev/keys/gpg | sudo gpg --dearmor -o "$LENS_KEY" 2>/dev/null || \
+    curl -fsSL https://downloads.k8slens.dev/keys/gpg | sudo rpm --import - 2>/dev/null || true
 
-  echo "📦 Installing RPM..."
-  sudo dnf install -y "$TMP_RPM"
+  echo "📁 Adding DNF repository..."
+  sudo tee "$LENS_REPO" > /dev/null <<EOF
+[lens]
+name=Lens Desktop
+baseurl=https://downloads.k8slens.dev/rpm/stable/\$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://downloads.k8slens.dev/keys/gpg
+EOF
 
-  echo "🧹 Cleaning up..."
-  rm -f "$TMP_RPM"
+  echo "🔄 Updating package lists..."
+  sudo dnf makecache -y
+
+  echo "⬇️ Installing Lens..."
+  sudo dnf install -y lens
+
   echo "✅ Lens Desktop installed."
 }
 
@@ -68,6 +68,8 @@ config_lens() {
 clean_lens() {
   echo "🧹 Removing Lens Desktop..."
   sudo dnf remove -y lens-desktop lens || true
+  sudo rm -f "$LENS_REPO" "$LENS_KEY"
+  sudo dnf makecache -y
   echo "✅ Lens Desktop removed."
 }
 
