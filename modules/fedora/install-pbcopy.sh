@@ -10,7 +10,7 @@ ACTION="${1:-all}"
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
-# === OS Check (Debian only) ===
+# === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
@@ -18,8 +18,8 @@ else
   exit 1
 fi
 
-if [[ "$ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
-  echo "❌ This module supports Debian only."
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
+  echo "❌ This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
@@ -28,13 +28,13 @@ DEPS=(wl-clipboard xclip)
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo apt update -y
-  sudo apt install -y "${DEPS[@]}"
+  sudo dnf makecache -y
+  sudo dnf install -y "${DEPS[@]}"
 }
 
 install() {
-  echo "✅ Ensuring wl-clipboard is installed..."
-  sudo apt install -y wl-clipboard
+  echo "✅ Ensuring wl-clipboard and xclip are installed..."
+  sudo dnf install -y wl-clipboard xclip
 }
 
 config() {
@@ -79,11 +79,17 @@ EOF
 
 clean() {
   echo "🧹 Removing pbcopy/pbpaste wrappers..."
-  rm -f "$HOME_DIR/.local/bin/pbcopy" "$HOME_DIR/.local/bin/pbpaste" || true
+  sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/pbcopy" "$HOME_DIR/.local/bin/pbpaste" || true
 
-  echo "🧽 Optionally removing wl-clipboard..."
-  if dpkg -s wl-clipboard >/dev/null 2>&1; then
-    sudo apt remove -y wl-clipboard || true
+  echo "🧽 Optionally removing wl-clipboard and xclip..."
+  if rpm -q wl-clipboard >/dev/null 2>&1; then
+    sudo dnf remove -y wl-clipboard || true
+  fi
+  if rpm -q xclip >/dev/null 2>&1; then
+    read -rp "Remove xclip as well? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      sudo dnf remove -y xclip || true
+    fi
   fi
 }
 
@@ -112,3 +118,4 @@ case "$ACTION" in
 esac
 
 echo "✅ Done ($MODULE_NAME: $ACTION)"
+

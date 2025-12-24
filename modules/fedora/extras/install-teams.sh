@@ -106,14 +106,15 @@ fetch_official_icon(){
 install_theme_icons(){
   # Register in hicolor (best-effort), so a theme name could work too if desired
   sudo -u "$REAL_USER" mkdir -p "$HICOLOR"/{16x16,24x24,32x32,48x48,64x64,128x128,256x256}/apps
-  local base="$ICON_PNG"; [[ -r "$ICON_SVG" ]] && base="$ICON_SVG"
-  if command -v rsvg-convert >/dev/null 2>&1 && [[ "$base" == "$ICON_SVG" ]]; then
+  if command -v rsvg-convert >/dev/null 2>&1 && [[ -r "$ICON_SVG" ]]; then
+    # Use SVG if available for better scaling
     local sizes=(16 24 32 48 64 128 256)
     for s in "${sizes[@]}"; do
       rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
       chown "$REAL_USER:$REAL_USER" "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" 2>/dev/null || true
     done
   else
+    # Fallback: just copy the PNG to 256x256
     cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
     chown "$REAL_USER:$REAL_USER" "$HICOLOR/256x256/apps/${APP_ID}.png" 2>/dev/null || true
   fi

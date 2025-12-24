@@ -13,13 +13,27 @@ TARGET_FILE="$CONFIG_DIR/volta.zsh"
 VOLTA_BIN="$HOME_DIR/.volta/bin/volta"
 VOLTA_ENV="export VOLTA_HOME=\"$HOME_DIR/.volta\"; export PATH=\"\$VOLTA_HOME/bin:\$PATH\""
 
+# === OS Check (Fedora only) ===
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
+  echo "❌ This module supports Fedora/RHEL-based systems only."
+  exit 1
+fi
+
 # === Step: deps ===
 deps() {
   echo "📦 Checking for curl..."
 
   if ! command -v curl >/dev/null; then
-    echo "❌ curl is not installed. Please install it manually."
-    exit 1
+    echo "➡️  Installing curl via dnf..."
+    sudo dnf makecache -y
+    sudo dnf install -y curl
   fi
 }
 
@@ -79,3 +93,4 @@ clean) clean ;;
   exit 1
   ;;
 esac
+

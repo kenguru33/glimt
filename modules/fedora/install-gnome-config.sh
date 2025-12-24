@@ -2,9 +2,11 @@
 set -e
 
 MODULE_NAME="gnome-config"
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WALLPAPER_SOURCE="$REPO_DIR/../debian/wallpapers/background.jpg"
-WALLPAPER_DEST="$HOME/Pictures/background.jpg"
+WALLPAPER_DEST="$HOME_DIR/Pictures/background.jpg"
 ACTION="${1:-all}"
 
 # === OS Detection ===
@@ -56,14 +58,14 @@ install_config() {
   fi
 
   echo "📥 Copying wallpaper to Pictures folder..."
-  mkdir -p "$HOME/Pictures"
-  cp "$WALLPAPER_SOURCE" "$WALLPAPER_DEST"
+  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/Pictures"
+  sudo -u "$REAL_USER" cp "$WALLPAPER_SOURCE" "$WALLPAPER_DEST"
   echo "✅ Wallpaper copied to: $WALLPAPER_DEST"
 
   if command -v gsettings >/dev/null 2>&1; then
     echo "🎨 Setting wallpaper via gsettings..."
-    gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_DEST"
-    gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_DEST"
+    sudo -u "$REAL_USER" gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_DEST"
+    sudo -u "$REAL_USER" gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_DEST"
     echo "✅ Wallpaper set."
   else
     echo "⚠️  gsettings not available. Set wallpaper manually."
@@ -80,14 +82,14 @@ configure_gnome() {
   echo "⚙️  Applying GNOME settings..."
 
   # Dark theme preference
-  gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' || true
-  gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark' || true
+  sudo -u "$REAL_USER" gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' || true
+  sudo -u "$REAL_USER" gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark' || true
 
   # Window controls
-  gsettings set org.gnome.desktop.wm.preferences button-layout 'appmenu:minimize,maximize,close' || true
+  sudo -u "$REAL_USER" gsettings set org.gnome.desktop.wm.preferences button-layout 'appmenu:minimize,maximize,close' || true
 
   # Disable animations (optional, for performance)
-  # gsettings set org.gnome.desktop.interface enable-animations false || true
+  # sudo -u "$REAL_USER" gsettings set org.gnome.desktop.interface enable-animations false || true
 
   echo "✅ GNOME settings applied."
 }
@@ -97,7 +99,7 @@ clean_config() {
   echo "🧹 Cleaning GNOME config..."
 
   if [[ -f "$WALLPAPER_DEST" ]]; then
-    rm -f "$WALLPAPER_DEST"
+    sudo -u "$REAL_USER" rm -f "$WALLPAPER_DEST"
     echo "✅ Removed wallpaper."
   fi
 

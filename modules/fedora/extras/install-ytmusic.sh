@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# modules/install-outlook-pwa.sh
-# Outlook Web PWA (Chrome/Chromium/Brave) — Fedora only
+# modules/fedora/extras/install-ytmusic.sh
+# YouTube Music PWA (Chrome/Chromium/Brave) — Fedora only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
 trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
 
-MODULE_NAME="outlook-pwa"
+MODULE_NAME="ytmusic-pwa"
 ACTION="${1:-all}"
 
 log(){ printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
@@ -13,41 +13,35 @@ die(){ printf "ERROR: %s\n" "$*" >&2; exit 1; }
 
 # --- Fedora-only guard ---
 if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+[[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
+
+# --- App metadata ---
+APP_NAME="YouTube Music"
+APP_URL="https://music.youtube.com"
+APP_ID="ytmusic-ssb"
 
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
-# --- App metadata ---
-APP_NAME="Outlook"
-# For personal accounts: export OUTLOOK_URL=https://outlook.live.com/mail/
-APP_URL="${OUTLOOK_URL:-https://outlook.office.com/mail/}"
-APP_ID="outlook-ssb"
-
 LAUNCHER_DIR="$HOME_DIR/.local/share/applications"
-APP_DIR="$HOME_DIR/.local/share/outlook-pwa"
-PROFILE_DIR="$HOME_DIR/.local/share/outlook-chrome-profile"
+APP_DIR="$HOME_DIR/.local/share/ytmusic-pwa"
+PROFILE_DIR="$HOME_DIR/.local/share/ytmusic-chrome-profile"
 DESKTOP_FILE="$LAUNCHER_DIR/${APP_ID}.desktop"
 
 # Icon files (absolute path in .desktop)
-ICON_PNG="$APP_DIR/outlook.png"
-ICON_SVG="$APP_DIR/outlook.svg"
+ICON_PNG="$APP_DIR/icon.png"
+ICON_SVG="$APP_DIR/icon.svg"
 
 # Also install into the user hicolor theme (secondary, best-effort)
 HICOLOR="$HOME_DIR/.local/share/icons/hicolor"
 
 # CLI
 BIN_DIR="$HOME_DIR/.local/bin"
-CLI_WRAPPER="$BIN_DIR/outlook"
-CLI_ALIAS="$BIN_DIR/ol"
+CLI_WRAPPER="$BIN_DIR/ytmusic"
+CLI_ALIAS="$BIN_DIR/ytm"
 
-# --- Official icon sources (Wikimedia Commons) ---
-# Use Special:FilePath to avoid brittle /upload/ paths and encoded characters.
-# Primary (2018–present):
-OFFICIAL_SVG_MAIN="https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft_Office_Outlook_(2018%E2%80%93present).svg"
-OFFICIAL_PNG256_MAIN="https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft_Office_Outlook_(2018%E2%80%93present).svg?width=256"
-# Alternate new logo (also official):
-OFFICIAL_SVG_ALT="https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft_Outlook_new_logo.svg"
+# Official icon source (Wikimedia Commons)
+ICON_SRC_SVG="https://upload.wikimedia.org/wikipedia/commons/6/6a/Youtube_Music_icon.svg"
 
 # -------------------------------
 # Deps
@@ -65,10 +59,10 @@ download_file(){ # $1=url $2=dest
   local url="$1" dest="$2"
   # Use curl first (follows redirects), then wget
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
+    sudo -u "$REAL_USER" curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
+    sudo -u "$REAL_USER" wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
   fi
   return 1
 }
@@ -76,53 +70,33 @@ download_file(){ # $1=url $2=dest
 fetch_official_icon(){
   sudo -u "$REAL_USER" mkdir -p "$APP_DIR"
 
-  # 1) Try direct PNG rasterized by Commons at 256px
-  if download_file "$OFFICIAL_PNG256_MAIN" "$ICON_PNG" && [[ -s "$ICON_PNG" ]]; then
-    chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
-    log "Official Outlook PNG (256px) downloaded via Special:FilePath."
-    return 0
+  # Try to download SVG and convert to PNG
+  if download_file "$ICON_SRC_SVG" "$ICON_SVG" && [[ -s "$ICON_SVG" ]]; then
+    if command -v rsvg-convert >/dev/null 2>&1; then
+      sudo -u "$REAL_USER" rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG" || true
+      if [[ -s "$ICON_PNG" ]]; then
+        log "YouTube Music icon SVG downloaded and converted to PNG."
+        return 0
+      fi
+    else
+      die "librsvg2-tools (rsvg-convert) missing — cannot convert SVG to PNG."
+    fi
   fi
 
-  # 2) Try official SVGs, then convert to PNG
-  local svg_candidates=(
-    "$OFFICIAL_SVG_MAIN"
-    "$OFFICIAL_SVG_ALT"
-  )
-
-  for u in "${svg_candidates[@]}"; do
-    rm -f "$ICON_SVG"
-    if download_file "$u" "$ICON_SVG" && [[ -s "$ICON_SVG" ]]; then
-      chown "$REAL_USER:$REAL_USER" "$ICON_SVG"
-      if command -v rsvg-convert >/dev/null 2>&1; then
-        rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG" || true
-        chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
-        if [[ -s "$ICON_PNG" ]]; then
-          log "Official Outlook SVG fetched and converted to PNG."
-          return 0
-        fi
-      else
-        die "librsvg2-tools (rsvg-convert) missing — cannot convert official SVG to PNG."
-      fi
-    fi
-  done
-
-  die "Failed to obtain the official Outlook icon (both PNG and SVG sources failed)."
+  die "Failed to obtain the YouTube Music icon."
 }
 
 install_theme_icons(){
-  # Best-effort: register in hicolor so the name could also work if you switch to Icon=outlook-ssb
+  # Best-effort: register in hicolor so the name could also work if you switch to Icon=ytmusic-ssb
   sudo -u "$REAL_USER" mkdir -p "$HICOLOR"/{16x16,24x24,32x32,48x48,64x64,128x128,256x256}/apps
-  if command -v rsvg-convert >/dev/null 2>&1 && [[ -r "$ICON_SVG" ]]; then
-    # Use SVG if available for better scaling
+  local base="$ICON_PNG"; [[ -r "$ICON_SVG" ]] && base="$ICON_SVG"
+  if command -v rsvg-convert >/dev/null 2>&1 && [[ "$base" == "$ICON_SVG" ]]; then
     local sizes=(16 24 32 48 64 128 256)
     for s in "${sizes[@]}"; do
-      rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
-      chown "$REAL_USER:$REAL_USER" "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" 2>/dev/null || true
+      sudo -u "$REAL_USER" rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
     done
   else
-    # Fallback: just copy the PNG to 256x256
-    cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
-    chown "$REAL_USER:$REAL_USER" "$HICOLOR/256x256/apps/${APP_ID}.png" 2>/dev/null || true
+    sudo -u "$REAL_USER" cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
   fi
   command -v gtk-update-icon-cache >/dev/null 2>&1 && sudo -u "$REAL_USER" gtk-update-icon-cache -f -t "$HICOLOR" || true
 }
@@ -132,13 +106,13 @@ install_theme_icons(){
 # -------------------------------
 write_cli_wrapper(){
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR" "$PROFILE_DIR"
-  sudo -u "$REAL_USER" cat >"$CLI_WRAPPER" <<'EOSH'
+  cat >"$CLI_WRAPPER" <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_URL="${OUTLOOK_URL:-https://outlook.office.com/mail/}"
-APP_ID="outlook-ssb"
-PROFILE_DIR="${HOME}/.local/share/outlook-chrome-profile"
+APP_URL="https://music.youtube.com"
+APP_ID="ytmusic-ssb"
+PROFILE_DIR="${HOME}/.local/share/ytmusic-chrome-profile"
 
 detect_browser() {
   local c
@@ -152,11 +126,11 @@ detect_browser() {
 
 BROWSER="$(detect_browser || true)"
 if [[ -z "${BROWSER:-}" ]]; then
-  echo "outlook: No supported browser (Chrome/Chromium/Brave) found." >&2
+  echo "ytmusic: No supported browser (Chrome/Chromium/Brave) found." >&2
   exit 127
 fi
 
-force_x11="${OUTLOOK_FORCE_X11:-1}"
+force_x11="${YTMUSIC_FORCE_X11:-1}"
 declare -a ENV_PREFIX=()
 declare -a BFLAGS=(--no-first-run --no-default-browser-check --disable-sync --disable-extensions
   "--user-data-dir=${PROFILE_DIR}" "--class=${APP_ID}" "--app=${APP_URL}")
@@ -170,8 +144,7 @@ fi
 
 exec "${ENV_PREFIX[@]}" "$BROWSER" "${BFLAGS[@]}" "$@"
 EOSH
-  chmod 0755 "$CLI_WRAPPER"
-  chown "$REAL_USER:$REAL_USER" "$CLI_WRAPPER"
+  sudo -u "$REAL_USER" chmod 0755 "$CLI_WRAPPER"
   sudo -u "$REAL_USER" ln -sf "$CLI_WRAPPER" "$CLI_ALIAS"
   log "CLI installed: $(basename "$CLI_WRAPPER") (alias: $(basename "$CLI_ALIAS"))"
 }
@@ -188,25 +161,24 @@ write_desktop(){
   # Use the absolute PNG path (most reliable)
   local icon_field="$ICON_PNG"
 
-  sudo -u "$REAL_USER" cat >"$DESKTOP_FILE" <<EOF
+  cat >"$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=$APP_NAME
-Comment=Outlook Web as a standalone app
+Comment=Play music from YouTube Music
 Exec=$CLI_WRAPPER
 TryExec=$CLI_WRAPPER
 StartupNotify=false
 Terminal=false
 Icon=$icon_field
-Categories=Office;Email;Network;GTK;
-Keywords=mail;email;outlook;exchange;office365;microsoft;
+Categories=Audio;Music;Player;GTK;
+Keywords=music;audio;youtube;yt;stream;
 StartupWMClass=$APP_ID
 DBusActivatable=false
 X-GNOME-UsesNotifications=true
 EOF
-  chmod 0644 "$DESKTOP_FILE"
-  chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
+  sudo -u "$REAL_USER" chmod 0644 "$DESKTOP_FILE"
   log "Wrote $DESKTOP_FILE (Icon=$icon_field)"
 }
 
@@ -214,9 +186,9 @@ EOF
 # Config / Clean / Install
 # -------------------------------
 configure(){
-  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
+  command -v update-desktop-database >/dev/null 2>&1 && sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" || true
   case ":$PATH:" in *":$HOME_DIR/.local/bin:"*) ;; *)
-    log "Note: add '\$HOME/.local/bin' to PATH to use 'outlook'/'ol' from the terminal." ;;
+    log "Note: add '\$HOME_DIR/.local/bin' to PATH to use 'ytmusic'/'ytm' from the terminal." ;;
   esac
   log "Done."
 }
@@ -227,7 +199,7 @@ clean(){
   sudo -u "$REAL_USER" rm -rf "$APP_DIR"
   sudo -u "$REAL_USER" rm -f "$CLI_WRAPPER" "$CLI_ALIAS"
   sudo -u "$REAL_USER" rm -rf "$PROFILE_DIR"
-  sudo -u "$REAL_USER" rm -f "$HICOLOR"/{16x16,24x24,32x32,48x48,64x64,128x128,256x256}/apps/"${APP_ID}.png" 2>/dev/null || true
+  sudo -u "$REAL_USER" rm -f "$HICOLOR"/{16x16,24x24,32x32,48x48,64x64,128x128,256x256}/apps/"${APP_ID}.png" || true
   command -v gtk-update-icon-cache >/dev/null 2>&1 && sudo -u "$REAL_USER" gtk-update-icon-cache -f -t "$HICOLOR" || true
 }
 

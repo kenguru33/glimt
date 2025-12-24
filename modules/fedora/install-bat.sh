@@ -8,44 +8,52 @@ REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
 BAT_THEME_NAME="Catppuccin Mocha"
-BAT_BIN="$HOME_DIR/.local/bin/bat"
+BAT_BIN="bat"  # On Fedora, bat is already called "bat" (not "batcat")
 THEME_VARIANTS=(Latte Frappe Macchiato Mocha)
 THEME_REPO_BASE="https://github.com/catppuccin/bat/raw/main/themes"
 
-# === Detect OS ===
+# === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
-  OS_ID="$ID"
 else
-  echo "❌ Cannot detect operating system."
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
+  echo "❌ This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
 # === Step: deps ===
 install_deps() {
-  if [[ "$OS_ID" != "debian" && "$OS_ID" != "ubuntu" ]]; then
-    echo "❌ Unsupported OS: $OS_ID"
-    exit 1
-  fi
-
-  echo "📦 Installing batcat and wget..."
-  sudo apt update
-  sudo apt install -y bat wget
+  echo "📦 Installing bat and wget..."
+  sudo dnf makecache -y
+  sudo dnf install -y bat wget
 }
 
 # === Step: install ===
 install_bat() {
-  echo "🔗 Creating ~/.local/bin/bat → batcat symlink..."
-  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.local/bin"
-  sudo -u "$REAL_USER" ln -sf "$(command -v batcat)" "$BAT_BIN"
-  chown -R "$REAL_USER:$REAL_USER" "$HOME_DIR/.local"
+  echo "✅ Bat is installed via DNF (no symlink needed on Fedora)"
+  
+  if ! command -v bat >/dev/null 2>&1; then
+    echo "❌ bat command not found. Installing..."
+    install_deps
+  fi
+  
+  echo "✅ Bat is ready: $(command -v bat)"
 }
 
 # === Step: config ===
 config_bat() {
   echo "🎨 Installing Catppuccin themes..."
 
-  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" "$BAT_BIN" --config-dir)"
+  if ! command -v bat >/dev/null 2>&1; then
+    echo "❌ bat command not found. Run 'install' first."
+    exit 1
+  fi
+
+  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" bat --config-dir)"
   BAT_THEME_DIR="$BAT_CONFIG_DIR/themes"
   BAT_CONFIG_FILE="$BAT_CONFIG_DIR/config"
 
@@ -57,7 +65,7 @@ config_bat() {
   done
 
   echo "🧹 Rebuilding theme cache..."
-  sudo -u "$REAL_USER" "$BAT_BIN" cache --build
+  sudo -u "$REAL_USER" bat cache --build
 
   echo "⚙️ Setting default theme: $BAT_THEME_NAME"
   sudo -u "$REAL_USER" sh -c "echo '--theme=\"$BAT_THEME_NAME\"' > '$BAT_CONFIG_FILE'"
@@ -67,17 +75,15 @@ config_bat() {
 # === Step: clean ===
 clean_bat() {
   echo "🧹 Removing bat themes and config..."
-  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" "$BAT_BIN" --config-dir 2>/dev/null || echo "$HOME_DIR/.config/bat")"
+  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" bat --config-dir 2>/dev/null || echo "$HOME_DIR/.config/bat")"
   BAT_THEME_DIR="$BAT_CONFIG_DIR/themes"
   BAT_CONFIG_FILE="$BAT_CONFIG_DIR/config"
   BAT_CACHE_DIR="$HOME_DIR/.cache/bat"
 
   sudo -u "$REAL_USER" rm -rf "$BAT_THEME_DIR" "$BAT_CONFIG_FILE" "$BAT_CACHE_DIR"
 
-  if [[ -L "$BAT_BIN" ]]; then
-    echo "❌ Removing bat symlink"
-    sudo -u "$REAL_USER" rm -f "$BAT_BIN"
-  fi
+  echo "✅ Bat config and themes removed."
+  echo "ℹ️  To remove bat package: sudo dnf remove -y bat"
 }
 
 # === Entry point ===
@@ -93,3 +99,4 @@ case "$ACTION" in
     exit 1
     ;;
 esac
+

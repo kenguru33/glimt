@@ -5,9 +5,6 @@ trap 'echo "❌ Discord installation failed. Exiting." >&2' ERR
 MODULE_NAME="discord"
 ACTION="${1:-all}"
 
-RPM_URL="https://discord.com/api/download?platform=linux&format=rpm"
-TMP_RPM="/tmp/discord_latest.rpm"
-
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
@@ -21,23 +18,44 @@ else
 fi
 
 # === Dependencies ===
-DEPS=(curl libatomic libappindicator-gtk3 libcxx)
+DEPS=(libatomic libappindicator-gtk3 libcxx)
 
 install_deps() {
   echo "📦 Installing dependencies..."
   sudo dnf makecache -y
+  
+  # Check if RPM Fusion is enabled
+  if ! rpm -q rpmfusion-free-release &>/dev/null && ! rpm -q rpmfusion-nonfree-release &>/dev/null; then
+    echo "📁 Adding RPM Fusion repository..."
+    FEDORA_VERSION=$(rpm -E %fedora 2>/dev/null || echo "")
+    if [[ -n "$FEDORA_VERSION" ]]; then
+      sudo dnf install -y "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VERSION}.noarch.rpm" || true
+    else
+      echo "⚠️  Could not determine Fedora version, trying generic RPM Fusion setup..."
+      sudo dnf install -y https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm || true
+    fi
+  fi
+  
   sudo dnf install -y "${DEPS[@]}" || true
 }
 
 install_discord() {
-  echo "⬇️  Downloading Discord RPM..."
-  curl -L "$RPM_URL" -o "$TMP_RPM"
-
-  echo "📦 Installing Discord..."
-  sudo dnf install -y "$TMP_RPM"
-
-  echo "🧹 Cleaning up..."
-  rm -f "$TMP_RPM"
+  echo "📦 Installing Discord from RPM Fusion..."
+  
+  if command -v discord &>/dev/null; then
+    echo "✅ Discord is already installed."
+    return
+  fi
+  
+  # Ensure RPM Fusion is available
+  if ! dnf list --available discord &>/dev/null; then
+    echo "⚠️  Discord not found in repositories. Adding RPM Fusion..."
+    install_deps
+  fi
+  
+  echo "⬇️  Installing Discord..."
+  sudo dnf install -y discord
+  
   echo "✅ Discord installed."
 }
 

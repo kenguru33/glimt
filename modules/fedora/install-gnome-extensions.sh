@@ -24,18 +24,18 @@ else
   exit 1
 fi
 
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
+  echo "❌ This module supports Fedora/RHEL-based systems only."
+  exit 1
+fi
+
 # === Define DEPS ===
-DEPS=(curl unzip jq gnome-shell-extension-prefs dconf-cli)
+DEPS=(curl unzip jq gnome-extensions-app dconf)
 
 install_deps() {
   echo "📦 Installing dependencies for $OS_ID..."
-  if [[ "$OS_ID" == "debian" || "$ID_LIKE" == *"debian"* ]]; then
-    sudo apt update
-    sudo apt install -y "${DEPS[@]}"
-  else
-    echo "❌ Unsupported OS: $OS_ID. Only Debian-based systems are supported."
-    exit 1
-  fi
+  sudo dnf makecache -y
+  sudo dnf install -y "${DEPS[@]}"
 }
 
 # === GNOME Extension Install ===
@@ -46,7 +46,7 @@ reload_gnome_shell() {
 
 enable_extension_safely() {
   local uuid="$1"
-  if sudo -u "$REAL_USER" gnome-extensions list | grep -q "$uuid"; then
+  if gnome-extensions list | grep -q "$uuid"; then
     echo "✅ Enabling $uuid"
     sudo -u "$REAL_USER" gnome-extensions enable "$uuid" && echo "🟢 $uuid enabled."
   else
@@ -127,7 +127,7 @@ config_extensions() {
   sudo -u "$REAL_USER" gsettings set org.gnome.shell.extensions.blur-my-shell color-and-noise true
   sudo -u "$REAL_USER" gsettings set org.gnome.shell.extensions.blur-my-shell hacks-level 1
 
-  if command -v dconf &>/dev/null; then
+  if command -v dconf >/dev/null 2>&1; then
     sudo -u "$REAL_USER" dconf write /org/gnome/shell/extensions/blur-my-shell/panel/override-background-dynamically false || true
   fi
 
@@ -181,3 +181,4 @@ all)
   exit 1
   ;;
 esac
+

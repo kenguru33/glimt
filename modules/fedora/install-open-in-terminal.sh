@@ -9,26 +9,26 @@ REPO_URL="https://github.com/Stunkymonkey/nautilus-open-any-terminal.git"
 SRC_DIR="$HOME_DIR/.cache/nautilus-open-any-terminal"
 EXT_FILE="$HOME_DIR/.local/share/nautilus-python/extensions/nautilus_open_any_terminal.py"
 
-# --- Debian check ---
+# --- Fedora check ---
 if [[ -f /etc/os-release ]]; then . /etc/os-release; else
   echo "❌ Cannot detect OS"
   exit 1
 fi
-[[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || {
-  echo "❌ Debian only."
+[[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
+  echo "❌ Fedora/RHEL-based systems only."
   exit 1
 }
 
 deps() {
   echo "📦 Installing dependencies..."
-  sudo apt update -y
-  sudo apt install -y python3-nautilus gir1.2-gtk-4.0 libglib2.0-bin make gettext git
+  sudo dnf makecache -y
+  sudo dnf install -y python3-nautilus gtk4 glib2 make gettext git
 }
 
 remove_system_entry() {
-  if dpkg -s nautilus-extension-gnome-terminal >/dev/null 2>&1; then
+  if rpm -q nautilus-extension-gnome-terminal >/dev/null 2>&1; then
     echo "🗑 Removing system GNOME 'Open in Terminal'..."
-    sudo apt remove -y nautilus-extension-gnome-terminal
+    sudo dnf remove -y nautilus-extension-gnome-terminal
   fi
 }
 
@@ -60,8 +60,8 @@ configure() {
   fi
 
   echo "⚙️  Setting preferred terminal: $SELECTED"
-  gsettings set com.github.stunkymonkey.nautilus-open-any-terminal terminal "$SELECTED"
-  gsettings set com.github.stunkymonkey.nautilus-open-any-terminal new-tab true
+  sudo -u "$REAL_USER" gsettings set com.github.stunkymonkey.nautilus-open-any-terminal terminal "$SELECTED"
+  sudo -u "$REAL_USER" gsettings set com.github.stunkymonkey.nautilus-open-any-terminal new-tab true
 
   # Patch label to always say "Open in terminal"
   if [[ -f "$EXT_FILE" ]]; then
@@ -112,3 +112,4 @@ all)
   exit 2
   ;;
 esac
+
