@@ -14,9 +14,9 @@ PALETTE_URL="https://gitlab.gnome.org/chergert/ptyxis/-/raw/main/src/palettes/${
 
 # === Step: deps ===
 deps() {
-  echo "📦 Ensuring Ptyxis and wget are installed (Fedora)..."
+  echo "📦 Ensuring Ptyxis and curl are installed (Fedora)..."
   sudo dnf makecache -y
-  sudo dnf install -y ptyxis wget
+  sudo dnf install -y ptyxis curl
 }
 
 # === Step: install ===
@@ -31,8 +31,25 @@ install() {
     return 0
   fi
 
+  # Try to find palette in system installation first
+  SYSTEM_PALETTE="/usr/share/ptyxis/palettes/${PALETTE_NAME}.json"
+  if [[ -f "$SYSTEM_PALETTE" ]]; then
+    echo "📋 Copying palette from system installation..."
+    sudo -u "$REAL_USER" cp "$SYSTEM_PALETTE" "$PALETTE_FILE"
+    chown "$REAL_USER:$REAL_USER" "$PALETTE_FILE"
+    echo "✅ Catppuccin Mocha palette installed for Ptyxis."
+    return 0
+  fi
+
+  # Fallback: Download from upstream
   echo "⬇️  Downloading palette from upstream Ptyxis repository..."
-  wget -q "$PALETTE_URL" -O "$PALETTE_FILE"
+  if ! sudo -u "$REAL_USER" curl -fsSL "$PALETTE_URL" -o "$PALETTE_FILE"; then
+    echo "❌ Failed to download palette from: $PALETTE_URL"
+    echo "   Attempted to download from GitLab, but the file may have moved."
+    echo "   You can manually download the palette from:"
+    echo "   https://gitlab.gnome.org/chergert/ptyxis"
+    exit 1
+  fi
   chown "$REAL_USER:$REAL_USER" "$PALETTE_FILE"
 
   echo "✅ Catppuccin Mocha palette installed for Ptyxis."
