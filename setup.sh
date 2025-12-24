@@ -109,11 +109,14 @@ run_with_spinner() {
   shift
 
   # Allow disabling spinners (e.g. if they render poorly) via env, or if gum is missing
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" ]] || ! command -v gum >/dev/null 2>&1; then
+  # Also disable if not a TTY (e.g., when output is being piped or logged)
+  # This prevents multiple spinner lines from appearing when output is captured
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" ]] || ! command -v gum >/dev/null 2>&1 || [[ ! -t 1 ]]; then
     echo "▶️  $title"
     "$@"
   else
-    # If gum fails for any reason, fall back to running the command directly
+    # Redirect only stdout to suppress command output; stderr is needed for spinner animation
+    # If gum spin fails, fall back to running without spinner
     if ! gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
       echo "▶️  $title"
       "$@"
