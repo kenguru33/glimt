@@ -14,13 +14,44 @@ TARGET_FILE="$CONFIG_DIR/eza.zsh"
 # === Step: deps ===
 deps() {
   echo "📦 Installing eza..."
+  
+  # Check if eza is already installed
+  if command -v eza &>/dev/null; then
+    echo "✅ eza is already installed."
+    return
+  fi
+  
+  # Try Fedora repos first
   sudo dnf makecache -y
-  if sudo dnf install -y eza; then
+  if sudo dnf install -y eza 2>/dev/null; then
     echo "✅ eza installed from Fedora repos."
+    return
+  fi
+  
+  # Fallback: Enable COPR repository and install
+  echo "⚠️  eza not available in Fedora repos. Enabling COPR repository..."
+  
+  # Install dnf-plugins-core if not present (needed for copr)
+  if ! rpm -q dnf-plugins-core &>/dev/null; then
+    echo "📦 Installing dnf-plugins-core..."
+    sudo dnf install -y dnf-plugins-core
+  fi
+  
+  # Enable dturner/eza COPR repository
+  echo "🔧 Enabling dturner/eza COPR repository..."
+  if sudo dnf copr enable -y dturner/eza; then
+    echo "✅ COPR repository enabled."
   else
-    echo "❌ Failed to install eza from Fedora repos."
-    echo "   The previous COPR-based installation path is no longer reliable (HTTP 404)."
-    echo "   Please install eza manually from upstream or an alternative source, then re-run this script with 'config'."
+    echo "❌ Failed to enable COPR repository."
+    exit 1
+  fi
+  
+  # Install eza from COPR
+  echo "📦 Installing eza from COPR repository..."
+  if sudo dnf install -y eza; then
+    echo "✅ eza installed from COPR repository."
+  else
+    echo "❌ Failed to install eza from COPR repository."
     exit 1
   fi
 }
