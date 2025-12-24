@@ -21,12 +21,11 @@ fi
 
 # Lens repository configuration
 LENS_REPO="/etc/yum.repos.d/lens.repo"
-LENS_KEY="/etc/pki/rpm-gpg/RPM-GPG-KEY-lens"
 
 install_deps() {
   echo "📦 Installing dependencies..."
   sudo dnf makecache -y
-  sudo dnf install -y curl gnupg2
+  sudo dnf install -y dnf-plugins-core curl
 }
 
 install_lens() {
@@ -37,20 +36,12 @@ install_lens() {
     return
   fi
 
-  echo "🔑 Importing GPG key..."
-  curl -fsSL https://downloads.k8slens.dev/keys/gpg | sudo gpg --dearmor -o "$LENS_KEY" 2>/dev/null || \
-    curl -fsSL https://downloads.k8slens.dev/keys/gpg | sudo rpm --import - 2>/dev/null || true
-
-  echo "📁 Adding DNF repository..."
-  sudo tee "$LENS_REPO" > /dev/null <<EOF
-[lens]
-name=Lens Desktop
-baseurl=https://downloads.k8slens.dev/rpm/stable/\$basearch
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://downloads.k8slens.dev/keys/gpg
-EOF
+  echo "📁 Adding Lens repository..."
+  if [[ -f "$LENS_REPO" ]]; then
+    echo "ℹ️  Lens repository already exists, removing old one..."
+    sudo rm -f "$LENS_REPO"
+  fi
+  sudo dnf config-manager addrepo --from-repofile=https://downloads.k8slens.dev/rpm/lens.repo
 
   echo "🔄 Updating package lists..."
   sudo dnf makecache -y
@@ -68,8 +59,10 @@ config_lens() {
 clean_lens() {
   echo "🧹 Removing Lens Desktop..."
   sudo dnf remove -y lens-desktop lens || true
-  sudo rm -f "$LENS_REPO" "$LENS_KEY"
-  sudo dnf makecache -y
+  if [[ -f "$LENS_REPO" ]]; then
+    sudo rm -f "$LENS_REPO"
+    sudo dnf makecache -y
+  fi
   echo "✅ Lens Desktop removed."
 }
 
