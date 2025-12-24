@@ -96,6 +96,14 @@ add_user_to_docker_group() {
 
 enable_and_start_docker() {
   echo "🚀 Enabling and starting Docker service…"
+  
+  # Check if docker.service is masked (e.g., by rootless docker setup)
+  if systemctl is-enabled docker.service 2>/dev/null | grep -q masked; then
+    echo "⚠️  Docker service is currently masked (likely by rootless docker setup)."
+    echo "🔓 Unmasking docker.service..."
+    sudo systemctl unmask docker.service
+  fi
+  
   sudo systemctl enable docker
   sudo systemctl start docker
   echo "✅ Docker service enabled and started."
