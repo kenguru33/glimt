@@ -21,7 +21,7 @@ else
 fi
 
 # === Dependencies ===
-DEPS=(curl wget libatomic libappindicator-gtk3 libcxx)
+DEPS=(curl libatomic libappindicator-gtk3 libcxx)
 
 install_deps() {
   echo "📦 Installing dependencies..."
@@ -31,13 +31,14 @@ install_deps() {
 
 install_discord() {
   echo "⬇️  Downloading Discord RPM..."
-  wget -O "$TMP_RPM" "$RPM_URL"
+  curl -L "$RPM_URL" -o "$TMP_RPM"
 
   echo "📦 Installing Discord..."
   sudo dnf install -y "$TMP_RPM"
 
   echo "🧹 Cleaning up..."
   rm -f "$TMP_RPM"
+  echo "✅ Discord installed."
 }
 
 config_discord() {

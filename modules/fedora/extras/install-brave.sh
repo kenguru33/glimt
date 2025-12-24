@@ -30,6 +30,8 @@ install_pkg() {
   echo "📦 [$MODULE_NAME] Installing Brave browser via RPM…"
   curl -L "$RPM_URL" -o "$TMP_RPM"
   sudo dnf install -y "$TMP_RPM"
+  rm -f "$TMP_RPM"
+  echo "✅ Brave browser installed."
 }
 
 config() {

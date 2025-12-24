@@ -5,8 +5,22 @@ trap 'echo "❌ Error on line $LINENO" >&2' ERR
 MODULE_NAME="vscode"
 ACTION="${1:-all}"
 
-RPM_URL="https://code.visualstudio.com/sha/download?build=stable&os=linux-rpm-x64"
-TMP_RPM="/tmp/vscode-latest.rpm"
+# Determine architecture
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)
+    RPM_URL="https://code.visualstudio.com/sha/download?build=stable&os=linux-rpm-x64"
+    TMP_RPM="/tmp/vscode-latest.x86_64.rpm"
+    ;;
+  aarch64)
+    RPM_URL="https://code.visualstudio.com/sha/download?build=stable&os=linux-rpm-arm64"
+    TMP_RPM="/tmp/vscode-latest.aarch64.rpm"
+    ;;
+  *)
+    echo "❌ Unsupported architecture: $ARCH"
+    exit 1
+    ;;
+esac
 
 fedora_guard() {
   [[ -r /etc/os-release ]] || {
@@ -30,6 +44,8 @@ install_pkg() {
   echo "📦 [$MODULE_NAME] Installing VS Code via RPM…"
   curl -L "$RPM_URL" -o "$TMP_RPM"
   sudo dnf install -y "$TMP_RPM"
+  rm -f "$TMP_RPM"
+  echo "✅ VS Code installed."
 }
 
 config() {
