@@ -28,9 +28,28 @@ done
 
 ACTION="${ACTION:-all}"
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
-MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
+
+# === OS Detection ===
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  OS_ID="$ID"
+  OS_ID_LIKE="${ID_LIKE:-}"
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+# Determine modules directory based on OS
+if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
+  MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
+elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
+  MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
+else
+  echo "❌ Unsupported OS: $OS_ID"
+  exit 1
+fi
 
 # === Define modules: [name]=binary (or absolute path)
 declare -A MODULES=(
@@ -43,13 +62,11 @@ declare -A MODULES=(
   [vscode]="code"
   [discord]="/usr/share/discord/Discord"
   [dotnet8]="dotnet"
-  [dotnet9]="dotnet"
+  [dotnet10]="dotnet"
   [gitkraken]="gitkraken"
   [docker-rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
-  [brave]="brave-browser"
   [spotify]="spotify"
-  [navicat]="navicat"
   [virtualization-suite]="/usr/bin/gnome-boxes"  # Main binary for virtualization suite
   [notion]="notion"
   [ytmusic]="ytm"
@@ -69,12 +86,10 @@ declare -A MODULE_DESCRIPTIONS=(
   [vscode]="Visual Studio Code"
   [discord]="Discord desktop client"
   [dotnet8]=".NET 8 SDK + runtime"
-  [dotnet9]=".NET 9 SDK + runtime"
+  [dotnet10]=".NET 10 SDK + runtime"
   [gitkraken]="GitKraken Git client"
   [docker-rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
-  [brave]="Brave browser"
-  [navicat]="Navicat Premium"
   [spotify]="Spotify desktop client"
   [virtualization-suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
   [notion]="Notion app (web app in Chrome)"
@@ -103,8 +118,8 @@ module_installed() {
   dotnet8)
     dotnet --list-sdks 2>/dev/null | grep -q '^8\.'
     ;;
-  dotnet9)
-    dotnet --list-sdks 2>/dev/null | grep -q '^9\.'
+  dotnet10)
+    dotnet --list-sdks 2>/dev/null | grep -q '^10\.'
     ;;
   *)
     local bin="${MODULES[$name]}"
@@ -115,6 +130,40 @@ module_installed() {
     fi
     ;;
   esac
+}
+
+# --- Helper: run a command with (optional) spinner
+run_with_spinner() {
+  local title="$1"
+  shift
+
+  # Use spinner if:
+  # - Not explicitly disabled (GLIMT_DISABLE_SPIN != 1)
+  # - gum is available
+  # - stdout is a TTY (interactive terminal)
+  # - stderr is a TTY (needed for spinner output)
+  # - TERM is set and not "dumb" (indicates a real terminal with escape sequence support)
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
+     command -v gum >/dev/null 2>&1 && \
+     [[ -t 1 ]] && \
+     [[ -t 2 ]] && \
+     [[ -n "${TERM:-}" ]] && \
+     [[ "${TERM:-}" != "dumb" ]]; then
+    # Use spinner: redirect only stdout to suppress command output
+    # stderr is left alone so spinner can write to it and update in place
+    # The spinner writes escape sequences to stderr to update the same line
+    if gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+      : # Spinner completed successfully
+    else
+      # Fallback if spinner fails
+      echo "▶️  $title"
+      "$@"
+    fi
+  else
+    # No spinner: simple message (output is piped, logged, or terminal doesn't support it)
+    echo "▶️  $title"
+    "$@"
+  fi
 }
 
 run_module_script() {
@@ -135,7 +184,7 @@ run_module_script() {
     bash "$script" "$mode" "${FLAGS[@]}"
     [[ "$mode" == "clean" ]] && echo "🧹 Cleaned: $label" || echo "✅ Finished: $label"
   else
-    gum spin --spinner dot --title "Running $label..." -- bash -c "bash \"$script\" \"$mode\" ${FLAGS[*]}" >/dev/null
+    run_with_spinner "Running $label..." bash "$script" "$mode" "${FLAGS[@]}"
     [[ "$mode" == "clean" ]] && gum style --foreground 8 "✔️  $label cleaned" ||
       gum style --foreground 10 "✔️  $label finished"
   fi

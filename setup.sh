@@ -10,20 +10,51 @@ if [[ "${1:-}" == "--verbose" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_DIR="${1:-"$SCRIPT_DIR/modules/debian"}"
 CONFIG_DIR="$HOME/.config/glimt"
 GIT_CONFIG="$CONFIG_DIR/user-git-info.config"
 AVATAR_CONFIG="$CONFIG_DIR/set-user-avatar.config"
 mkdir -p "$CONFIG_DIR"
 
-# --- helpers: apt quiet on success, loud on error ---
-apt_quiet() {
-  # usage: apt_quiet install -y git wget
-  if ! sudo apt "$@" >/dev/null; then
-    echo "❌ apt $* failed" >&2
-    # re-run noisily to surface the real error message
-    sudo apt "$@"
-    exit 1
+# === OS Detection ===
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  OS_ID="$ID"
+  OS_ID_LIKE="${ID_LIKE:-}"
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+# Determine modules directory based on OS
+if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
+  MODULES_DIR="${1:-"$SCRIPT_DIR/modules/fedora"}"
+  PKG_MANAGER="dnf"
+elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
+  MODULES_DIR="${1:-"$SCRIPT_DIR/modules/debian"}"
+  PKG_MANAGER="apt"
+else
+  echo "❌ Unsupported OS: $OS_ID"
+  echo "   Supported: Debian, Ubuntu, Fedora, RHEL"
+  exit 1
+fi
+
+TARGET_DIR="$MODULES_DIR"
+
+# --- helpers: package manager quiet on success, loud on error ---
+pkg_quiet() {
+  # usage: pkg_quiet install -y git wget
+  if [[ "$PKG_MANAGER" == "dnf" ]]; then
+    if ! sudo dnf "$@" -q >/dev/null 2>&1; then
+      echo "❌ dnf $* failed" >&2
+      sudo dnf "$@"
+      exit 1
+    fi
+  elif [[ "$PKG_MANAGER" == "apt" ]]; then
+    if ! sudo apt "$@" >/dev/null; then
+      echo "❌ apt $* failed" >&2
+      sudo apt "$@"
+      exit 1
+    fi
   fi
 }
 
@@ -40,19 +71,71 @@ ensure_deps() {
   # If sudo token isn't cached yet, ask now (prevents hidden prompts when stdout is /dev/null)
   sudo -n true 2>/dev/null || sudo -v
 
-  # Noninteractive to avoid tzdata prompts etc.
-  export DEBIAN_FRONTEND=noninteractive
-
-  apt_quiet update -y
-  apt_quiet install -y git wget
-
-  if ! command -v gum >/dev/null 2>&1; then
-    echo "📦 Installing gum..."
-    apt_quiet update -y
-    apt_quiet install -y gum
+  if [[ "$PKG_MANAGER" == "dnf" ]]; then
+    # Fedora/RHEL
+    pkg_quiet makecache -y
+    pkg_quiet install -y git wget
+    if ! command -v gum >/dev/null 2>&1; then
+      echo "📦 Installing gum..."
+      pkg_quiet makecache -y
+      # Try to install from RPM Fusion or use go install
+      if ! pkg_quiet install -y gum 2>/dev/null; then
+        echo "⚠️  gum not in repos, will install via go or manual method"
+        # Fallback: install via go or download binary
+        if command -v go >/dev/null 2>&1; then
+          go install github.com/charmbracelet/gum@latest
+        else
+          echo "❌ Please install gum manually or install golang first"
+        fi
+      fi
+    fi
+  elif [[ "$PKG_MANAGER" == "apt" ]]; then
+    # Debian/Ubuntu
+    export DEBIAN_FRONTEND=noninteractive
+    pkg_quiet update -y
+    pkg_quiet install -y git wget
+    if ! command -v gum >/dev/null 2>&1; then
+      echo "📦 Installing gum..."
+      pkg_quiet update -y
+      pkg_quiet install -y gum
+    fi
   fi
 }
 ensure_deps
+
+# === Helper: run a command with (optional) spinner ===
+run_with_spinner() {
+  local title="$1"
+  shift
+
+  # Use spinner if:
+  # - Not explicitly disabled (GLIMT_DISABLE_SPIN != 1)
+  # - gum is available
+  # - stdout is a TTY (interactive terminal)
+  # - stderr is a TTY (needed for spinner output)
+  # - TERM is set and not "dumb" (indicates a real terminal with escape sequence support)
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
+     command -v gum >/dev/null 2>&1 && \
+     [[ -t 1 ]] && \
+     [[ -t 2 ]] && \
+     [[ -n "${TERM:-}" ]] && \
+     [[ "${TERM:-}" != "dumb" ]]; then
+    # Use spinner: redirect only stdout to suppress command output
+    # stderr is left alone so spinner can write to it and update in place
+    # The spinner writes escape sequences to stderr to update the same line
+    if gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+      : # Spinner completed successfully
+    else
+      # Fallback if spinner fails
+      echo "▶️  $title"
+      "$@"
+    fi
+  else
+    # No spinner: simple message (output is piped, logged, or terminal doesn't support it)
+    echo "▶️  $title"
+    "$@"
+  fi
+}
 
 # === Splash Screen ===
 clear
@@ -137,16 +220,16 @@ PRIORITY_MODULES=(
 # Run priority modules first (if present & executable)
 for p in "${PRIORITY_MODULES[@]}"; do
   script="$TARGET_DIR/$p"
-  if [[ -x "$script" ]]; then
-    if $VERBOSE; then
-      echo "▶️  Running (priority): $p"
-      "$script" all
-      echo "✅ Finished: $p"
-    else
-      gum spin --spinner dot --title "Running $p..." -- "$script" all >/dev/null
-      gum style --foreground 10 "✔️  $p finished"
-    fi
-  else
+      if [[ -x "$script" ]]; then
+        if $VERBOSE; then
+          echo "▶️  Running (priority): $p"
+          "$script" all
+          echo "✅ Finished: $p"
+        else
+          run_with_spinner "Running $p..." "$script" all
+          gum style --foreground 10 "✔️  $p finished"
+        fi
+      else
     echo "⚠️  Priority module not found or not executable: $script"
   fi
 done
@@ -162,7 +245,7 @@ find "$TARGET_DIR" -maxdepth 1 -type f -name "*.sh" -executable \
         "$script" all
         echo "✅ Finished: $MODULE_NAME"
       else
-        gum spin --spinner dot --title "Running $MODULE_NAME..." -- "$script" all >/dev/null
+        run_with_spinner "Running $MODULE_NAME..." "$script" all
         gum style --foreground 10 "✔️  $MODULE_NAME finished"
       fi
     done
@@ -188,10 +271,11 @@ chmod +x "$HOME/.local/bin/glimt"
 
 # === Copy autocomplete file (guarded) ===
 mkdir -p "$HOME/.zsh/completions"
-if [[ -f "$SCRIPT_DIR/modules/debian/config/_glimt" ]]; then
-  cp "$SCRIPT_DIR/modules/debian/config/_glimt" "$HOME/.zsh/completions"
+COMPLETION_FILE="$MODULES_DIR/config/_glimt"
+if [[ -f "$COMPLETION_FILE" ]]; then
+  cp "$COMPLETION_FILE" "$HOME/.zsh/completions"
 else
-  echo "⚠️  Zsh completion file not found: $SCRIPT_DIR/modules/debian/config/_glimt"
+  echo "⚠️  Zsh completion file not found: $COMPLETION_FILE"
 fi
 
 # Revert to normal idle and lock settings (guard for non-GNOME)
@@ -202,8 +286,17 @@ fi
 
 # === Done ===
 echo ""
+OS_NAME=""
+if [[ "$OS_ID" == "fedora" ]]; then
+  OS_NAME="Fedora ${VERSION_ID:-}"
+elif [[ "$OS_ID" == "debian" ]]; then
+  OS_NAME="Debian ${VERSION_CODENAME:-Trixie}"
+else
+  OS_NAME="$OS_ID"
+fi
+
 gum style --padding "1 4" --margin "1" --align center \
   --foreground 10 --bold \
   "🎉 Glimt setup complete!" "" \
-  "$(gum style --foreground 15 'Your Debian Trixie system is now ready to use.')" "" \
+  "$(gum style --foreground 15 "Your $OS_NAME system is now ready to use.")" "" \
   "$(gum style --foreground 220 '🔁 Please reboot to apply all changes.')"

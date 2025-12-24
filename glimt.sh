@@ -8,8 +8,28 @@ REPO_DIR="${REPO_DIR:-$HOME/.glimt}"
 EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
 SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
-MODULES_DIR="$REPO_DIR/modules/debian"   # ← restrict to modules/debian
 VALID_ACTIONS=("update" "module-selection" "install" "clean")
+
+# === OS Detection ===
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+  OS_ID="$ID"
+  OS_ID_LIKE="${ID_LIKE:-}"
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
+  exit 1
+fi
+
+# Determine modules directory based on OS
+if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
+  MODULES_DIR="$REPO_DIR/modules/fedora"
+elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
+  MODULES_DIR="$REPO_DIR/modules/debian"
+else
+  echo "❌ Unsupported OS: $OS_ID"
+  echo "   Supported: Debian, Ubuntu, Fedora, RHEL"
+  exit 1
+fi
 
 # === Helpers ===
 print_usage() {
@@ -17,9 +37,9 @@ print_usage() {
 Usage: $SCRIPT_NAME <action> [args...]
 
 Actions:
-  update [module]     → git pull and run installers in modules/debian with 'all', or only <module> if provided
-  install <module>    → run modules/debian/**/install-<module>.sh with 'all'
-  clean <module>      → run modules/debian/**/install-<module>.sh with 'clean'
+  update [module]     → git pull and run installers in modules/<os> with 'all', or only <module> if provided
+  install <module>    → run modules/<os>/**/install-<module>.sh with 'all'
+  clean <module>      → run modules/<os>/**/install-<module>.sh with 'clean'
   module-selection    → run setup-extras.sh (optional modules UI)
 
 Note: <module> is the installer basename without "install-" and ".sh".
@@ -77,7 +97,7 @@ run_update() {
     [[ -n "$script" ]] || { echo "❌ Module not found: $maybe_module"; exit 1; }
     run_installer "$script" "all"
   else
-    echo "🚀 Running all installers in modules/debian with 'all'..."
+    echo "🚀 Running all installers in $MODULES_DIR with 'all'..."
     mapfile -t installers < <(find "$MODULES_DIR" -type f -name 'install-*.sh' -print 2>/dev/null | sort)
     if (( ${#installers[@]} == 0 )); then
       echo "ℹ️  No installers found under: $MODULES_DIR"

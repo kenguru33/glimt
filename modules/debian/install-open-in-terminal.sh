@@ -3,9 +3,11 @@ set -euo pipefail
 trap 'echo "❌ ${BASH_COMMAND} failed (line $LINENO)"; exit 1' ERR
 
 ACTION="${1:-all}"
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
 REPO_URL="https://github.com/Stunkymonkey/nautilus-open-any-terminal.git"
-SRC_DIR="${HOME}/.cache/nautilus-open-any-terminal"
-EXT_FILE="$HOME/.local/share/nautilus-python/extensions/nautilus_open_any_terminal.py"
+SRC_DIR="$HOME_DIR/.cache/nautilus-open-any-terminal"
+EXT_FILE="$HOME_DIR/.local/share/nautilus-python/extensions/nautilus_open_any_terminal.py"
 
 # --- Debian check ---
 if [[ -f /etc/os-release ]]; then . /etc/os-release; else
@@ -32,14 +34,14 @@ remove_system_entry() {
 
 install_ext() {
   echo "⬇️  Fetching source..."
-  rm -rf "$SRC_DIR"
-  git clone --depth=1 "$REPO_URL" "$SRC_DIR"
+  sudo -u "$REAL_USER" rm -rf "$SRC_DIR"
+  sudo -u "$REAL_USER" git clone --depth=1 "$REPO_URL" "$SRC_DIR"
 
   echo "🛠 Installing userspace extension..."
   pushd "$SRC_DIR" >/dev/null
-  make
-  make install-nautilus schema
-  glib-compile-schemas "${HOME}/.local/share/glib-2.0/schemas"
+  sudo -u "$REAL_USER" make
+  sudo -u "$REAL_USER" make install-nautilus schema
+  sudo -u "$REAL_USER" glib-compile-schemas "$HOME_DIR/.local/share/glib-2.0/schemas"
   popd >/dev/null
 }
 
@@ -63,8 +65,8 @@ configure() {
 
   # Patch label to always say "Open in terminal"
   if [[ -f "$EXT_FILE" ]]; then
-    cp -a "$EXT_FILE" "$EXT_FILE.bak"
-    sed -i 's/Open in Terminal/Open in terminal/' "$EXT_FILE"
+    sudo -u "$REAL_USER" cp -a "$EXT_FILE" "$EXT_FILE.bak"
+    sudo -u "$REAL_USER" sed -i 's/Open in Terminal/Open in terminal/' "$EXT_FILE"
     echo "📝 Menu label set to: Open in terminal"
   else
     echo "⚠️ Extension file not found to patch label."
@@ -73,13 +75,13 @@ configure() {
 
 restart_nautilus() {
   echo "🔄 Restarting Nautilus..."
-  nautilus -q || true
+  sudo -u "$REAL_USER" nautilus -q || true
 }
 
 clean() {
   echo "🧹 Removing userspace extension..."
-  rm -f "$EXT_FILE" "$EXT_FILE.bak"
-  glib-compile-schemas "${HOME}/.local/share/glib-2.0/schemas" || true
+  sudo -u "$REAL_USER" rm -f "$EXT_FILE" "$EXT_FILE.bak"
+  sudo -u "$REAL_USER" glib-compile-schemas "$HOME_DIR/.local/share/glib-2.0/schemas" || true
   restart_nautilus
 }
 

@@ -149,6 +149,21 @@ EOF
 }
 
 # ==========================================================
+# NVIDIA suspend / persistence fix (desktop only)
+# ==========================================================
+config_suspend_fix() {
+  $HEADLESS && return 0
+
+  log "Applying NVIDIA suspend / persistence fix…"
+
+  systemctl disable --now nvidia-persistenced.service 2>/dev/null || true
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi -pm 0 >/dev/null 2>&1 || true
+  fi
+}
+
+# ==========================================================
 # Install-time verification (NO runtime checks)
 # ==========================================================
 verify_install() {
@@ -163,6 +178,7 @@ verify_install() {
   fi
 
   log "Installation verified. Reboot required."
+  log "Note: NVIDIA persistence mode disabled for suspend stability."
 }
 
 # ==========================================================
@@ -190,6 +206,7 @@ all)
   install
   pin_driver
   config_desktop
+  config_suspend_fix
   verify_install
   ;;
 verify)

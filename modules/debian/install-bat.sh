@@ -36,8 +36,8 @@ install_deps() {
 # === Step: install ===
 install_bat() {
   echo "🔗 Creating ~/.local/bin/bat → batcat symlink..."
-  mkdir -p "$HOME_DIR/.local/bin"
-  ln -sf "$(command -v batcat)" "$BAT_BIN"
+  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.local/bin"
+  sudo -u "$REAL_USER" ln -sf "$(command -v batcat)" "$BAT_BIN"
   chown -R "$REAL_USER:$REAL_USER" "$HOME_DIR/.local"
 }
 
@@ -45,14 +45,14 @@ install_bat() {
 config_bat() {
   echo "🎨 Installing Catppuccin themes..."
 
-  BAT_CONFIG_DIR="$($BAT_BIN --config-dir)"
+  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" "$BAT_BIN" --config-dir)"
   BAT_THEME_DIR="$BAT_CONFIG_DIR/themes"
   BAT_CONFIG_FILE="$BAT_CONFIG_DIR/config"
 
-  mkdir -p "$BAT_THEME_DIR"
+  sudo -u "$REAL_USER" mkdir -p "$BAT_THEME_DIR"
 
   for variant in "${THEME_VARIANTS[@]}"; do
-    wget -q -O "$BAT_THEME_DIR/Catppuccin ${variant}.tmTheme" \
+    sudo -u "$REAL_USER" wget -q -O "$BAT_THEME_DIR/Catppuccin ${variant}.tmTheme" \
       "$THEME_REPO_BASE/Catppuccin%20${variant}.tmTheme"
   done
 
@@ -60,23 +60,23 @@ config_bat() {
   sudo -u "$REAL_USER" "$BAT_BIN" cache --build
 
   echo "⚙️ Setting default theme: $BAT_THEME_NAME"
-  echo "--theme=\"$BAT_THEME_NAME\"" > "$BAT_CONFIG_FILE"
+  sudo -u "$REAL_USER" sh -c "echo '--theme=\"$BAT_THEME_NAME\"' > '$BAT_CONFIG_FILE'"
   chown -R "$REAL_USER:$REAL_USER" "$BAT_CONFIG_DIR"
 }
 
 # === Step: clean ===
 clean_bat() {
   echo "🧹 Removing bat themes and config..."
-  BAT_CONFIG_DIR="$($BAT_BIN --config-dir)"
+  BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" "$BAT_BIN" --config-dir 2>/dev/null || echo "$HOME_DIR/.config/bat")"
   BAT_THEME_DIR="$BAT_CONFIG_DIR/themes"
   BAT_CONFIG_FILE="$BAT_CONFIG_DIR/config"
   BAT_CACHE_DIR="$HOME_DIR/.cache/bat"
 
-  rm -rf "$BAT_THEME_DIR" "$BAT_CONFIG_FILE" "$BAT_CACHE_DIR"
+  sudo -u "$REAL_USER" rm -rf "$BAT_THEME_DIR" "$BAT_CONFIG_FILE" "$BAT_CACHE_DIR"
 
   if [[ -L "$BAT_BIN" ]]; then
     echo "❌ Removing bat symlink"
-    rm -f "$BAT_BIN"
+    sudo -u "$REAL_USER" rm -f "$BAT_BIN"
   fi
 }
 

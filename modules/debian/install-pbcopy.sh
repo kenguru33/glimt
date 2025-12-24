@@ -24,7 +24,7 @@ if [[ "$ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
 fi
 
 # === Deps ===
-DEPS=(wl-clipboard)
+DEPS=(wl-clipboard xclip)
 
 install_deps() {
   echo "📦 Installing dependencies..."
@@ -40,21 +40,35 @@ install() {
 config() {
   echo "⚙️  Creating pbcopy/pbpaste wrappers in $HOME_DIR/.local/bin ..."
   BIN_DIR="$HOME_DIR/.local/bin"
-  mkdir -p "$BIN_DIR"
+  sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
   chown -R "$REAL_USER":"$REAL_USER" "$BIN_DIR"
 
-  # pbcopy -> wl-copy
+  # pbcopy -> wl-copy (Wayland) or xclip (X11 fallback)
   cat > "$BIN_DIR/pbcopy" <<'EOF'
 #!/usr/bin/env bash
-# macOS-like pbcopy using wl-copy (Wayland)
-exec wl-copy "$@"
+# macOS-like pbcopy using wl-copy (Wayland) or xclip (X11)
+if command -v wl-copy >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+  exec wl-copy "$@"
+elif command -v xclip >/dev/null 2>&1; then
+  exec xclip -selection clipboard "$@"
+else
+  echo "pbcopy: No clipboard tool found (install wl-clipboard or xclip)" >&2
+  exit 1
+fi
 EOF
 
-  # pbpaste -> wl-paste
+  # pbpaste -> wl-paste (Wayland) or xclip (X11 fallback)
   cat > "$BIN_DIR/pbpaste" <<'EOF'
 #!/usr/bin/env bash
-# macOS-like pbpaste using wl-paste (Wayland)
-exec wl-paste "$@"
+# macOS-like pbpaste using wl-paste (Wayland) or xclip (X11)
+if command -v wl-paste >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+  exec wl-paste "$@"
+elif command -v xclip >/dev/null 2>&1; then
+  exec xclip -selection clipboard -o "$@"
+else
+  echo "pbpaste: No clipboard tool found (install wl-clipboard or xclip)" >&2
+  exit 1
+fi
 EOF
 
   chmod +x "$BIN_DIR/pbcopy" "$BIN_DIR/pbpaste"

@@ -1,0 +1,50 @@
+#compdef glimt
+# Minimal zsh completion for `glimt` (modules only under modules/debian)
+emulate -L zsh -o no_aliases
+
+: ${GLIMT_ROOT:="$HOME/.glimt"}
+
+typeset -gA _glimt_cache
+
+_glimt_modules() {
+  local key="modules:${GLIMT_ROOT}"
+  if [[ -n "${_glimt_cache[$key]-}" ]]; then
+    print -l -- ${(ps:\n:)_glimt_cache[$key]}
+    return
+  fi
+  local root="$GLIMT_ROOT/modules/debian"
+  local -a files names
+  if [[ -d "$root" ]]; then
+    files=(${(f)"$(command find "$root" -type f -name 'install-*.sh' 2>/dev/null)"})
+    for f in $files; do
+      local base="${f:t}"
+      local name="${base#install-}"
+      name="${name%.sh}"
+      [[ -n "$name" ]] && names+="$name"
+    done
+  fi
+  names=(${(uon)names})
+  _glimt_cache[$key]="${(j:\n:)names}"
+  print -l -- $names
+}
+
+_glimt_subcommands() { print -l -- module-selection update install clean }
+
+(( CURRENT == 1 )) && return 0
+
+# first arg: subcommand
+if (( CURRENT == 2 )); then
+  compadd -- $(_glimt_subcommands)
+  return 0
+fi
+
+case ${words[2]} in
+  install|clean|update)
+    # install <module>, clean <module>, update [module]
+    (( CURRENT == 3 )) && compadd -- $(_glimt_modules)
+    ;;
+  module-selection)
+    ;;
+  *)
+    ;;
+esac

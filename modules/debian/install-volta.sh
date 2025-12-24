@@ -43,8 +43,8 @@ install() {
 config() {
   echo "📝 Installing volta.zsh config from template..."
 
-  mkdir -p "$CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$TARGET_FILE"
+  sudo -u "$REAL_USER" mkdir -p "$CONFIG_DIR"
+  sudo -u "$REAL_USER" cp "$TEMPLATE_FILE" "$TARGET_FILE"
   chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
   echo "✅ Installed $TARGET_FILE"
 }
@@ -54,10 +54,10 @@ clean() {
   echo "🧹 Cleaning Volta setup..."
 
   echo "❌ Removing ~/.volta"
-  rm -rf "$HOME_DIR/.volta"
+  sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.volta"
 
   echo "❌ Removing volta.zsh config"
-  rm -f "$TARGET_FILE"
+  sudo -u "$REAL_USER" rm -f "$TARGET_FILE"
 
   echo "✅ Clean complete."
 }

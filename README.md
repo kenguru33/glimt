@@ -65,8 +65,6 @@ To install Glimt, simply run the following command in your terminal:
 - Lens Kubernetes Desktop App
 - 1Password
 - Chrome
-- Brave
-- Navicat
 - Spotify
 - Virtualzation Suite with Gnome Boxes
 - Gitkraken

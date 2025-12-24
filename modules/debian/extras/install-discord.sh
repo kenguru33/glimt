@@ -5,6 +5,9 @@ trap 'echo "❌ Discord installation failed. Exiting." >&2' ERR
 MODULE_NAME="discord"
 ACTION="${1:-all}"
 
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
+
 DISCORD_DEB_URL="https://discord.com/api/download?platform=linux&format=deb"
 TMP_DEB="/tmp/discord_latest.deb"
 
@@ -31,13 +34,39 @@ install_deps() {
 
 install_discord() {
     echo "⬇️  Downloading Discord..."
-    wget -O "$TMP_DEB" "$DISCORD_DEB_URL"
+    
+    # Try curl first (handles redirects better), then wget
+    if command -v curl >/dev/null 2>&1; then
+        curl -L --user-agent "Mozilla/5.0" "$DISCORD_DEB_URL" -o "$TMP_DEB" || {
+            echo "❌ Failed to download Discord with curl"
+            exit 1
+        }
+    elif command -v wget >/dev/null 2>&1; then
+        wget --user-agent="Mozilla/5.0" -O "$TMP_DEB" "$DISCORD_DEB_URL" || {
+            echo "❌ Failed to download Discord with wget"
+            exit 1
+        }
+    else
+        echo "❌ Neither curl nor wget found. Please install one."
+        exit 1
+    fi
+    
+    # Verify it's actually a .deb file
+    if ! file "$TMP_DEB" | grep -q "Debian\|ar archive"; then
+        echo "❌ Downloaded file is not a valid .deb package. It might be HTML/redirect."
+        echo "   File type: $(file "$TMP_DEB")"
+        rm -f "$TMP_DEB"
+        exit 1
+    fi
 
     echo "📦 Installing Discord..."
-    sudo apt install -y "$TMP_DEB"
+    # Use dpkg to install, then fix dependencies with apt
+    sudo dpkg -i "$TMP_DEB" || true
+    sudo apt install -f -y
 
     echo "🧹 Cleaning up..."
     rm -f "$TMP_DEB"
+    echo "✅ Discord installed."
 }
 
 config_discord() {
