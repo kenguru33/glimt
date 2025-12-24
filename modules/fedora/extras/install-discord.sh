@@ -5,6 +5,9 @@ trap 'echo "❌ Discord installation failed. Exiting." >&2' ERR
 MODULE_NAME="discord"
 ACTION="${1:-all}"
 
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
+
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release

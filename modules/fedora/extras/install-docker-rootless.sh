@@ -1,11 +1,11 @@
 #!/bin/bash
-# modules/debian/docker-rootless.sh
+# modules/fedora/extras/install-docker-rootless.sh
 # Glimt module: Install Docker in ROOTLESS mode for the current user.
 # - Installs engine (dockerd), CLI, and rootless extras from Docker's repo
 # - Disables/masks the system daemon/socket (rootful) so rootless can run
 # - Self-heals common failures (subuid/subgid, helpers, half-installs)
 # - Writes env with *numeric* UID and applies it to the current shell
-# - Zsh: ONLY copies modules/debian/config/docker-rootless.zsh → ~/.zsh/config/docker-rootless.zsh
+# - Zsh: ONLY copies modules/fedora/config/docker-rootless.zsh → ~/.zsh/config/docker-rootless.zsh
 # - Verifies rootless daemon by starting it once, then stops & disables it
 # - Installs GNOME extension by running the repo's own manage.sh and enables it
 # - Pattern: all | deps | install | config | clean
@@ -21,11 +21,10 @@ REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
 # === Config (override with env) ==========================================
-DOCKER_CHANNEL_CODENAME_DEFAULT="trixie" # fallback if VERSION_CODENAME missing
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME_DIR/.glimt}"
 
 # Zsh snippet copy (copy only; no edits to user rc files)
-ZSH_SRC="${ZSH_SRC:-$GLIMT_ROOT/modules/debian/config/docker-rootless.zsh}"
+ZSH_SRC="${ZSH_SRC:-$GLIMT_ROOT/modules/fedora/config/docker-rootless.zsh}"
 ZSH_DIR="${ZSH_DIR:-$HOME_DIR/.zsh/config}"
 ZSH_TARGET="${ZSH_TARGET:-$ZSH_DIR/docker-rootless.zsh}"
 
@@ -34,11 +33,11 @@ GNOME_EXT_REPO="${GNOME_EXT_REPO:-https://github.com/kenguru33/rootless-docker-g
 GNOME_EXT_BRANCH="${GNOME_EXT_BRANCH:-main}"
 GNOME_EXT_CACHE="${GNOME_EXT_CACHE:-$HOME_DIR/.cache/glimt-rootless-ext/repo}"
 
-# === Debian-only guard ====================================================
+# === Fedora-only guard ====================================================
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
-  [[ "$ID" == "debian" || "$ID_LIKE" == *"debian"* ]] || {
-    echo "❌ Debian only."
+  [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
+    echo "❌ Fedora/RHEL-based systems only."
     exit 1
   }
 else
@@ -46,10 +45,9 @@ else
   exit 1
 fi
 
-ARCH="$(dpkg --print-architecture)"
-CODENAME="${VERSION_CODENAME:-$DOCKER_CHANNEL_CODENAME_DEFAULT}"
-KEYRING="/etc/apt/keyrings/docker.gpg"
-LIST="/etc/apt/sources.list.d/docker.list"
+ARCH="$(uname -m)"
+KEYRING="/etc/pki/rpm-gpg/docker.gpg"
+REPO_FILE="/etc/yum.repos.d/docker-ce.repo"
 
 # Rootless runtime env (will be overwritten by write_user_env/apply_env_now)
 REAL_USER_UID="$(id -u "$REAL_USER" 2>/dev/null || id -u)"
@@ -67,24 +65,36 @@ log_recent_unit() {
 
 deps() {
   echo "📦 Installing prerequisites…"
-  sudo apt update
-  sudo apt install -y rsync uidmap dbus-user-session slirp4netns fuse-overlayfs curl gnupg lsb-release
+  sudo dnf makecache -y
+  sudo dnf install -y rsync shadow-utils dbus-user-session slirp4netns fuse-overlayfs curl gnupg2 dnf-plugins-core
   # For cloning/running the extension installer
-  sudo apt install -y git || true
+  sudo dnf install -y git || true
 }
 
 ensure_repo() {
-  echo "🏷️  Ensuring Docker APT repository (${CODENAME})…"
-  if [[ ! -f "$KEYRING" ]]; then
-    sudo install -m0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o "$KEYRING"
-    sudo chmod a+r "$KEYRING"
+  echo "🏷️  Ensuring Docker DNF repository…"
+  if [[ ! -f "$REPO_FILE" ]]; then
+    # Import GPG key
+    if [[ ! -f "$KEYRING" ]]; then
+      sudo install -m0755 -d "$(dirname "$KEYRING")"
+      curl -fsSL https://download.docker.com/linux/fedora/gpg | sudo gpg --dearmor -o "$KEYRING"
+      sudo chmod a+r "$KEYRING"
+    fi
+    
+    # Add repository
+    sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo || {
+      # Fallback: create repo file manually
+      sudo tee "$REPO_FILE" >/dev/null <<EOF
+[docker-ce-stable]
+name=Docker CE Stable - \$basearch
+baseurl=https://download.docker.com/linux/fedora/\$releasever/\$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=file://$KEYRING
+EOF
+    }
   fi
-  local line="deb [arch=${ARCH} signed-by=${KEYRING}] https://download.docker.com/linux/debian ${CODENAME} stable"
-  if [[ ! -f "$LIST" ]] || ! grep -qF "$line" "$LIST"; then
-    echo "$line" | sudo tee "$LIST" >/dev/null
-  fi
-  sudo apt update
+  sudo dnf makecache -y
 }
 
 ensure_subids() {
@@ -134,9 +144,9 @@ verify_running() {
 }
 
 remove_conflicts() {
-  if dpkg -s docker.io >/dev/null 2>&1; then
-    echo "🧹 Removing conflicting package: docker.io"
-    sudo apt purge -y docker.io || true
+  if rpm -q docker >/dev/null 2>&1; then
+    echo "🧹 Removing conflicting package: docker"
+    sudo dnf remove -y docker || true
   fi
 }
 
@@ -213,8 +223,6 @@ fetch_ext_repo() {
     sudo -u "$REAL_USER" git clone --branch "$branch" --depth 1 "$repo" "$dest"
   fi
 }
-
-# --- NEW: robust enabling helpers ----------------------------------------
 
 ensure_user_extensions_allowed() {
   # Enable user extensions if globally disabled
@@ -318,7 +326,7 @@ install_gnome_extension() {
   echo "🧩 Installing GNOME extension (manage.sh) from: $GNOME_EXT_REPO ($GNOME_EXT_BRANCH)"
   command -v git >/dev/null 2>&1 || {
     echo "⚠️ git missing; installing…"
-    sudo apt install -y git
+    sudo dnf install -y git
   }
   fetch_ext_repo "$GNOME_EXT_REPO" "$GNOME_EXT_BRANCH" "$GNOME_EXT_CACHE"
 
@@ -358,7 +366,7 @@ install() {
   remove_conflicts
 
   echo "🐳 Installing Docker engine + CLI + rootless extras (no system daemon)…"
-  sudo apt install -y docker-ce docker-ce-cli docker-ce-rootless-extras
+  sudo dnf install -y docker-ce docker-ce-cli docker-ce-rootless-extras
 
   # Make sure rootful is *really* off before rootless setup
   ensure_rootful_docker_off
@@ -370,7 +378,7 @@ install() {
 
   echo "⚙️ Running rootless setup tool (idempotent)…"
   cleanup_half_installed
-  if ! /usr/bin/dockerd-rootless-setuptool.sh install; then
+  if ! sudo -u "$REAL_USER" /usr/bin/dockerd-rootless-setuptool.sh install; then
     echo "❌ Setup tool failed. Printing logs (if any)…"
     log_recent_unit "docker.service" 120
     exit 1
@@ -421,8 +429,7 @@ clean() {
   sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.cache/glimt-rootless-ext" 2>/dev/null || true
 
   echo "🗑 Optional package removal (manual):"
-  echo "    sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras"
-  echo "    sudo apt autoremove -y"
+  echo "    sudo dnf remove -y docker-ce docker-ce-cli docker-ce-rootless-extras"
   reload_shell_hint
 }
 
@@ -441,3 +448,4 @@ all)
   exit 1
   ;;
 esac
+
