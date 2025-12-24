@@ -87,13 +87,13 @@ config() {
   DEST_DIR="$TARGET_HOME/.local/share/applications"
   DEST_DESKTOP="$DEST_DIR/google-chrome.desktop"
 
-  install -d -m 0755 "$DEST_DIR"
+  sudo -u "$TARGET_USER" mkdir -p "$DEST_DIR"
 
   if [[ -f "$SRC_DESKTOP" ]]; then
-    cp -f "$SRC_DESKTOP" "$DEST_DESKTOP"
+    sudo -u "$TARGET_USER" cp -f "$SRC_DESKTOP" "$DEST_DESKTOP"
   else
     # Fallback minimal launcher if the system one isn't there yet
-    cat >"$DEST_DESKTOP" <<'EOF'
+    sudo -u "$TARGET_USER" sh -c "cat >\"$DEST_DESKTOP\" <<'EOF'
 [Desktop Entry]
 Version=1.0
 Name=Google Chrome
@@ -105,14 +105,14 @@ Icon=google-chrome
 Type=Application
 Categories=Network;WebBrowser;
 StartupWMClass=Google-chrome
-EOF
+EOF"
   fi
 
   # Ensure StartupNotify=false (replace if present, append if missing)
-  if grep -q '^StartupNotify=' "$DEST_DESKTOP"; then
-    sed -i 's/^StartupNotify=.*/StartupNotify=false/' "$DEST_DESKTOP"
+  if sudo -u "$TARGET_USER" grep -q '^StartupNotify=' "$DEST_DESKTOP"; then
+    sudo -u "$TARGET_USER" sed -i 's/^StartupNotify=.*/StartupNotify=false/' "$DEST_DESKTOP"
   else
-    printf '\nStartupNotify=false\n' >> "$DEST_DESKTOP"
+    sudo -u "$TARGET_USER" sh -c "printf '\nStartupNotify=false\n' >> \"$DEST_DESKTOP\""
   fi
 
   chown "$TARGET_USER:$TARGET_USER" "$DEST_DESKTOP"
@@ -122,7 +122,7 @@ EOF
   sudo -u "$TARGET_USER" update-desktop-database "$DEST_DIR" >/dev/null 2>&1 || true
 
   echo "✅ [$MODULE_NAME] Created override at $DEST_DESKTOP with StartupNotify=false."
-  echo "   Tip: If the change doesn’t reflect immediately, re-open the app grid."
+  echo "   Tip: If the change doesn't reflect immediately, re-open the app grid."
 }
 
 

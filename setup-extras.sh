@@ -63,6 +63,7 @@ declare -A MODULES=(
   [discord]="/usr/share/discord/Discord"
   [dotnet8]="dotnet"
   [dotnet9]="dotnet"
+  [dotnet10]="dotnet"
   [gitkraken]="gitkraken"
   [docker-rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
@@ -88,6 +89,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [discord]="Discord desktop client"
   [dotnet8]=".NET 8 SDK + runtime"
   [dotnet9]=".NET 9 SDK + runtime"
+  [dotnet10]=".NET 10 SDK + runtime"
   [gitkraken]="GitKraken Git client"
   [docker-rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
@@ -122,6 +124,9 @@ module_installed() {
     ;;
   dotnet9)
     dotnet --list-sdks 2>/dev/null | grep -q '^9\.'
+    ;;
+  dotnet10)
+    dotnet --list-sdks 2>/dev/null | grep -q '^10\.'
     ;;
   *)
     local bin="${MODULES[$name]}"

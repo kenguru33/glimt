@@ -30,6 +30,13 @@ ICON_DIR="$HOME_DIR/.local/share/icons"
 ICON_FILE="$ICON_DIR/notion.png"
 DESKTOP_FILE="$LAUNCHER_DIR/${WMCLASS}.desktop"
 
+# --- Deps ---
+install_deps(){
+  log "Installing dependencies..."
+  sudo dnf makecache -y
+  sudo dnf install -y curl wget xdg-utils desktop-file-utils
+}
+
 detect_chrome() {
   command -v google-chrome >/dev/null 2>&1 && { command -v google-chrome; return; }
   command -v google-chrome-stable >/dev/null 2>&1 && { command -v google-chrome-stable; return; }
@@ -49,20 +56,20 @@ effective_flags() {
 
 fetch_icon() {
   sudo -u "$REAL_USER" mkdir -p "$ICON_DIR"
-  local tmp="/tmp/notion-icon.$$"; rm -f "$tmp" || true
+  local tmp="/tmp/notion-icon.$$"; sudo -u "$REAL_USER" rm -f "$tmp" || true
   for url in \
     "https://www.notion.so/front-static/favicon/notion-app-icon-256.png" \
     "https://www.notion.so/front-static/favicon/notion-icon-192.png" \
     "https://www.notion.so/images/favicon.ico"
   do
-    if curl -fsSL -o "$tmp" "$url" || wget -q -O "$tmp" "$url"; then break; fi
+    if sudo -u "$REAL_USER" curl -fsSL -o "$tmp" "$url" || sudo -u "$REAL_USER" wget -q -O "$tmp" "$url"; then break; fi
   done
   if [[ -s "$tmp" ]]; then
-    mv -f "$tmp" "$ICON_FILE"
+    sudo -u "$REAL_USER" mv -f "$tmp" "$ICON_FILE"
     chown "$REAL_USER:$REAL_USER" "$ICON_FILE"
     log "Icon saved: $ICON_FILE"
   else
-    rm -f "$tmp" || true
+    sudo -u "$REAL_USER" rm -f "$tmp" || true
     log "Could not fetch icon (best-effort)."
   fi
 }
@@ -70,19 +77,19 @@ fetch_icon() {
 remove_old_launchers() {
   log "Cleaning old launchers…"
   sudo -u "$REAL_USER" rm -f "$LAUNCHER_DIR/Notion.desktop" 2>/dev/null || true
-  find "$LAUNCHER_DIR" -maxdepth 1 -type f -name "*notion*.desktop" ! -name "$(basename "$DESKTOP_FILE")" -print0 \
-    | xargs -0r rm -f
-  update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
+  sudo -u "$REAL_USER" find "$LAUNCHER_DIR" -maxdepth 1 -type f -name "*notion*.desktop" ! -name "$(basename "$DESKTOP_FILE")" -print0 \
+    | xargs -0r sudo -u "$REAL_USER" rm -f
+  sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
 }
 
 write_cli_launcher() {
   local chrome_bin="$1" flags; flags="$(effective_flags)"
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
 
-  sudo -u "$REAL_USER" cat > "$CLI_LAUNCHER" <<EOF
+  sudo -u "$REAL_USER" sh -c "cat > \"$CLI_LAUNCHER\" <<EOF
 #!/usr/bin/env bash
-exec $chrome_bin --class=$WMCLASS --name=$WMCLASS --user-data-dir="$PROFILE_DIR" --app=$APP_URL $flags "\$@"
-EOF
+exec $chrome_bin --class=$WMCLASS --name=$WMCLASS --user-data-dir=\"$PROFILE_DIR\" --app=$APP_URL $flags \"\\\$@\"
+EOF"
 
   chmod +x "$CLI_LAUNCHER"
   chown "$REAL_USER:$REAL_USER" "$CLI_LAUNCHER"
@@ -94,7 +101,7 @@ write_desktop_file() {
   local chrome_bin="$1" flags; flags="$(effective_flags)"
   sudo -u "$REAL_USER" mkdir -p "$LAUNCHER_DIR" "$PROFILE_DIR"
 
-  sudo -u "$REAL_USER" cat > "$DESKTOP_FILE" <<EOF
+  sudo -u "$REAL_USER" sh -c "cat > \"$DESKTOP_FILE\" <<EOF
 [Desktop Entry]
 Name=$APP_NAME
 Comment=Open Notion in a chromeless Chrome window
@@ -107,12 +114,12 @@ Categories=Office;Productivity;
 StartupNotify=false
 # X11: GNOME matches by WM_CLASS (we set it via --class/--name)
 StartupWMClass=$WMCLASS
-EOF
+EOF"
 
   chmod 0644 "$DESKTOP_FILE"
   chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
-  command -v desktop-file-validate >/dev/null 2>&1 && desktop-file-validate "$DESKTOP_FILE" || true
-  update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
+  command -v desktop-file-validate >/dev/null 2>&1 && sudo -u "$REAL_USER" desktop-file-validate "$DESKTOP_FILE" || true
+  sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
   log "Launcher written: $DESKTOP_FILE"
 }
 
@@ -130,17 +137,18 @@ do_clean() {
   log "Removing Notion launcher, icon, profile, and CLI wrapper…"
   sudo -u "$REAL_USER" rm -f "$DESKTOP_FILE" "$ICON_FILE" "$CLI_LAUNCHER"
   [[ -d "$PROFILE_DIR" ]] && sudo -u "$REAL_USER" rm -rf "$PROFILE_DIR"
-  update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
+  sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
   log "Clean complete."
 }
 
 do_config(){ log "No extra config."; }
 
 case "$ACTION" in
+  deps)    install_deps ;;
   install) do_install ;;
   clean)   do_clean ;;
   config)  do_config ;;
-  all)     do_install; do_config ;;
-  *)       die "Usage: $0 [all|install|clean|config]" ;;
+  all)     install_deps; do_install; do_config ;;
+  *)       die "Usage: $0 [all|deps|install|clean|config]" ;;
 esac
 
