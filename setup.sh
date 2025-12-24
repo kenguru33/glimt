@@ -108,19 +108,32 @@ run_with_spinner() {
   local title="$1"
   shift
 
-  # Allow disabling spinners (e.g. if they render poorly) via env, or if gum is missing
-  # Also disable if not a TTY (e.g., when output is being piped or logged)
-  # This prevents multiple spinner lines from appearing when output is captured
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" == "1" ]] || ! command -v gum >/dev/null 2>&1 || [[ ! -t 1 ]]; then
-    echo "▶️  $title"
-    "$@"
-  else
-    # Redirect only stdout to suppress command output; stderr is needed for spinner animation
-    # If gum spin fails, fall back to running without spinner
-    if ! gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+  # Use spinner if:
+  # - Not explicitly disabled (GLIMT_DISABLE_SPIN != 1)
+  # - gum is available
+  # - stdout is a TTY (interactive terminal)
+  # - stderr is a TTY (needed for spinner output)
+  # - TERM is set and not "dumb" (indicates a real terminal with escape sequence support)
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
+     command -v gum >/dev/null 2>&1 && \
+     [[ -t 1 ]] && \
+     [[ -t 2 ]] && \
+     [[ -n "${TERM:-}" ]] && \
+     [[ "${TERM:-}" != "dumb" ]]; then
+    # Use spinner: redirect only stdout to suppress command output
+    # stderr is left alone so spinner can write to it and update in place
+    # The spinner writes escape sequences to stderr to update the same line
+    if gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+      : # Spinner completed successfully
+    else
+      # Fallback if spinner fails
       echo "▶️  $title"
       "$@"
     fi
+  else
+    # No spinner: simple message (output is piped, logged, or terminal doesn't support it)
+    echo "▶️  $title"
+    "$@"
   fi
 }
 

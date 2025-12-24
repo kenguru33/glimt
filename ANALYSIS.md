@@ -71,10 +71,10 @@ Modules follow a consistent pattern:
 - System: `flatpak`, `btop`, `bat`
 
 #### Optional Extras (`modules/debian/extras/`)
-- Desktop apps: `vscode`, `kitty`, `discord`, `spotify`, `brave`
+- Desktop apps: `vscode`, `kitty`, `discord`, `spotify`
 - Development: `jetbrains-toolbox`, `gitkraken`, `lens`
 - Tools: `zellij`, `lazydocker`, `docker-rootless`
-- .NET: `dotnet8`, `dotnet9`
+- .NET: `dotnet8`
 - PWAs: `notion`, `ytmusic`, `outlook`, `teams`, `chatgpt`
 
 ---

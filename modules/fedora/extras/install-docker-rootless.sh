@@ -50,7 +50,7 @@ KEYRING="/etc/pki/rpm-gpg/docker.gpg"
 REPO_FILE="/etc/yum.repos.d/docker-ce.repo"
 
 # Rootless runtime env (will be overwritten by write_user_env/apply_env_now)
-REAL_USER_UID="$(id -u "$REAL_USER" 2>/dev/null || id -u)"
+REAL_USER_UID="$(sudo -u "$REAL_USER" id -u 2>/dev/null || id -u)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$REAL_USER_UID}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 
@@ -66,7 +66,8 @@ log_recent_unit() {
 deps() {
   echo "📦 Installing prerequisites…"
   sudo dnf makecache -y
-  sudo dnf install -y rsync shadow-utils dbus-user-session slirp4netns fuse-overlayfs curl gnupg2 dnf-plugins-core
+  # dbus-user-session is not available on Fedora (user D-Bus is handled by systemd)
+  sudo dnf install -y rsync shadow-utils slirp4netns fuse-overlayfs curl gnupg2 dnf-plugins-core
   # For cloning/running the extension installer
   sudo dnf install -y git || true
 }
@@ -98,7 +99,7 @@ EOF
 }
 
 ensure_subids() {
-  local target_user="${SUDO_USER:-$USER}"
+  local target_user="$REAL_USER"
   local need=0
   grep -q "^$target_user:" /etc/subuid || need=1
   grep -q "^$target_user:" /etc/subgid || need=1
@@ -113,7 +114,7 @@ ensure_subids() {
 write_user_env() {
   # Bake the *numeric* UID so DOCKER_HOST is always correct in new sessions
   local UID_NUM
-  UID_NUM="$(id -u "$REAL_USER")"
+  UID_NUM="$(sudo -u "$REAL_USER" id -u)"
   sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.config/environment.d"
   sudo -u "$REAL_USER" sh -c "cat >\"$HOME_DIR/.config/environment.d/docker-rootless.conf\" <<EOF
 XDG_RUNTIME_DIR=/run/user/${UID_NUM}
@@ -122,7 +123,7 @@ EOF"
 }
 
 apply_env_now() {
-  export XDG_RUNTIME_DIR="/run/user/$(id -u "$REAL_USER")"
+  export XDG_RUNTIME_DIR="/run/user/$(sudo -u "$REAL_USER" id -u)"
   export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
 }
 
@@ -302,20 +303,21 @@ enable_extension() {
 
   ensure_user_extensions_allowed
 
+  # Try CLI tools first, but suppress error output (they may fail if GNOME Shell hasn't reloaded)
   if command -v gext >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gext enable "$uuid"; then
+    if sudo -u "$REAL_USER" gext enable "$uuid" 2>/dev/null; then
       echo "✅ Enabled via gext: $uuid"
       return 0
     fi
   fi
   if command -v gnome-extensions >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gnome-extensions enable "$uuid"; then
+    if sudo -u "$REAL_USER" gnome-extensions enable "$uuid" 2>/dev/null; then
       echo "✅ Enabled via gnome-extensions: $uuid"
       return 0
     fi
   fi
 
-  # Last resort
+  # Fallback to gsettings (works even if GNOME Shell hasn't reloaded yet)
   enable_ext_with_gsettings "$uuid" || {
     echo "⚠️ Could not enable extension automatically. UUID: $uuid"
     return 1

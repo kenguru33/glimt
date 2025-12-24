@@ -41,7 +41,6 @@ detect_chrome() {
   command -v google-chrome >/dev/null 2>&1 && { command -v google-chrome; return; }
   command -v google-chrome-stable >/dev/null 2>&1 && { command -v google-chrome-stable; return; }
   command -v chromium >/dev/null 2>&1 && { command -v chromium; return; }
-  command -v brave-browser >/dev/null 2>&1 && { command -v brave-browser; return; }
   return 1
 }
 
@@ -124,7 +123,7 @@ EOF"
 }
 
 do_install() {
-  local chrome_bin; chrome_bin="$(detect_chrome)" || die "Google Chrome/Chromium/Brave not found. Install Chrome/Chromium/Brave first."
+  local chrome_bin; chrome_bin="$(detect_chrome)" || die "Google Chrome/Chromium not found. Install Chrome/Chromium first."
   remove_old_launchers
   fetch_icon
   write_desktop_file "$chrome_bin"

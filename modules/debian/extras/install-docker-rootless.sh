@@ -294,20 +294,21 @@ enable_extension() {
 
   ensure_user_extensions_allowed
 
+  # Try CLI tools first, but suppress error output (they may fail if GNOME Shell hasn't reloaded)
   if command -v gext >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gext enable "$uuid"; then
+    if sudo -u "$REAL_USER" gext enable "$uuid" 2>/dev/null; then
       echo "✅ Enabled via gext: $uuid"
       return 0
     fi
   fi
   if command -v gnome-extensions >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gnome-extensions enable "$uuid"; then
+    if sudo -u "$REAL_USER" gnome-extensions enable "$uuid" 2>/dev/null; then
       echo "✅ Enabled via gnome-extensions: $uuid"
       return 0
     fi
   fi
 
-  # Last resort
+  # Fallback to gsettings (works even if GNOME Shell hasn't reloaded yet)
   enable_ext_with_gsettings "$uuid" || {
     echo "⚠️ Could not enable extension automatically. UUID: $uuid"
     return 1

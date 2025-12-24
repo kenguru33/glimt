@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/fedora/extras/install-ytmusic.sh
-# YouTube Music PWA (Chrome/Chromium/Brave) — Fedora only
+# YouTube Music PWA (Chrome/Chromium) — Fedora only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
 trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
@@ -116,7 +116,7 @@ PROFILE_DIR="${HOME}/.local/share/ytmusic-chrome-profile"
 
 detect_browser() {
   local c
-  for c in google-chrome-stable google-chrome chromium chromium-browser brave-browser; do
+  for c in google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$c" >/dev/null 2>&1; then
       echo "$c"; return 0
     fi
@@ -126,7 +126,7 @@ detect_browser() {
 
 BROWSER="$(detect_browser || true)"
 if [[ -z "${BROWSER:-}" ]]; then
-  echo "ytmusic: No supported browser (Chrome/Chromium/Brave) found." >&2
+  echo "ytmusic: No supported browser (Chrome/Chromium) found." >&2
   exit 127
 fi
 

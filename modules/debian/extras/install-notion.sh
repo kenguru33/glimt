@@ -41,7 +41,6 @@ detect_chrome() {
   command -v google-chrome >/dev/null 2>&1 && { command -v google-chrome; return; }
   command -v google-chrome-stable >/dev/null 2>&1 && { command -v google-chrome-stable; return; }
   command -v chromium >/dev/null 2>&1 && { command -v chromium; return; }
-  command -v brave-browser >/dev/null 2>&1 && { command -v brave-browser; return; }
   return 1
 }
 

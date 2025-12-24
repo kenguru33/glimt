@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/install-chatgpt-pwa.sh
-# ChatGPT Web launcher (Chrome/Chromium/Brave) — Debian only
+# ChatGPT Web launcher (Chrome/Chromium) — Debian only
 # Uses the ChatGPT icon from Wikipedia (Wikimedia Commons),
 # renders it onto a rounded white card, and cache-busts the filename.
 # Actions: all | deps | install | config | clean
@@ -186,7 +186,7 @@ PROFILE_DIR="${HOME}/.local/share/chatgpt-chrome-profile"
 
 detect_browser() {
   local c
-  for c in google-chrome-stable google-chrome chromium chromium-browser brave-browser; do
+  for c in google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
   done
   return 1
@@ -194,7 +194,7 @@ detect_browser() {
 
 BROWSER="$(detect_browser || true)"
 if [[ -z "${BROWSER:-}" ]]; then
-  echo "chatgpt: No supported browser (Chrome/Chromium/Brave) found." >&2
+  echo "chatgpt: No supported browser (Chrome/Chromium) found." >&2
   exit 127
 fi
 

@@ -37,9 +37,15 @@ install_discord() {
     
     # Try curl first (handles redirects better), then wget
     if command -v curl >/dev/null 2>&1; then
-        curl -L "$DISCORD_DEB_URL" -o "$TMP_DEB"
+        curl -L --user-agent "Mozilla/5.0" "$DISCORD_DEB_URL" -o "$TMP_DEB" || {
+            echo "❌ Failed to download Discord with curl"
+            exit 1
+        }
     elif command -v wget >/dev/null 2>&1; then
-        wget -O "$TMP_DEB" "$DISCORD_DEB_URL"
+        wget --user-agent="Mozilla/5.0" -O "$TMP_DEB" "$DISCORD_DEB_URL" || {
+            echo "❌ Failed to download Discord with wget"
+            exit 1
+        }
     else
         echo "❌ Neither curl nor wget found. Please install one."
         exit 1
@@ -54,7 +60,9 @@ install_discord() {
     fi
 
     echo "📦 Installing Discord..."
-    sudo apt install -y "$TMP_DEB"
+    # Use dpkg to install, then fix dependencies with apt
+    sudo dpkg -i "$TMP_DEB" || true
+    sudo apt install -f -y
 
     echo "🧹 Cleaning up..."
     rm -f "$TMP_DEB"

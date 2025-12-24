@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/install-outlook-pwa.sh
-# Outlook Web PWA (Chrome/Chromium/Brave) — Debian only
+# Outlook Web PWA (Chrome/Chromium) — Debian only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
 trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
@@ -133,7 +133,7 @@ PROFILE_DIR="${HOME}/.local/share/outlook-chrome-profile"
 
 detect_browser() {
   local c
-  for c in google-chrome-stable google-chrome chromium chromium-browser brave-browser; do
+  for c in google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$c" >/dev/null 2>&1; then
       echo "$c"; return 0
     fi
@@ -143,7 +143,7 @@ detect_browser() {
 
 BROWSER="$(detect_browser || true)"
 if [[ -z "${BROWSER:-}" ]]; then
-  echo "outlook: No supported browser (Chrome/Chromium/Brave) found." >&2
+  echo "outlook: No supported browser (Chrome/Chromium) found." >&2
   exit 127
 fi
 

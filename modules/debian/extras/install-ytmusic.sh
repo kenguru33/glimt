@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # modules/install-ytmusic-pwa.sh
-# Glimt: YouTube Music PWA (Chrome/Chromium/Brave) – Debian only
+# Glimt: YouTube Music PWA (Chrome/Chromium) – Debian only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
 trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
@@ -35,13 +35,13 @@ ICON_SRC_SVG="https://upload.wikimedia.org/wikipedia/commons/6/6a/Youtube_Music_
 # ---- Browser detection ----
 detect_browser(){
   local c
-  for c in google-chrome-stable google-chrome chromium chromium-browser brave-browser; do
+  for c in google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$c" >/dev/null 2>&1; then
       BROWSER="$(command -v "$c")"
       break
     fi
   done
-  [[ -n "${BROWSER:-}" ]] || die "Ingen støttet nettleser funnet (Chrome/Chromium/Brave)."
+  [[ -n "${BROWSER:-}" ]] || die "Ingen støttet nettleser funnet (Chrome/Chromium)."
 }
 
 # ---- Flags (X11 som default på Wayland) ----
@@ -117,7 +117,7 @@ PROFILE_DIR="${HOME}/.local/share/ytmusic-chrome-profile"
 
 detect_browser() {
   local c
-  for c in google-chrome-stable google-chrome chromium chromium-browser brave-browser; do
+  for c in google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$c" >/dev/null 2>&1; then
       echo "$c"; return 0
     fi
@@ -127,7 +127,7 @@ detect_browser() {
 
 BROWSER="$(detect_browser || true)"
 if [[ -z "${BROWSER:-}" ]]; then
-  echo "ytmusic: No supported browser (Chrome/Chromium/Brave) found." >&2
+  echo "ytmusic: No supported browser (Chrome/Chromium) found." >&2
   exit 127
 fi
 
