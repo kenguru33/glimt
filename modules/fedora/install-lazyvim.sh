@@ -58,7 +58,7 @@ config_lazyvim() {
   echo "🎨 Adding Catppuccin theme plugin..."
   PLUGIN_DIR="$HOME_DIR/.config/nvim/lua/plugins"
   sudo -u "$REAL_USER" mkdir -p "$PLUGIN_DIR"
-  sudo -u "$REAL_USER" sh -c "cat > '$PLUGIN_DIR/catppuccin.lua'" <<'EOF'
+  cat <<'EOF' | sudo -u "$REAL_USER" tee "$PLUGIN_DIR/catppuccin.lua" > /dev/null
 return {
   "catppuccin/nvim",
   name = "catppuccin",
