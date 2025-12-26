@@ -45,6 +45,7 @@ DEPS=(
   git
   curl
   git-credential-libsecret
+  gnome-keyring
 )
 
 install_dependencies() {
@@ -56,6 +57,38 @@ install_dependencies() {
       sudo dnf install -y "$pkg"
     fi
   done
+}
+
+# ---------------------------------------------------------------------
+# GNOME Keyring (needed for libsecret credential helper on Fedora)
+# ---------------------------------------------------------------------
+enable_gnome_keyring_socket() {
+  local uid runtime_dir
+  uid="$(id -u "$REAL_USER" 2>/dev/null || echo "")"
+  runtime_dir="/run/user/${uid}"
+
+  # Best-effort: only meaningful on systems with systemd user sessions.
+  if ! command -v systemctl >/dev/null 2>&1; then
+    log "systemctl not available; skipping gnome-keyring socket enable."
+    return 0
+  fi
+
+  if [[ -z "$uid" || ! -d "$runtime_dir" ]]; then
+    log "No user runtime dir ($runtime_dir); cannot enable gnome-keyring socket automatically."
+    log "Run: systemctl --user enable --now gnome-keyring-daemon.socket"
+    return 0
+  fi
+
+  # When running via sudo, systemctl --user often needs XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS.
+  if sudo -u "$REAL_USER" \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus" \
+    systemctl --user enable --now gnome-keyring-daemon.socket 2>/dev/null; then
+    log "Enabled GNOME Keyring user socket: gnome-keyring-daemon.socket"
+  else
+    log "Could not enable GNOME Keyring socket automatically (no user session bus?)."
+    log "Run (as your user): systemctl --user enable --now gnome-keyring-daemon.socket"
+  fi
 }
 
 # ---------------------------------------------------------------------
@@ -131,6 +164,7 @@ configure_git() {
     sudo -u "$REAL_USER" git config --global credential.helper manager
     log "Using Git Credential Manager"
   elif command -v git-credential-libsecret >/dev/null 2>&1; then
+    enable_gnome_keyring_socket
     sudo -u "$REAL_USER" git config --global credential.helper libsecret
     log "Using git-credential-libsecret (GNOME Keyring)"
   else

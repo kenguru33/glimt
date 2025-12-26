@@ -112,9 +112,27 @@ needs_sudo() {
 }
 
 # --- Helper: determine if a module is actually installed right now
+flatpak_app_installed() { # $1 = app id
+  command -v flatpak &>/dev/null || return 1
+  flatpak info --user "$1" &>/dev/null && return 0
+  flatpak info --system "$1" &>/dev/null && return 0
+  return 1
+}
+
 module_installed() {
   local name="$1"
   case "$name" in
+  discord)
+    # Fedora: Discord is installed via Flatpak in glimt; also treat RPM installs as installed.
+    flatpak_app_installed "com.discordapp.Discord" && return 0
+    command -v discord &>/dev/null && return 0
+    rpm -q discord &>/dev/null && return 0
+    return 1
+    ;;
+  spotify)
+    # Fedora: Spotify is installed via Flatpak in glimt; the 'spotify' binary usually doesn't exist.
+    flatpak_app_installed "com.spotify.Client"
+    ;;
   dotnet8)
     dotnet --list-sdks 2>/dev/null | grep -q '^8\.'
     ;;
