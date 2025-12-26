@@ -26,6 +26,13 @@ FLATPAK_APP_ID="com.discordapp.Discord"
 FLATHUB_REMOTE="flathub"
 FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
 
+flatpak_app_installed() { # $1 = app id
+  command -v flatpak &>/dev/null || return 1
+  flatpak info --user "$1" &>/dev/null && return 0
+  flatpak info --system "$1" &>/dev/null && return 0
+  return 1
+}
+
 install_deps() {
   log "Installing Flatpak dependencies (dnf)…"
   sudo dnf makecache -y
@@ -51,9 +58,15 @@ ensure_flathub() {
 install_discord() {
   ensure_flathub
 
-  # Check if Discord is installed via Flatpak
-  if command -v flatpak &>/dev/null && flatpak info "$FLATPAK_APP_ID" &>/dev/null; then
+  # Check if Discord is installed via Flatpak (user or system)
+  if flatpak_app_installed "$FLATPAK_APP_ID"; then
     log "Discord already installed (Flatpak)"
+    return
+  fi
+
+  # If Discord is installed via RPM, don't force-install the Flatpak.
+  if command -v discord &>/dev/null || rpm -q discord &>/dev/null; then
+    log "Discord appears installed (RPM). Skipping Flatpak install."
     return
   fi
 
