@@ -60,6 +60,7 @@ declare -A MODULES=(
   [1password]="1password"
   [kitty]="kitty"
   [vscode]="code"
+  [blackbox-terminal]="blackbox-terminal"
   [discord]="/usr/share/discord/Discord"
   [dotnet8]="dotnet"
   [dotnet10]="dotnet"
@@ -67,6 +68,7 @@ declare -A MODULES=(
   [docker-rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
   [spotify]="spotify"
+  [tableplus]="tableplus"
   [virtualization-suite]="/usr/bin/gnome-boxes"  # Main binary for virtualization suite
   [notion]="notion"
   [ytmusic]="ytm"
@@ -84,6 +86,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
+  [blackbox-terminal]="BlackBox terminal"
   [discord]="Discord desktop client"
   [dotnet8]=".NET 8 SDK + runtime"
   [dotnet10]=".NET 10 SDK + runtime"
@@ -91,6 +94,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [docker-rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
   [spotify]="Spotify desktop client"
+  [tableplus]="TablePlus database GUI"
   [virtualization-suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
   [notion]="Notion app (web app in Chrome)"
   [ytmusic]="YouTube Music PWA (web app in Chrome)"
@@ -132,6 +136,12 @@ module_installed() {
   spotify)
     # Fedora: Spotify is installed via Flatpak in glimt; the 'spotify' binary usually doesn't exist.
     flatpak_app_installed "com.spotify.Client"
+    ;;
+  tableplus)
+    command -v tableplus &>/dev/null && return 0
+    command -v rpm &>/dev/null && rpm -q tableplus &>/dev/null && return 0
+    command -v dpkg &>/dev/null && dpkg -s tableplus &>/dev/null && return 0
+    return 1
     ;;
   dotnet8)
     dotnet --list-sdks 2>/dev/null | grep -q '^8\.'

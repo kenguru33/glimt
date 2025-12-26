@@ -1,6 +1,6 @@
 # ✨ G L I M T ✨
 
-**Glimt** is an opinionated post-installation tool for **Debian Trixie**, designed to streamline and personalize your Linux setup—both in the terminal and on the GNOME desktop. It applies sensible defaults, installs essential tools, and delivers a clean, consistent environment that’s ready to use from the start.
+**Glimt** is an opinionated post-installation tool for **Debian (Trixie)** and **Fedora**. It streamlines and personalizes your Linux setup—both in the terminal and on the GNOME desktop—by applying sensible defaults, installing essential tools, and delivering a clean, consistent environment that’s ready to use from the start.
 
 ---
 
@@ -38,14 +38,15 @@ To install Glimt, simply run the following command in your terminal:
 - Lazyvim
 - Kubernetes tools (kubens, kubectx, kubectl, k9s)
 - Volta nodejs version management
-- Blackbox as defaul terminal
+- BlackBox terminal (Debian core, Fedora optional extra)
 - Docker Rootless setup
 - LazyDocker
 - 1Password CLI
 - Azure CLI
 - Glimt CLI
-- Dotnet Core 8
-- Dotnet Core 9
+- .NET 8
+- .NET 10
+- btop
 
 ### 🧩 GNOME Extensions & Configuration
 
@@ -61,17 +62,19 @@ To install Glimt, simply run the following command in your terminal:
 - [Kitty Terminal](https://sw.kovidgoyal.net/kitty/)
 - [BlackBox Terminal](https://apps.gnome.org/BlackBox/)
 - [Visual Studio Code](https://code.visualstudio.com/)
-- Jetbrains Toolboox
+- JetBrains Toolbox
 - Lens Kubernetes Desktop App
 - 1Password
 - Chrome
-- Spotify
-- Virtualzation Suite with Gnome Boxes
-- Gitkraken
+- Discord (Fedora: Flatpak)
+- Spotify (Fedora: Flatpak)
+- TablePlus
+- Virtualization Suite with GNOME Boxes
+- GitKraken
 
 ### 🖥️ Drivers
 
-- Auto Detect Nvidia Gfx Card and install newst driver from nvidia debian package source
+- Auto-detect NVIDIA GPU and install the newest driver (Debian)
 
 ---
 
@@ -90,6 +93,21 @@ glimt module-selection
 glimt update
 ```
 
+### 🧠 OS-aware completions
+
+`glimt install <TAB>` and `glimt clean <TAB>` complete modules from the correct tree:
+
+- Fedora/RHEL: `modules/fedora/` and `modules/fedora/extras/`
+- Debian/Ubuntu: `modules/debian/` and `modules/debian/extras/`
+
+### 🔐 Fedora note: Git credentials (GNOME Keyring)
+
+On Fedora, Git uses `git-credential-libsecret` (GNOME Keyring). If your user keyring socket isn’t enabled, run:
+
+```bash
+systemctl --user enable --now gnome-keyring-daemon.socket
+```
+
 ---
 
-Glimt helps you go from a fresh Debian install to a fully personalized, ready-to-work system — fast, clean, and consistent.
+Glimt helps you go from a fresh install to a fully personalized, ready-to-work system — fast, clean, and consistent.

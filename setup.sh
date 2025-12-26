@@ -214,7 +214,6 @@ PRIORITY_MODULES=(
   "install-gnome-config.sh"
   "install-nerdfonts.sh"
   "install-gnome-terminal-theme.sh"
-  "install-blackbox-terminal.sh"
 )
 
 # Run priority modules first (if present & executable)
@@ -236,7 +235,7 @@ done
 
 # Run remaining modules (excluding the priority ones)
 find "$TARGET_DIR" -maxdepth 1 -type f -name "*.sh" -executable \
-  | grep -v -E "/(install-gnome-config|install-nerdfonts|install-gnome-terminal-theme|install-blackbox-terminal)\.sh$" \
+  | grep -v -E "/(install-gnome-config|install-nerdfonts|install-gnome-terminal-theme)\.sh$" \
   | sort \
   | while read -r script; do
       MODULE_NAME="$(basename "$script")"
