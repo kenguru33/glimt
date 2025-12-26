@@ -149,10 +149,10 @@ run_with_spinner() {
      [[ -t 2 ]] && \
      [[ -n "${TERM:-}" ]] && \
      [[ "${TERM:-}" != "dumb" ]]; then
-    # Use spinner: redirect only stdout to suppress command output
-    # stderr is left alone so spinner can write to it and update in place
-    # The spinner writes escape sequences to stderr to update the same line
-    if gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+    # Use spinner: wrap command to suppress its stdout and stderr output
+    # gum spin writes its animation to stderr independently, so this won't interfere
+    # The wrapper ensures the command's output doesn't interfere with the spinner animation
+    if gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@"; then
       : # Spinner completed successfully
     else
       # Fallback if spinner fails

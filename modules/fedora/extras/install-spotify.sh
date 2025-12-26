@@ -33,7 +33,12 @@ install_deps() {
 }
 
 ensure_flathub() {
-  if flatpak remote-list --columns=name | grep -qx "$FLATHUB_REMOTE"; then
+  if ! command -v flatpak &>/dev/null; then
+    log "Flatpak not found. Installing..."
+    install_deps
+  fi
+
+  if flatpak remote-list --columns=name 2>/dev/null | grep -qx "$FLATHUB_REMOTE"; then
     log "Flathub remote already configured"
   else
     log "Adding Flathub remote"
@@ -46,7 +51,8 @@ ensure_flathub() {
 install_spotify() {
   ensure_flathub
 
-  if flatpak info "$FLATPAK_APP_ID" &>/dev/null; then
+  # Check if Spotify is installed via Flatpak
+  if command -v flatpak &>/dev/null && flatpak info "$FLATPAK_APP_ID" &>/dev/null; then
     log "Spotify already installed (Flatpak)"
     return
   fi
@@ -61,10 +67,12 @@ configure_spotify() {
 
 clean_spotify() {
   log "Removing Spotify Flatpak"
-  sudo flatpak uninstall -y "$FLATPAK_APP_ID" || true
+  if command -v flatpak &>/dev/null; then
+    sudo flatpak uninstall -y "$FLATPAK_APP_ID" || true
 
-  log "Removing unused Flatpak runtimes"
-  sudo flatpak uninstall -y --unused || true
+    log "Removing unused Flatpak runtimes"
+    sudo flatpak uninstall -y --unused || true
+  fi
 
   log "Clean complete."
 }

@@ -1,75 +1,84 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ Discord installation failed. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="discord"
 ACTION="${1:-all}"
 
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
-
-# === OS Detection ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
-    echo "❌ This script supports Fedora/RHEL-based systems only."
-    exit 1
-  }
-else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
+die() {
+  printf "ERROR: %s\n" "$*" >&2
   exit 1
-fi
+}
 
-# === Dependencies ===
-DEPS=(libatomic libappindicator-gtk3 libcxx)
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
+
+# ---- Flatpak / Flathub ----
+FLATPAK_APP_ID="com.discordapp.Discord"
+FLATHUB_REMOTE="flathub"
+FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
 
 install_deps() {
-  echo "📦 Installing dependencies..."
+  log "Installing Flatpak dependencies (dnf)…"
   sudo dnf makecache -y
-  
-  # Check if RPM Fusion is enabled
-  if ! rpm -q rpmfusion-free-release &>/dev/null && ! rpm -q rpmfusion-nonfree-release &>/dev/null; then
-    echo "📁 Adding RPM Fusion repository..."
-    FEDORA_VERSION=$(rpm -E %fedora 2>/dev/null || echo "")
-    if [[ -n "$FEDORA_VERSION" ]]; then
-      sudo dnf install -y "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VERSION}.noarch.rpm" || true
-    else
-      echo "⚠️  Could not determine Fedora version, trying generic RPM Fusion setup..."
-      sudo dnf install -y https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm || true
-    fi
+  sudo dnf install -y flatpak
+}
+
+ensure_flathub() {
+  if ! command -v flatpak &>/dev/null; then
+    log "Flatpak not found. Installing..."
+    install_deps
   fi
-  
-  sudo dnf install -y "${DEPS[@]}" || true
+
+  if flatpak remote-list --columns=name 2>/dev/null | grep -qx "$FLATHUB_REMOTE"; then
+    log "Flathub remote already configured"
+  else
+    log "Adding Flathub remote"
+    sudo flatpak remote-add --if-not-exists \
+      "$FLATHUB_REMOTE" \
+      "$FLATHUB_URL"
+  fi
 }
 
 install_discord() {
-  echo "📦 Installing Discord from RPM Fusion..."
-  
-  if command -v discord &>/dev/null; then
-    echo "✅ Discord is already installed."
+  ensure_flathub
+
+  # Check if Discord is installed via Flatpak
+  if command -v flatpak &>/dev/null && flatpak info "$FLATPAK_APP_ID" &>/dev/null; then
+    log "Discord already installed (Flatpak)"
     return
   fi
-  
-  # Ensure RPM Fusion is available
-  if ! dnf list --available discord &>/dev/null; then
-    echo "⚠️  Discord not found in repositories. Adding RPM Fusion..."
-    install_deps
-  fi
-  
-  echo "⬇️  Installing Discord..."
-  sudo dnf install -y discord
-  
-  echo "✅ Discord installed."
+
+  log "Installing Discord via Flatpak"
+  sudo flatpak install -y "$FLATHUB_REMOTE" "$FLATPAK_APP_ID"
 }
 
-config_discord() {
-  echo "⚙️  Configuring Discord (no Fedora-specific tweaks yet)..."
+configure_discord() {
+  true
 }
 
 clean_discord() {
-  echo "🗑️  Removing Discord..."
-  sudo dnf remove -y discord || true
+  log "Removing Discord Flatpak"
+  if command -v flatpak &>/dev/null; then
+    sudo flatpak uninstall -y "$FLATPAK_APP_ID" || true
+
+    log "Removing unused Flatpak runtimes"
+    sudo flatpak uninstall -y --unused || true
+  fi
+
+  log "Clean complete."
 }
+
+# ---- Entry point ----
+fedora_guard
 
 case "$ACTION" in
   deps)
@@ -80,7 +89,7 @@ case "$ACTION" in
     install_discord
     ;;
   config)
-    config_discord
+    configure_discord
     ;;
   clean)
     clean_discord
@@ -88,12 +97,14 @@ case "$ACTION" in
   all)
     install_deps
     install_discord
-    config_discord
+    configure_discord
     ;;
   *)
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;
 esac
+
+log "Done: $ACTION"
 
 

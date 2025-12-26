@@ -83,7 +83,7 @@ ensure_deps() {
         echo "⚠️  gum not in repos, will install via go or manual method"
         # Fallback: install via go or download binary
         if command -v go >/dev/null 2>&1; then
-          go install github.com/charmbracelet/gum@latest
+          go install github.com/charmbracelet/gum@v0.14.3
         else
           echo "❌ Please install gum manually or install golang first"
         fi
@@ -120,10 +120,10 @@ run_with_spinner() {
      [[ -t 2 ]] && \
      [[ -n "${TERM:-}" ]] && \
      [[ "${TERM:-}" != "dumb" ]]; then
-    # Use spinner: redirect only stdout to suppress command output
-    # stderr is left alone so spinner can write to it and update in place
-    # The spinner writes escape sequences to stderr to update the same line
-    if gum spin --spinner dot --title "$title" -- "$@" >/dev/null; then
+    # Use spinner: wrap command to suppress its stdout and stderr output
+    # gum spin writes its animation to stderr independently, so this won't interfere
+    # The wrapper ensures the command's output doesn't interfere with the spinner animation
+    if gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@"; then
       : # Spinner completed successfully
     else
       # Fallback if spinner fails
