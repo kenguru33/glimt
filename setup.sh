@@ -273,7 +273,8 @@ chmod +x "$HOME/.local/bin/glimt"
 mkdir -p "$HOME/.zsh/completions"
 COMPLETION_FILE="$MODULES_DIR/config/_glimt"
 if [[ -f "$COMPLETION_FILE" ]]; then
-  cp "$COMPLETION_FILE" "$HOME/.zsh/completions"
+  # Always overwrite the installed completion so updates take effect immediately.
+  cp -f "$COMPLETION_FILE" "$HOME/.zsh/completions/_glimt"
 else
   echo "⚠️  Zsh completion file not found: $COMPLETION_FILE"
 fi
