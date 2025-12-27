@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Glimt module: Install, configure and remove Snapper (Fedora)
+# Glimt module: Install, configure and remove Snapper (Fedora, VM-safe)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
@@ -15,15 +15,24 @@ die() {
 
 fedora_guard() {
   . /etc/os-release
-  [[ "$ID" == "fedora" ]] || die "Fedora-only module."
+  [[ "${ID:-}" == "fedora" ]] || die "Fedora-only module."
 }
 
 is_btrfs() {
-  findmnt -n -o FSTYPE "$1" | grep -qx btrfs
+  findmnt -n -o FSTYPE "$1" 2>/dev/null | grep -qx btrfs
 }
 
 has_config() {
-  snapper list-configs 2>/dev/null | awk '{print $1}' | grep -qx "$1"
+  snapper list-configs 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$1"
+}
+
+ensure_kv() {
+  local file="$1" key="$2" value="$3"
+  if grep -q "^${key}=" "$file"; then
+    sudo sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+  else
+    echo "${key}=\"${value}\"" | sudo tee -a "$file" >/dev/null
+  fi
 }
 
 deps() {
@@ -52,6 +61,7 @@ config() {
     return
   fi
 
+  # --- Root config ---
   if ! has_config root; then
     log "Creating Snapper config for /"
     sudo snapper -c root create-config /
@@ -59,15 +69,21 @@ config() {
     log "Snapper config for / already exists"
   fi
 
-  if is_btrfs /home && ! has_config home; then
-    log "Creating Snapper config for /home (Btrfs subvolume)"
-    sudo snapper -c home create-config /home
-  fi
+  ROOT_CFG="/etc/snapper/configs/root"
 
-  log "Enabling Snapper timers"
-  sudo systemctl enable --now \
-    snapper-timeline.timer \
-    snapper-cleanup.timer
+  log "Configuring Snapper (VM-safe defaults)"
+  ensure_kv "$ROOT_CFG" TIMELINE_CREATE "no"
+  ensure_kv "$ROOT_CFG" NUMBER_CLEANUP "yes"
+  ensure_kv "$ROOT_CFG" TIMELINE_CLEANUP "yes"
+
+  # Exclude GNOME Boxes disks if home is inside root snapshot
+  ensure_kv "$ROOT_CFG" EXCLUDE "home/*/.local/share/gnome-boxes/images"
+
+  log "Enabling Snapper cleanup timer only"
+  sudo systemctl enable --now snapper-cleanup.timer
+  sudo systemctl disable --now snapper-timeline.timer 2>/dev/null || true
+
+  log "Snapper configured (no timelines, safe for VMs)"
 }
 
 clean() {
