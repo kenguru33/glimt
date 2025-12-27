@@ -54,22 +54,22 @@ fi
 # === Define modules: [name]=binary (or absolute path)
 declare -A MODULES=(
   [zellij]="zellij"
-  [1password-cli]="op"
-  [jetbrains-toolbox]="jetbrains-toolbox"
+  [1password - cli]="op"
+  [jetbrains - toolbox]="jetbrains-toolbox"
   [lens]="/opt/Lens/lens-desktop"
   [1password]="1password"
   [kitty]="kitty"
   [vscode]="code"
-  [blackbox-terminal]="blackbox-terminal"
+  [blackbox - terminal]="blackbox-terminal"
   [discord]="/usr/share/discord/Discord"
   [dotnet8]="dotnet"
   [dotnet10]="dotnet"
   [gitkraken]="gitkraken"
-  [docker-rootless]="dockerd-rootless.sh"
+  [docker - rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
   [spotify]="spotify"
   [tableplus]="tableplus"
-  [virtualization-suite]="/usr/bin/gnome-boxes"  # Main binary for virtualization suite
+  [virtualization - suite]="/usr/bin/gnome-boxes" # Main binary for virtualization suite
   [notion]="notion"
   [ytmusic]="ytm"
   [outlook]="outlook"
@@ -80,22 +80,22 @@ declare -A MODULES=(
 # === Optional descriptions
 declare -A MODULE_DESCRIPTIONS=(
   [zellij]="Zellij terminal multiplexer (like tmux)"
-  [1password-cli]="1Password CLI tool (op)"
-  [jetbrains-toolbox]="JetBrains Toolbox App for IDE management"
+  [1password - cli]="1Password CLI tool (op)"
+  [jetbrains - toolbox]="JetBrains Toolbox App for IDE management"
   [lens]="Lens Kubernetes IDE"
   [1password]="1Password Desktop GUI"
   [kitty]="Kitty GPU-accelerated terminal"
   [vscode]="Visual Studio Code"
-  [blackbox-terminal]="BlackBox terminal"
+  [blackbox - terminal]="BlackBox terminal"
   [discord]="Discord desktop client"
   [dotnet8]=".NET 8 SDK + runtime"
   [dotnet10]=".NET 10 SDK + runtime"
   [gitkraken]="GitKraken Git client"
-  [docker-rootless]="Docker Rootless"
+  [docker - rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
   [spotify]="Spotify desktop client"
   [tableplus]="TablePlus database GUI"
-  [virtualization-suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
+  [virtualization - suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
   [notion]="Notion app (web app in Chrome)"
   [ytmusic]="YouTube Music PWA (web app in Chrome)"
   [outlook]="Outlook Web App (web app in Chrome)"
@@ -171,12 +171,12 @@ run_with_spinner() {
   # - stdout is a TTY (interactive terminal)
   # - stderr is a TTY (needed for spinner output)
   # - TERM is set and not "dumb" (indicates a real terminal with escape sequence support)
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
-     command -v gum >/dev/null 2>&1 && \
-     [[ -t 1 ]] && \
-     [[ -t 2 ]] && \
-     [[ -n "${TERM:-}" ]] && \
-     [[ "${TERM:-}" != "dumb" ]]; then
+  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] &&
+    command -v gum >/dev/null 2>&1 &&
+    [[ -t 1 ]] &&
+    [[ -t 2 ]] &&
+    [[ -n "${TERM:-}" ]] &&
+    [[ "${TERM:-}" != "dumb" ]]; then
     # Use spinner: wrap command to suppress its stdout and stderr output
     # gum spin writes its animation to stderr independently, so this won't interfere
     # The wrapper ensures the command's output doesn't interfere with the spinner animation
