@@ -68,6 +68,7 @@ declare -A MODULES=(
   [docker - rootless]="dockerd-rootless.sh"
   [lazydocker]="lazydocker"
   [spotify]="spotify"
+  [pika]="pika"
   [tableplus]="tableplus"
   [virtualization - suite]="/usr/bin/gnome-boxes" # Main binary for virtualization suite
   [notion]="notion"
@@ -94,6 +95,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [docker - rootless]="Docker Rootless"
   [lazydocker]="LazyDocker terminal UI for Docker"
   [spotify]="Spotify desktop client"
+  [pika]="Pika backup"
   [tableplus]="TablePlus database GUI"
   [virtualization - suite]="Full virtualization suite (GNOME Boxes + QEMU/KVM + libvirt + OVMF + TPM + SPICE)"
   [notion]="Notion app (web app in Chrome)"
@@ -132,6 +134,9 @@ module_installed() {
     command -v discord &>/dev/null && return 0
     rpm -q discord &>/dev/null && return 0
     return 1
+    ;;
+  pika)
+    flatpak_app_installed "org.gnome.World.PikaBackup"
     ;;
   spotify)
     # Fedora: Spotify is installed via Flatpak in glimt; the 'spotify' binary usually doesn't exist.
