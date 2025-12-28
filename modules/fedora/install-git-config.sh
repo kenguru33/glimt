@@ -46,6 +46,7 @@ DEPS=(
   curl
   git-credential-libsecret
   gnome-keyring
+  libsecret
 )
 
 install_dependencies() {
@@ -60,35 +61,26 @@ install_dependencies() {
 }
 
 # ---------------------------------------------------------------------
-# GNOME Keyring (needed for libsecret credential helper on Fedora)
+# GNOME Keyring (best-effort)
 # ---------------------------------------------------------------------
 enable_gnome_keyring_socket() {
   local uid runtime_dir
-  uid="$(id -u "$REAL_USER" 2>/dev/null || echo "")"
+  uid="$(id -u "$REAL_USER" 2>/dev/null || true)"
   runtime_dir="/run/user/${uid}"
 
-  # Best-effort: only meaningful on systems with systemd user sessions.
   if ! command -v systemctl >/dev/null 2>&1; then
-    log "systemctl not available; skipping gnome-keyring socket enable."
     return 0
   fi
 
   if [[ -z "$uid" || ! -d "$runtime_dir" ]]; then
-    log "No user runtime dir ($runtime_dir); cannot enable gnome-keyring socket automatically."
-    log "Run: systemctl --user enable --now gnome-keyring-daemon.socket"
     return 0
   fi
 
-  # When running via sudo, systemctl --user often needs XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS.
-  if sudo -u "$REAL_USER" \
+  sudo -u "$REAL_USER" \
     XDG_RUNTIME_DIR="$runtime_dir" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus" \
-    systemctl --user enable --now gnome-keyring-daemon.socket 2>/dev/null; then
-    log "Enabled GNOME Keyring user socket: gnome-keyring-daemon.socket"
-  else
-    log "Could not enable GNOME Keyring socket automatically (no user session bus?)."
-    log "Run (as your user): systemctl --user enable --now gnome-keyring-daemon.socket"
-  fi
+    systemctl --user enable --now gnome-keyring-daemon.socket \
+    &>/dev/null || true
 }
 
 # ---------------------------------------------------------------------
@@ -140,11 +132,12 @@ load_git_config() {
   if [[ "$ACTION" == "reconfigure" || ! -f "$CONFIG_FILE" ]]; then
     prompt_git_config
   fi
+  # shellcheck source=/dev/null
   source "$CONFIG_FILE"
 }
 
 # ---------------------------------------------------------------------
-# Apply git configuration
+# Apply git configuration (Fedora way)
 # ---------------------------------------------------------------------
 configure_git() {
   log "Applying git configuration"
@@ -157,19 +150,14 @@ configure_git() {
   sudo -u "$REAL_USER" git config --global color.ui auto
   sudo -u "$REAL_USER" git config --global core.autocrlf input
 
-  # -----------------------------------------------------------------
-  # Credential helper (Fedora-correct logic)
-  # -----------------------------------------------------------------
-  if command -v git-credential-manager >/dev/null 2>&1; then
-    sudo -u "$REAL_USER" git config --global credential.helper manager
-    log "Using Git Credential Manager"
-  elif command -v git-credential-libsecret >/dev/null 2>&1; then
+  # Fedora-native credential storage
+  if command -v git-credential-libsecret >/dev/null 2>&1; then
     enable_gnome_keyring_socket
     sudo -u "$REAL_USER" git config --global credential.helper libsecret
-    log "Using git-credential-libsecret (GNOME Keyring)"
+    log "Using Fedora-native credential helper (libsecret + GNOME Keyring)"
   else
     sudo -u "$REAL_USER" git config --global credential.helper 'cache --timeout=3600'
-    log "Using in-memory credential cache (1h)"
+    log "libsecret missing — using in-memory cache (1h)"
   fi
 
   sudo -u "$REAL_USER" git config --global alias.st status
@@ -187,7 +175,8 @@ configure_git() {
 install_git_completion_zsh() {
   if [[ ! -f "$FALLBACK_COMPLETION" ]]; then
     mkdir -p "$PLUGIN_DIR"
-    curl -fsSL https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.zsh \
+    curl -fsSL \
+      https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.zsh \
       -o "$FALLBACK_COMPLETION"
     chown -R "$REAL_USER:$REAL_USER" "$PLUGIN_DIR"
   fi
