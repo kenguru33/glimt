@@ -20,6 +20,8 @@ if [[ "$OS_ID" != "debian" && "$ID_LIKE" != *"debian"* ]]; then
 fi
 
 SOURCES_FILE="/etc/apt/sources.list"
+TESTING_LIST="/etc/apt/sources.list.d/testing.list"
+TESTING_PREF="/etc/apt/preferences.d/testing.pref"
 
 install_debian_nonfree() {
   echo "📝 Updating $SOURCES_FILE to enable contrib, non-free, and non-free-firmware..."
@@ -47,23 +49,64 @@ EOF
   sudo apt install -y firmware-linux firmware-misc-nonfree
 }
 
+# ---------------------------------------------------------
+# Cherry-pick support (Testing)
+# ---------------------------------------------------------
+enable_testing_cherrypick() {
+  echo "🍒 Enabling Debian Testing (cherry-pick only)"
+
+  echo "📝 Adding testing repo ($TESTING_LIST)"
+  sudo tee "$TESTING_LIST" >/dev/null <<EOF
+deb http://deb.debian.org/debian testing main contrib non-free non-free-firmware
+EOF
+
+  echo "📌 Adding APT pinning ($TESTING_PREF)"
+  sudo tee "$TESTING_PREF" >/dev/null <<EOF
+Package: *
+Pin: release a=testing
+Pin-Priority: 100
+EOF
+
+  echo "🔄 Updating APT sources..."
+  sudo apt update
+
+  cat <<EOF
+
+✅ Testing repository added safely.
+
+Usage example:
+  sudo apt install -t testing <package>
+
+Verify with:
+  apt-cache policy <package>
+
+⚠️ Do NOT run:
+  apt full-upgrade -t testing
+EOF
+}
+
 clean_debian_nonfree() {
   echo "ℹ️ Clean does nothing — no backup kept by design."
 }
 
-# === Dispatcher ===
+# ---------------------------------------------------------
+# Dispatcher
+# ---------------------------------------------------------
 case "$ACTION" in
-  all | install)
-    install_debian_nonfree
-    ;;
-  config)
-    echo "ℹ️ No additional config required for this module."
-    ;;
-  clean)
-    clean_debian_nonfree
-    ;;
-  *)
-    echo "Usage: $0 [all|install|config|clean]"
-    exit 1
-    ;;
+all | install)
+  install_debian_nonfree
+  ;;
+cherry-pick)
+  enable_testing_cherrypick
+  ;;
+config)
+  echo "ℹ️ No additional config required for this module."
+  ;;
+clean)
+  clean_debian_nonfree
+  ;;
+*)
+  echo "Usage: $0 [all|install|cherry-pick|config|clean]"
+  exit 1
+  ;;
 esac

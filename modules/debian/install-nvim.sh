@@ -11,46 +11,79 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/config/nvim.zsh"
 TARGET_FILE="$CONFIG_DIR/nvim.zsh"
 
-# === Step: deps ===
+# ---------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------
+ensure_testing_available() {
+  if ! apt-cache policy | grep -q "testing"; then
+    echo "❌ Debian testing repository not available."
+    echo "👉 Run your enable-nonfree.sh cherry-pick first."
+    exit 1
+  fi
+}
+
+# ---------------------------------------------------------
+# deps
+# ---------------------------------------------------------
 deps() {
-  echo "📦 Installing Neovim via apt..."
+  echo "📦 Installing Neovim from Debian testing (cherry-pick)..."
+
+  ensure_testing_available
+
   sudo apt update
-  sudo apt install -y neovim
+  sudo apt install -y -t testing neovim
+
+  echo "✅ Neovim installed from testing"
 }
 
-# === Step: install ===
+# ---------------------------------------------------------
+# install
+# ---------------------------------------------------------
 install() {
-  echo "✅ Neovim is installed system-wide. Nothing to install here."
+  echo "ℹ️ Neovim is installed via apt. Nothing else to install."
 }
 
-# === Step: config ===
+# ---------------------------------------------------------
+# config
+# ---------------------------------------------------------
 config() {
   echo "📝 Installing nvim.zsh config from template..."
 
   mkdir -p "$CONFIG_DIR"
   cp "$TEMPLATE_FILE" "$TARGET_FILE"
   chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+
   echo "✅ Installed $TARGET_FILE"
 }
 
-# === Step: clean ===
+# ---------------------------------------------------------
+# clean
+# ---------------------------------------------------------
 clean() {
   echo "🧹 Removing Neovim config..."
 
   rm -f "$TARGET_FILE"
   echo "✅ Removed $TARGET_FILE"
+
+  echo "ℹ️ Neovim package not removed automatically."
 }
 
-# === Entry Point ===
+# ---------------------------------------------------------
+# entrypoint
+# ---------------------------------------------------------
 case "$ACTION" in
-  all)    deps; install; config ;;
-  deps)   deps ;;
-  install) install ;;
-  config) config ;;
-  clean)  clean ;;
-  *)
-    echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 1
-    ;;
+all)
+  deps
+  install
+  config
+  ;;
+deps) deps ;;
+install) install ;;
+config) config ;;
+clean) clean ;;
+*)
+  echo "❌ Unknown action: $ACTION"
+  echo "Usage: $0 [all|deps|install|config|clean]"
+  exit 1
+  ;;
 esac
