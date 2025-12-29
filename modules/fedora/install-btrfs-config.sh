@@ -65,7 +65,7 @@ deps() {
   sudo dnf install -y \
     btrfs-progs \
     btrfs-assistant \
-    snapper-dnf
+    dnf-plugin-snapper
 }
 
 # ---------------------------------------------------------
@@ -166,7 +166,7 @@ clean() {
       snapper-cleanup.timer 2>/dev/null || true
 
     log "Uninstalling Snapper"
-    sudo dnf remove -y snapper snapper-dnf
+    sudo dnf remove -y snapper dnf-plugin-snapper
   else
     log "Snapper not installed — nothing to clean"
   fi
