@@ -2,6 +2,9 @@
 set -e
 trap 'echo "❌ An error occurred in optional desktop setup." >&2' ERR
 
+# === Ensure user dotnet is visible in non-interactive shells ===
+export PATH="$HOME/.dotnet:$PATH"
+
 # === Parse flags and action ===
 VERBOSE=false
 ACTION=""
@@ -17,7 +20,9 @@ for arg in "$@"; do
     VERBOSE=false
     FLAGS+=("$arg")
     ;;
-  all | install) ACTION="$arg" ;;
+  all | install)
+    ACTION="$arg"
+    ;;
   *)
     echo "❌ Unknown argument: $arg"
     echo "Usage: $0 [--verbose|--quiet] [all|install]"
@@ -31,6 +36,9 @@ GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
 
+# === Track finished scripts ===
+declare -a FINISHED=()
+
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
@@ -41,7 +49,7 @@ else
   exit 1
 fi
 
-# Determine modules directory based on OS
+# === Module directory ===
 if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
   MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
 elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
@@ -51,7 +59,7 @@ else
   exit 1
 fi
 
-# === Define modules: [name]=binary (or absolute path)
+# === Define modules ===
 declare -A MODULES=(
   [zellij]="zellij"
   ["1password-cli"]="op"
@@ -77,42 +85,32 @@ declare -A MODULES=(
   [chatgpt]="chatgpt"
 )
 
-# === Optional descriptions
 declare -A MODULE_DESCRIPTIONS=(
-  [zellij]="Zellij terminal multiplexer (like tmux)"
-  ["1password-cli"]="1Password CLI tool (op)"
-  ["jetbrains-toolbox"]="JetBrains Toolbox App for IDE management"
+  [zellij]="Zellij terminal multiplexer"
+  ["1password-cli"]="1Password CLI"
+  ["jetbrains-toolbox"]="JetBrains Toolbox"
   [lens]="Lens Kubernetes IDE"
-  [1password]="1Password Desktop GUI"
-  [kitty]="Kitty GPU-accelerated terminal"
+  [1password]="1Password GUI"
+  [kitty]="Kitty terminal"
   [vscode]="Visual Studio Code"
   ["blackbox-terminal"]="BlackBox terminal"
-  [discord]="Discord desktop client"
-  [dotnet]=".NET SDK"
-  [gitkraken]="GitKraken Git client"
+  [discord]="Discord"
+  [dotnet]=".NET SDK / Runtime"
+  [gitkraken]="GitKraken"
   ["docker-rootless"]="Docker Rootless"
-  [lazydocker]="LazyDocker terminal UI for Docker"
-  [spotify]="Spotify desktop client"
-  [pika]="Pika backup"
-  [tableplus]="TablePlus database GUI"
-  ["virtualization-suite"]="Full virtualization suite (GNOME Boxes + QEMU/KVM)"
-  [notion]="Notion app (web app)"
-  [ytmusic]="YouTube Music PWA"
-  [outlook]="Outlook Web App"
-  [teams]="Microsoft Teams PWA"
+  [lazydocker]="LazyDocker"
+  [spotify]="Spotify"
+  [pika]="Pika Backup"
+  [tableplus]="TablePlus"
+  ["virtualization-suite"]="GNOME Boxes + KVM"
+  [notion]="Notion"
+  [ytmusic]="YouTube Music"
+  [outlook]="Outlook PWA"
+  [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
 )
 
-# --- Helper: check if module script likely needs sudo
-needs_sudo() {
-  local script="$1"
-  [[ -x "$script" ]] || return 1
-  grep -Eq \
-    'apt|dnf|flatpak|snap|systemctl|/usr|/etc' \
-    "$script"
-}
-
-# --- Flatpak detection
+# === Flatpak detection ===
 flatpak_app_installed() {
   command -v flatpak &>/dev/null || return 1
   flatpak info --user "$1" &>/dev/null && return 0
@@ -120,7 +118,7 @@ flatpak_app_installed() {
   return 1
 }
 
-# --- Detect installed modules
+# === Detect installed modules ===
 module_installed() {
   local name="$1"
   case "$name" in
@@ -143,10 +141,11 @@ module_installed() {
     return 1
     ;;
   dotnet)
-    # Any installed SDK or runtime counts
-    if command -v dotnet &>/dev/null; then
-      dotnet --info &>/dev/null && return 0
-    fi
+    # Robust dotnet detection (system + user installs)
+    if command -v dotnet &>/dev/null; then return 0; fi
+    if [[ -x "$HOME/.dotnet/dotnet" ]]; then return 0; fi
+    if [[ -x "/usr/share/dotnet/dotnet" ]]; then return 0; fi
+    if [[ -x "/usr/lib/dotnet/dotnet" ]]; then return 0; fi
     return 1
     ;;
   *)
@@ -160,7 +159,7 @@ module_installed() {
   esac
 }
 
-# --- Spinner runner
+# === Spinner runner ===
 run_with_spinner() {
   local title="$1"
   shift
@@ -172,6 +171,7 @@ run_with_spinner() {
   fi
 }
 
+# === Run module script ===
 run_module_script() {
   local name="$1"
   local mode="$2"
@@ -187,6 +187,8 @@ run_module_script() {
   else
     run_with_spinner "Running $name…" bash "$script" "$mode" "${FLAGS[@]}"
   fi
+
+  FINISHED+=("install-$name.sh")
 }
 
 main() {
@@ -203,7 +205,9 @@ main() {
   done
 
   local args=()
-  for s in "${preselect[@]}"; do args+=(--selected "$s"); done
+  for s in "${preselect[@]}"; do
+    args+=(--selected "$s")
+  done
 
   IFS=$'\n' read -r -d '' -a selected < <(
     printf "%s\n" "${menu[@]}" | sort |
@@ -226,6 +230,14 @@ main() {
   done
 
   printf "%s\n" "${!WANT[@]}" >"$STATE_FILE"
+
+  # === Final summary ===
+  if ((${#FINISHED[@]})); then
+    echo
+    for f in "${FINISHED[@]}"; do
+      printf "✔️  %s finished\n" "$f"
+    done
+  fi
 }
 
 # === Entry point ===
