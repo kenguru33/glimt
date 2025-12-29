@@ -58,13 +58,9 @@ install_repo() {
     echo "❌ TablePlus repo is amd64-only; current arch: $arch"
     exit 1
   fi
-  if [[ -z "$major" ]]; then
-    echo "❌ Could not detect OS major version for TablePlus repo."
-    exit 1
-  fi
 
   cat >"$SOURCES" <<EOF
-deb [arch=amd64 signed-by=$KEYRING] https://deb.tableplus.com/debian/${major} tableplus main
+deb [arch=amd64 signed-by=$KEYRING] https://deb.tableplus.com/debian tableplus main
 EOF
   chmod 0644 "$SOURCES"
 }

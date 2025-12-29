@@ -16,23 +16,19 @@ trap 'echo "❌ docker-rootless: error on line $LINENO" >&2' ERR
 MODULE_NAME="docker-rootless"
 ACTION="${1:-all}"
 
-# === Real user context ====================================================
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
-
 # === Config (override with env) ==========================================
 DOCKER_CHANNEL_CODENAME_DEFAULT="trixie" # fallback if VERSION_CODENAME missing
-GLIMT_ROOT="${GLIMT_ROOT:-$HOME_DIR/.glimt}"
+GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 
 # Zsh snippet copy (copy only; no edits to user rc files)
 ZSH_SRC="${ZSH_SRC:-$GLIMT_ROOT/modules/debian/config/docker-rootless.zsh}"
-ZSH_DIR="${ZSH_DIR:-$HOME_DIR/.zsh/config}"
+ZSH_DIR="${ZSH_DIR:-$HOME/.zsh/config}"
 ZSH_TARGET="${ZSH_TARGET:-$ZSH_DIR/docker-rootless.zsh}"
 
 # GNOME extension (use its own manage.sh)
 GNOME_EXT_REPO="${GNOME_EXT_REPO:-https://github.com/kenguru33/rootless-docker-gnome-extension.git}"
 GNOME_EXT_BRANCH="${GNOME_EXT_BRANCH:-main}"
-GNOME_EXT_CACHE="${GNOME_EXT_CACHE:-$HOME_DIR/.cache/glimt-rootless-ext/repo}"
+GNOME_EXT_CACHE="${GNOME_EXT_CACHE:-$HOME/.cache/glimt-rootless-ext/repo}"
 
 # === Debian-only guard ====================================================
 if [[ -f /etc/os-release ]]; then
@@ -52,8 +48,7 @@ KEYRING="/etc/apt/keyrings/docker.gpg"
 LIST="/etc/apt/sources.list.d/docker.list"
 
 # Rootless runtime env (will be overwritten by write_user_env/apply_env_now)
-REAL_USER_UID="$(id -u "$REAL_USER" 2>/dev/null || id -u)"
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$REAL_USER_UID}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 
 # --- Helpers --------------------------------------------------------------
@@ -61,7 +56,7 @@ export DOCKER_HOST="${DOCKER_HOST:-unix://$XDG_RUNTIME_DIR/docker.sock}"
 log_recent_unit() {
   local unit="$1" lines="${2:-80}"
   echo "----- logs: $unit (last ${lines}) -----"
-  sudo -u "$REAL_USER" journalctl --user -u "$unit" -n "$lines" --no-pager || true
+  journalctl --user -u "$unit" -n "$lines" --no-pager || true
   echo "-----------------------------------------------------------------"
 }
 
@@ -103,29 +98,29 @@ ensure_subids() {
 write_user_env() {
   # Bake the *numeric* UID so DOCKER_HOST is always correct in new sessions
   local UID_NUM
-  UID_NUM="$(id -u "$REAL_USER")"
-  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.config/environment.d"
-  sudo -u "$REAL_USER" sh -c "cat >\"$HOME_DIR/.config/environment.d/docker-rootless.conf\" <<EOF
+  UID_NUM="$(id -u)"
+  mkdir -p "$HOME/.config/environment.d"
+  cat >"$HOME/.config/environment.d/docker-rootless.conf" <<EOF
 XDG_RUNTIME_DIR=/run/user/${UID_NUM}
 DOCKER_HOST=unix:///run/user/${UID_NUM}/docker.sock
-EOF"
+EOF
 }
 
 apply_env_now() {
-  export XDG_RUNTIME_DIR="/run/user/$(id -u "$REAL_USER")"
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
 }
 
 cleanup_half_installed() {
   echo "🧽 Cleaning any half-installed rootless setup…"
-  sudo -u "$REAL_USER" /usr/bin/dockerd-rootless-setuptool.sh uninstall -f >/dev/null 2>&1 || true
-  sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.local/share/docker" >/dev/null 2>&1 || true
-  sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/systemd/user/docker.service" >/dev/null 2>&1 || true
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
+  /usr/bin/dockerd-rootless-setuptool.sh uninstall -f >/dev/null 2>&1 || true
+  rm -rf "$HOME/.local/share/docker" >/dev/null 2>&1 || true
+  rm -f "$HOME/.config/systemd/user/docker.service" >/dev/null 2>&1 || true
+  systemctl --user daemon-reload || true
 }
 
 verify_running() {
-  if ! sudo -u "$REAL_USER" docker info >/dev/null 2>&1; then
+  if ! docker info >/dev/null 2>&1; then
     echo "❌ Cannot reach rootless Docker at ${DOCKER_HOST}"
     log_recent_unit "docker.service" 120
     return 1
@@ -146,9 +141,8 @@ copy_zsh_config() {
     echo "⚠️  Zsh snippet not found at $ZSH_SRC (set ZSH_SRC to override). Skipping copy."
     return 0
   fi
-  sudo -u "$REAL_USER" mkdir -p "$ZSH_DIR"
-  sudo -u "$REAL_USER" cp -f "$ZSH_SRC" "$ZSH_TARGET"
-  chown "$REAL_USER:$REAL_USER" "$ZSH_TARGET"
+  mkdir -p "$ZSH_DIR"
+  cp -f "$ZSH_SRC" "$ZSH_TARGET"
   echo "✅ Copied Zsh snippet → $ZSH_TARGET"
 }
 
@@ -179,8 +173,8 @@ ensure_rootful_docker_off() {
 
 start_user_docker_service_once() {
   echo "▶️  Starting user docker.service (temporary check)…"
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
-  if ! sudo -u "$REAL_USER" systemctl --user start docker; then
+  systemctl --user daemon-reload || true
+  if ! systemctl --user start docker; then
     echo "❌ Failed to start user docker.service"
     log_recent_unit "docker.service" 120
     return 1
@@ -188,14 +182,14 @@ start_user_docker_service_once() {
 
   # Wait for the socket, then verify
   for _ in {1..10}; do
-    if sudo -u "$REAL_USER" docker info >/dev/null 2>&1; then break; fi
+    if docker info >/dev/null 2>&1; then break; fi
     sleep 1
   done
   verify_running
 
   echo "⏹  Stopping docker.service (manual start required next time)…"
-  sudo -u "$REAL_USER" systemctl --user stop docker || true
-  sudo -u "$REAL_USER" systemctl --user disable docker || true
+  systemctl --user stop docker || true
+  systemctl --user disable docker || true
   echo "ℹ️ Start it on demand with: systemctl --user start docker"
 }
 
@@ -203,14 +197,14 @@ start_user_docker_service_once() {
 
 fetch_ext_repo() {
   local repo="$1" branch="$2" dest="$3"
-  sudo -u "$REAL_USER" mkdir -p "$(dirname "$dest")"
+  mkdir -p "$(dirname "$dest")"
   if [[ -d "$dest/.git" ]]; then
-    sudo -u "$REAL_USER" git -C "$dest" fetch --all --prune || true
-    sudo -u "$REAL_USER" git -C "$dest" checkout "$branch" || true
-    sudo -u "$REAL_USER" git -C "$dest" pull --ff-only || true
+    git -C "$dest" fetch --all --prune || true
+    git -C "$dest" checkout "$branch" || true
+    git -C "$dest" pull --ff-only || true
   else
-    sudo -u "$REAL_USER" rm -rf "$dest"
-    sudo -u "$REAL_USER" git clone --branch "$branch" --depth 1 "$repo" "$dest"
+    rm -rf "$dest"
+    git clone --branch "$branch" --depth 1 "$repo" "$dest"
   fi
 }
 
@@ -219,8 +213,8 @@ fetch_ext_repo() {
 ensure_user_extensions_allowed() {
   # Enable user extensions if globally disabled
   if command -v gsettings >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gsettings get org.gnome.shell disable-user-extensions 2>/dev/null | grep -q true; then
-      sudo -u "$REAL_USER" gsettings set org.gnome.shell disable-user-extensions false || true
+    if gsettings get org.gnome.shell disable-user-extensions 2>/dev/null | grep -q true; then
+      gsettings set org.gnome.shell disable-user-extensions false || true
     fi
   fi
 }
@@ -249,7 +243,7 @@ detect_extension_uuid() {
 
   # 2) If still empty, search user's extensions by keyword
   if [[ -z "$uuid" ]]; then
-    md="$(grep -rilE 'uuid|rootless|docker' "$HOME_DIR/.local/share/gnome-shell/extensions"/*/metadata.json 2>/dev/null | head -n1 || true)"
+    md="$(grep -rilE 'uuid|rootless|docker' "$HOME/.local/share/gnome-shell/extensions"/*/metadata.json 2>/dev/null | head -n1 || true)"
     if [[ -n "$md" ]]; then
       uuid="$(parse_uuid_from_metadata "$md")"
     fi
@@ -257,7 +251,7 @@ detect_extension_uuid() {
 
   # 3) As a last resort, try gnome-extensions list and pick a sensible match
   if [[ -z "$uuid" ]] && command -v gnome-extensions >/dev/null 2>&1; then
-    uuid="$(sudo -u "$REAL_USER" gnome-extensions list 2>/dev/null | grep -E 'rootless|docker' | head -n1 || true)"
+    uuid="$(gnome-extensions list 2>/dev/null | grep -E 'rootless|docker' | head -n1 || true)"
   fi
 
   [[ -n "$uuid" ]] && echo "$uuid"
@@ -274,14 +268,14 @@ enable_ext_with_gsettings() {
     return 1
   }
   local cur new
-  cur="$(sudo -u "$REAL_USER" gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo "[]")"
+  cur="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo "[]")"
   [[ "$cur" == *"'$uuid'"* ]] && {
     echo "ℹ️ Already enabled via gsettings: $uuid"
     return 0
   }
   new="${cur%]*}, '$uuid']"
   [[ "$cur" == "[]" ]] && new="['$uuid']"
-  sudo -u "$REAL_USER" gsettings set org.gnome.shell enabled-extensions "$new"
+  gsettings set org.gnome.shell enabled-extensions "$new"
   echo "✅ Enabled via gsettings: $uuid"
 }
 
@@ -294,21 +288,20 @@ enable_extension() {
 
   ensure_user_extensions_allowed
 
-  # Try CLI tools first, but suppress error output (they may fail if GNOME Shell hasn't reloaded)
   if command -v gext >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gext enable "$uuid" 2>/dev/null; then
+    if gext enable "$uuid"; then
       echo "✅ Enabled via gext: $uuid"
       return 0
     fi
   fi
   if command -v gnome-extensions >/dev/null 2>&1; then
-    if sudo -u "$REAL_USER" gnome-extensions enable "$uuid" 2>/dev/null; then
+    if gnome-extensions enable "$uuid"; then
       echo "✅ Enabled via gnome-extensions: $uuid"
       return 0
     fi
   fi
 
-  # Fallback to gsettings (works even if GNOME Shell hasn't reloaded yet)
+  # Last resort
   enable_ext_with_gsettings "$uuid" || {
     echo "⚠️ Could not enable extension automatically. UUID: $uuid"
     return 1
@@ -328,7 +321,7 @@ install_gnome_extension() {
     return 1
   fi
 
-  (cd "$GNOME_EXT_CACHE" && sudo -u "$REAL_USER" chmod +x manage.sh && sudo -u "$REAL_USER" ./manage.sh install)
+  (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh install)
 
   # Detect UUID robustly and enable
   local uuid
@@ -345,7 +338,7 @@ install_gnome_extension() {
 uninstall_gnome_extension() {
   if [[ -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
     echo "🗑 Uninstalling GNOME extension via manage.sh…"
-    (cd "$GNOME_EXT_CACHE" && sudo -u "$REAL_USER" chmod +x manage.sh && sudo -u "$REAL_USER" ./manage.sh uninstall || true)
+    (cd "$GNOME_EXT_CACHE" && chmod +x manage.sh && ./manage.sh uninstall || true)
   else
     echo "ℹ️ Extension repo cache not found; skipping manage.sh uninstall."
   fi
@@ -367,7 +360,7 @@ install() {
   ensure_subids
   write_user_env
   apply_env_now
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
+  systemctl --user daemon-reload || true
 
   echo "⚙️ Running rootless setup tool (idempotent)…"
   cleanup_half_installed
@@ -390,7 +383,7 @@ install() {
 config() {
   write_user_env
   apply_env_now
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
+  systemctl --user daemon-reload || true
 
   # Make sure rootful is *really* off before reconfiguring rootless
   ensure_rootful_docker_off
@@ -407,19 +400,19 @@ config() {
 
 clean() {
   echo "🧹 Removing rootless Docker user service and env (packages kept)…"
-  sudo -u "$REAL_USER" systemctl --user disable --now docker 2>/dev/null || true
-  sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/systemd/user/docker.service" 2>/dev/null || true
-  sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/environment.d/docker-rootless.conf" 2>/dev/null || true
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
+  systemctl --user disable --now docker 2>/dev/null || true
+  rm -f "$HOME/.config/systemd/user/docker.service" 2>/dev/null || true
+  rm -f "$HOME/.config/environment.d/docker-rootless.conf" 2>/dev/null || true
+  systemctl --user daemon-reload || true
 
   echo "🧽 Removing copied Zsh snippet…"
-  sudo -u "$REAL_USER" rm -f "$ZSH_TARGET" 2>/dev/null || true
+  rm -f "$ZSH_TARGET" 2>/dev/null || true
 
   echo "🧽 Uninstalling GNOME extension (manage.sh)…"
   uninstall_gnome_extension
 
   echo "🧽 Removing cached extension repo…"
-  sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.cache/glimt-rootless-ext" 2>/dev/null || true
+  rm -rf "$HOME/.cache/glimt-rootless-ext" 2>/dev/null || true
 
   echo "🗑 Optional package removal (manual):"
   echo "    sudo apt purge -y docker-ce docker-ce-cli docker-ce-rootless-extras"
