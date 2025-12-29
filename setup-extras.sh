@@ -1,65 +1,52 @@
 #!/bin/bash
-set -e
-trap 'echo "❌ An error occurred in optional desktop setup." >&2' ERR
+set -Eeuo pipefail
+trap 'echo "❌ Optional extras setup failed." >&2' ERR
 
-# === Ensure user dotnet is visible in non-interactive shells ===
 export PATH="$HOME/.dotnet:$PATH"
 
-# === Parse flags and action ===
+# -----------------------------
+# Args
+# -----------------------------
 VERBOSE=false
-ACTION=""
-FLAGS=()
+ACTION="all"
 
 for arg in "$@"; do
   case "$arg" in
-  --verbose)
-    VERBOSE=true
-    FLAGS+=("$arg")
-    ;;
-  --quiet)
-    VERBOSE=false
-    FLAGS+=("$arg")
-    ;;
-  all | install)
-    ACTION="$arg"
-    ;;
+  --verbose) VERBOSE=true ;;
+  --quiet) VERBOSE=false ;;
+  all | install) ACTION="$arg" ;;
   *)
     echo "❌ Unknown argument: $arg"
-    echo "Usage: $0 [--verbose|--quiet] [all|install]"
     exit 1
     ;;
   esac
 done
 
-ACTION="${ACTION:-all}"
+# -----------------------------
+# Paths
+# -----------------------------
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
 
-# === Track finished scripts ===
-declare -a FINISHED=()
+# -----------------------------
+# OS detection (SAFE)
+# -----------------------------
+. /etc/os-release
+ID_LIKE="${ID_LIKE:-}"
 
-# === OS Detection ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  OS_ID="$ID"
-  OS_ID_LIKE="${ID_LIKE:-}"
-else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
-  exit 1
-fi
-
-# === Module directory ===
-if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
+if [[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* || "$ID" == "rhel" ]]; then
   MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
-elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
+elif [[ "$ID" == "debian" || "$ID_LIKE" == *debian* || "$ID" == "ubuntu" ]]; then
   MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
 else
-  echo "❌ Unsupported OS: $OS_ID"
+  echo "❌ Unsupported OS: $ID"
   exit 1
 fi
 
-# === Define modules ===
+# -----------------------------
+# MODULES (unchanged)
+# -----------------------------
 declare -A MODULES=(
   [zellij]="zellij"
   ["1password-cli"]="op"
@@ -110,7 +97,9 @@ declare -A MODULE_DESCRIPTIONS=(
   [chatgpt]="ChatGPT PWA"
 )
 
-# === Flatpak detection ===
+# -----------------------------
+# Detection (UX only)
+# -----------------------------
 flatpak_app_installed() {
   command -v flatpak &>/dev/null || return 1
   flatpak info --user "$1" &>/dev/null && return 0
@@ -118,36 +107,12 @@ flatpak_app_installed() {
   return 1
 }
 
-# === Detect installed modules ===
 module_installed() {
   local name="$1"
   case "$name" in
-  discord)
-    flatpak_app_installed "com.discordapp.Discord" && return 0
-    command -v discord &>/dev/null && return 0
-    rpm -q discord &>/dev/null && return 0
-    return 1
-    ;;
-  pika)
-    flatpak_app_installed "org.gnome.World.PikaBackup"
-    ;;
-  spotify)
-    flatpak_app_installed "com.spotify.Client"
-    ;;
-  tableplus)
-    command -v tableplus &>/dev/null && return 0
-    rpm -q tableplus &>/dev/null && return 0
-    dpkg -s tableplus &>/dev/null && return 0
-    return 1
-    ;;
-  dotnet)
-    # Robust dotnet detection (system + user installs)
-    if command -v dotnet &>/dev/null; then return 0; fi
-    if [[ -x "$HOME/.dotnet/dotnet" ]]; then return 0; fi
-    if [[ -x "/usr/share/dotnet/dotnet" ]]; then return 0; fi
-    if [[ -x "/usr/lib/dotnet/dotnet" ]]; then return 0; fi
-    return 1
-    ;;
+  discord) flatpak_app_installed "com.discordapp.Discord" ;;
+  spotify) flatpak_app_installed "com.spotify.Client" ;;
+  pika) flatpak_app_installed "org.gnome.World.PikaBackup" ;;
   *)
     local bin="${MODULES[$name]}"
     if [[ "$bin" == /* ]]; then
@@ -159,11 +124,13 @@ module_installed() {
   esac
 }
 
-# === Spinner runner ===
+# -----------------------------
+# Spinner (INSTALL ONLY)
+# -----------------------------
 run_with_spinner() {
   local title="$1"
   shift
-  if command -v gum >/dev/null && [[ -t 1 && -t 2 ]]; then
+  if command -v gum &>/dev/null && [[ -t 1 && -t 2 ]]; then
     gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@" || "$@"
   else
     echo "▶️  $title"
@@ -171,80 +138,85 @@ run_with_spinner() {
   fi
 }
 
-# === Run module script ===
-run_module_script() {
+# -----------------------------
+# Run module
+# -----------------------------
+run_module() {
   local name="$1"
   local mode="$2"
   local script="$MODULE_DIR/install-$name.sh"
 
   [[ -x "$script" ]] || {
-    echo "⚠️  Missing $script"
+    echo "⚠️ Missing $script"
     return
   }
 
-  if $VERBOSE; then
-    bash "$script" "$mode" "${FLAGS[@]}"
-  else
-    run_with_spinner "Running $name…" bash "$script" "$mode" "${FLAGS[@]}"
+  if [[ "$mode" == "clean" ]]; then
+    echo "🧹 Cleaning $name…"
+    bash "$script" clean >/dev/null
+    echo "✔️ install-$name.sh cleaned"
+    return
   fi
 
-  FINISHED+=("install-$name.sh")
+  if $VERBOSE; then
+    echo "▶️ Running install-$name.sh"
+    bash "$script" all
+    echo "✔️ install-$name.sh finished"
+  else
+    run_with_spinner "Running $name…" bash "$script" all
+    gum style --foreground 10 "✔️ install-$name.sh finished"
+  fi
 }
 
+# -----------------------------
+# Main
+# -----------------------------
 main() {
-  local menu=()
-  local map=()
-  local preselect=()
+  declare -A PREV=()
+  if [[ -f "$STATE_FILE" ]]; then
+    while read -r m; do
+      [[ -n "$m" ]] && PREV["$m"]=1
+    done <"$STATE_FILE"
+  fi
 
-  for name in "${!MODULES[@]}"; do
-    local label="$name"
-    [[ -n "${MODULE_DESCRIPTIONS[$name]}" ]] && label="$name – ${MODULE_DESCRIPTIONS[$name]}"
+  menu=()
+  map=()
+  preselect=()
+
+  for m in "${!MODULES[@]}"; do
+    label="$m – ${MODULE_DESCRIPTIONS[$m]}"
     menu+=("$label")
-    map+=("$label:$name")
-    module_installed "$name" && preselect+=("$label")
-  done
+    map+=("$label:$m")
 
-  local args=()
-  for s in "${preselect[@]}"; do
-    args+=(--selected "$s")
+    if [[ "${PREV[$m]:-}" == "1" ]] || module_installed "$m"; then
+      preselect+=(--selected "$label")
+    fi
   done
 
   IFS=$'\n' read -r -d '' -a selected < <(
     printf "%s\n" "${menu[@]}" | sort |
-      gum choose --no-limit "${args[@]}" --height=15 && printf '\0'
+      gum choose --no-limit --height=15 "${preselect[@]}" && printf '\0'
   )
 
   declare -A WANT=()
-  for sel in "${selected[@]}"; do
+  for s in "${selected[@]}"; do
     for m in "${map[@]}"; do
-      [[ "$m" == "$sel:"* ]] && WANT["${m#*:}"]=1
+      [[ "$m" == "$s:"* ]] && WANT["${m#*:}"]=1
     done
   done
 
-  for name in "${!MODULES[@]}"; do
-    if [[ "${WANT[$name]}" == "1" ]]; then
-      module_installed "$name" || run_module_script "$name" all
-    else
-      module_installed "$name" && run_module_script "$name" clean
+  for m in "${!MODULES[@]}"; do
+    now="${WANT[$m]:-}"
+    before="${PREV[$m]:-}"
+
+    if [[ "$now" == "1" && "$before" != "1" ]]; then
+      run_module "$m" all
+    elif [[ "$now" != "1" && "$before" == "1" ]]; then
+      run_module "$m" clean
     fi
   done
 
   printf "%s\n" "${!WANT[@]}" >"$STATE_FILE"
-
-  # === Final summary ===
-  if ((${#FINISHED[@]})); then
-    echo
-    for f in "${FINISHED[@]}"; do
-      printf "✔️  %s finished\n" "$f"
-    done
-  fi
 }
 
-# === Entry point ===
-case "$ACTION" in
-all | install) main ;;
-*)
-  echo "Usage: $0 [--verbose|--quiet] [all|install]"
-  exit 1
-  ;;
-esac
+main
