@@ -35,17 +35,26 @@ mkdir -p "$(dirname "$STATE_FILE")"
 . /etc/os-release
 ID_LIKE="${ID_LIKE:-}"
 
+IS_FEDORA=false
+IS_DEBIAN=false
+
 if [[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* || "$ID" == "rhel" ]]; then
-  MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
+  IS_FEDORA=true
 elif [[ "$ID" == "debian" || "$ID_LIKE" == *debian* || "$ID" == "ubuntu" ]]; then
-  MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
+  IS_DEBIAN=true
 else
   echo "❌ Unsupported OS: $ID"
   exit 1
 fi
 
+if $IS_FEDORA; then
+  MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
+else
+  MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
+fi
+
 # -----------------------------
-# MODULES (unchanged)
+# MODULES
 # -----------------------------
 declare -A MODULES=(
   [zellij]="zellij"
@@ -64,7 +73,6 @@ declare -A MODULES=(
   [spotify]="spotify"
   [pika]="pika"
   [tableplus]="tableplus"
-  ["virtualization-suite"]="/usr/bin/gnome-boxes"
   [notion]="notion"
   [ytmusic]="ytm"
   [outlook]="outlook"
@@ -89,13 +97,20 @@ declare -A MODULE_DESCRIPTIONS=(
   [spotify]="Spotify"
   [pika]="Pika Backup"
   [tableplus]="TablePlus"
-  ["virtualization-suite"]="GNOME Boxes + KVM"
   [notion]="Notion"
   [ytmusic]="YouTube Music"
   [outlook]="Outlook PWA"
   [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
 )
+
+# -----------------------------
+# Debian-only module
+# -----------------------------
+if $IS_DEBIAN; then
+  MODULES["virtualization-suite"]="/usr/bin/gnome-boxes"
+  MODULE_DESCRIPTIONS["virtualization-suite"]="GNOME Boxes + KVM"
+fi
 
 # -----------------------------
 # Detection (UX only)
