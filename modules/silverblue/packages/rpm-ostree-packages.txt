@@ -1,0 +1,12 @@
+# rpm-ostree Packages for Silverblue
+# These packages are installed via rpm-ostree install command
+# A system reboot is required after installation for changes to take effect
+
+# Core utilities
+curl
+jq
+zsh
+wl-clipboard
+
+# Applications
+1password

@@ -1,0 +1,47 @@
+{
+  "rpm-ostree-packages": [
+    {
+      "name": "curl",
+      "description": "Command-line tool for transferring data",
+      "category": "core-utilities",
+      "prerequisite_for": ["volta"],
+      "install_command": "sudo rpm-ostree install -y curl"
+    },
+    {
+      "name": "jq",
+      "description": "JSON processor for command-line",
+      "category": "core-utilities",
+      "install_command": "sudo rpm-ostree install -y jq"
+    },
+    {
+      "name": "zsh",
+      "description": "Z shell with enhanced features",
+      "category": "core-utilities",
+      "install_command": "sudo rpm-ostree install -y zsh"
+    },
+    {
+      "name": "wl-clipboard",
+      "description": "Wayland clipboard utilities (wl-copy, wl-paste)",
+      "category": "core-utilities",
+      "install_command": "sudo rpm-ostree install -y wl-clipboard"
+    },
+    {
+      "name": "1password",
+      "description": "Password manager",
+      "category": "applications",
+      "requires_repository": true,
+      "repository": {
+        "name": "1password",
+        "gpg_key_url": "https://downloads.1password.com/linux/keys/1password.asc",
+        "repo_url": "https://downloads.1password.com/linux/rpm/stable"
+      },
+      "install_command": "sudo rpm-ostree install -y 1password"
+    }
+  ],
+  "notes": [
+    "A system reboot is required after installing packages via rpm-ostree",
+    "Packages are installed in layers and take effect after reboot",
+    "Use 'rpm -q <package>' to check if a package is installed",
+    "Use 'sudo rpm-ostree uninstall <package>' to remove a package"
+  ]
+}
