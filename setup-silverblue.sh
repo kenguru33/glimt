@@ -88,42 +88,94 @@ echo ""
 echo "🚀 Step 3: Running all install scripts in modules/silverblue..."
 echo ""
 
+# Priority scripts (must run first, in this order)
+PRIORITY_SCRIPTS=(
+  "install-homebrew.sh"
+)
+
 # Find all install scripts, excluding not_used and packages directories
-mapfile -t install_scripts < <(
+mapfile -t all_scripts < <(
   find "$SILVERBLUE_DIR" -maxdepth 1 -type f -name "install-*.sh" \
     -not -path "*/not_used/*" \
     -not -path "*/packages/*" \
     -print 2>/dev/null | sort
 )
 
-if (( ${#install_scripts[@]} == 0 )); then
+if (( ${#all_scripts[@]} == 0 )); then
   echo "ℹ️  No install scripts found in $SILVERBLUE_DIR"
   exit 0
 fi
 
-echo "Found ${#install_scripts[@]} install script(s):"
-for script in "${install_scripts[@]}"; do
-  echo "  - $(basename "$script")"
+# Separate priority scripts from the rest
+declare -a priority_scripts=()
+declare -a remaining_scripts=()
+
+for script in "${all_scripts[@]}"; do
+  script_name="$(basename "$script")"
+  is_priority=false
+  
+  for priority in "${PRIORITY_SCRIPTS[@]}"; do
+    if [[ "$script_name" == "$priority" ]]; then
+      priority_scripts+=("$script")
+      is_priority=true
+      break
+    fi
+  done
+  
+  if [[ "$is_priority" == "false" ]]; then
+    remaining_scripts+=("$script")
+  fi
+done
+
+echo "Found ${#all_scripts[@]} install script(s):"
+for script in "${all_scripts[@]}"; do
+  script_name="$(basename "$script")"
+  for priority in "${PRIORITY_SCRIPTS[@]}"; do
+    if [[ "$script_name" == "$priority" ]]; then
+      echo "  - $script_name (priority)"
+      break
+    fi
+  done || echo "  - $script_name"
 done
 echo ""
 
-# Run each install script
-for script in "${install_scripts[@]}"; do
-  script_name="$(basename "$script")"
-  echo "▶️  Running: $script_name"
-  
-  # Make sure script is executable
-  chmod +x "$script"
-  
-  # Run the script with 'all' action
-  if bash "$script" all; then
-    echo "✅ Finished: $script_name"
-  else
-    echo "❌ Failed: $script_name"
-    echo "   Continuing with remaining scripts..."
-  fi
-  echo ""
-done
+# Run priority scripts first
+if (( ${#priority_scripts[@]} > 0 )); then
+  echo "📌 Running priority scripts first..."
+  for script in "${priority_scripts[@]}"; do
+    script_name="$(basename "$script")"
+    echo "▶️  Running (priority): $script_name"
+    
+    chmod +x "$script"
+    
+    if bash "$script" all; then
+      echo "✅ Finished: $script_name"
+    else
+      echo "❌ Failed: $script_name"
+      echo "   Continuing with remaining scripts..."
+    fi
+    echo ""
+  done
+fi
+
+# Run remaining scripts
+if (( ${#remaining_scripts[@]} > 0 )); then
+  echo "📦 Running remaining scripts..."
+  for script in "${remaining_scripts[@]}"; do
+    script_name="$(basename "$script")"
+    echo "▶️  Running: $script_name"
+    
+    chmod +x "$script"
+    
+    if bash "$script" all; then
+      echo "✅ Finished: $script_name"
+    else
+      echo "❌ Failed: $script_name"
+      echo "   Continuing with remaining scripts..."
+    fi
+    echo ""
+  done
+fi
 
 echo "✅ Setup complete!"
 echo ""

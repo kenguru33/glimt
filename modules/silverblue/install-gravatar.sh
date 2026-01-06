@@ -7,7 +7,7 @@ ACTION="${1:-all}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+HOME_DIR="${HOME:-$(eval echo "~$REAL_USER")}"
 CONFIG_DIR="$HOME_DIR/.config/glimt"
 CONFIG_FILE="$CONFIG_DIR/set-user-avatar.config"
 FACE_IMAGE="$HOME_DIR/.face"
@@ -30,16 +30,17 @@ fi
 
 # === Dependencies ===
 install_dependencies() {
-  echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
-  sudo dnf install -y curl
-  # Check if gum is available, install if not
+  echo "📦 Checking dependencies..."
+  # curl should be installed via rpm-ostree (install-silverblue-prereq.sh)
+  if ! command -v curl &>/dev/null; then
+    echo "⚠️  curl not found. Please install it via rpm-ostree first:"
+    echo "   sudo rpm-ostree install -y curl"
+    echo "   Then reboot and run this script again."
+    exit 1
+  fi
+  # Check if gum is available (optional, not required)
   if ! command -v gum &>/dev/null; then
-    if sudo dnf install -y gum 2>/dev/null; then
-      echo "✅ Installed gum"
-    else
-      echo "⚠️  gum not available in repos, will use basic prompts"
-    fi
+    echo "ℹ️  gum not available, will use basic prompts"
   fi
 }
 
@@ -73,8 +74,8 @@ EOF
     done
   fi
 
-  sudo -u "$REAL_USER" mkdir -p "$CONFIG_DIR"
-  echo "gravatar_email=\"$EMAIL\"" | sudo -u "$REAL_USER" tee "$CONFIG_FILE" > /dev/null
+  mkdir -p "$CONFIG_DIR"
+  echo "gravatar_email=\"$EMAIL\"" > "$CONFIG_FILE"
   echo "✅ Saved to $CONFIG_FILE"
 }
 
@@ -103,40 +104,35 @@ config_avatar() {
   GRAVATAR_URL="https://www.gravatar.com/avatar/$HASH?s=$SIZE&d=identicon"
 
   echo "⬇️  Downloading Gravatar from: $GRAVATAR_URL"
-  sudo -u "$REAL_USER" curl -sL "$GRAVATAR_URL" -o "$FACE_IMAGE"
-  chown "$REAL_USER:$REAL_USER" "$FACE_IMAGE"
+  curl -sL "$GRAVATAR_URL" -o "$FACE_IMAGE"
   echo "🖼️  Saved avatar to $FACE_IMAGE"
 
   # GNOME user picture
   if command -v gsettings &>/dev/null; then
     echo "🔧 Setting GNOME account picture..."
-    sudo -u "$REAL_USER" gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" 2>/dev/null || true
+    gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" 2>/dev/null || true
   fi
 
-  # GDM login avatar
-  echo "🔧 Setting GDM login avatar..."
-  sudo mkdir -p "$GDM_ICON_DIR"
-  sudo cp "$FACE_IMAGE" "$GDM_ICON_DIR/$REAL_USER"
-  sudo chmod 644 "$GDM_ICON_DIR/$REAL_USER"
-
-  # AccountsService config
-  ACCOUNTS_USER_CONFIG="/var/lib/AccountsService/users/$REAL_USER"
-  sudo mkdir -p "$(dirname "$ACCOUNTS_USER_CONFIG")"
-  sudo tee "$ACCOUNTS_USER_CONFIG" >/dev/null <<EOF
-[User]
-Icon=$GDM_ICON_DIR/$REAL_USER
-EOF
-
-  echo "✅ GNOME and GDM avatar updated."
+  # GDM login avatar (skipped for Silverblue - requires sudo)
+  # The GNOME avatar set above is sufficient for most use cases
+  # To set GDM login avatar, run manually with sudo:
+  #   sudo cp "$FACE_IMAGE" /var/lib/AccountsService/icons/$USER
+  #   sudo tee /var/lib/AccountsService/users/$USER >/dev/null <<EOF
+  #   [User]
+  #   Icon=/var/lib/AccountsService/icons/$USER
+  #   EOF
+  echo "✅ GNOME avatar updated."
 }
 
 # === Clean avatar ===
 clean_avatar() {
   echo "🧹 Removing avatar and config..."
-  sudo -u "$REAL_USER" rm -f "$FACE_IMAGE"
-  sudo -u "$REAL_USER" rm -f "$CONFIG_FILE"
-  sudo rm -f "$GDM_ICON_DIR/$REAL_USER"
-  sudo rm -f "/var/lib/AccountsService/users/$REAL_USER"
+  rm -f "$FACE_IMAGE"
+  rm -f "$CONFIG_FILE"
+  # Note: GDM system files are not removed (would require sudo)
+  # To manually remove GDM avatar:
+  #   sudo rm -f /var/lib/AccountsService/icons/$USER
+  #   sudo rm -f /var/lib/AccountsService/users/$USER
   echo "✅ Avatar and config cleaned."
 }
 

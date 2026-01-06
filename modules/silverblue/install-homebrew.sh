@@ -9,7 +9,7 @@ MODULE_NAME="homebrew"
 ACTION="${1:-all}"
 
 REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+HOME_DIR="${HOME:-$(eval echo "~$REAL_USER")}"
 
 BREW_PREFIX="$HOME_DIR/.linuxbrew"
 ENV_DIR="$HOME_DIR/.config/environment.d"
@@ -30,22 +30,43 @@ require_user() {
 }
 
 deps() {
-  log "📦 Installing Homebrew dependencies..."
+  log "📦 Checking Homebrew dependencies..."
 
   . /etc/os-release
 
-  if [[ "$ID" == "fedora" || "${ID_LIKE:-}" == *fedora* ]]; then
-    sudo dnf install -y \
-      curl file git procps-ng \
-      gcc gcc-c++ make \
-      glibc-devel
-  elif [[ "$ID" == "debian" || "${ID_LIKE:-}" == *debian* ]]; then
-    sudo apt update
-    sudo apt install -y \
-      curl file git procps \
-      build-essential
+  # Required commands for Homebrew
+  local missing_deps=()
+  local required_commands=("curl" "file" "git")
+  
+  for cmd in "${required_commands[@]}"; do
+    if ! command -v "$cmd" &>/dev/null; then
+      missing_deps+=("$cmd")
+    fi
+  done
+
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    log "❌ Missing required dependencies: ${missing_deps[*]}"
+    log "ℹ️  For Silverblue, install these via rpm-ostree:"
+    log "   sudo rpm-ostree install -y ${missing_deps[*]}"
+    log "   Then reboot and run this script again."
+    exit 1
+  fi
+
+  # Check for build tools (optional but recommended)
+  local build_tools=("gcc" "make")
+  local missing_build_tools=()
+  for tool in "${build_tools[@]}"; do
+    if ! command -v "$tool" &>/dev/null; then
+      missing_build_tools+=("$tool")
+    fi
+  done
+
+  if [[ ${#missing_build_tools[@]} -gt 0 ]]; then
+    log "⚠️  Build tools not found: ${missing_build_tools[*]}"
+    log "ℹ️  Some Homebrew packages may fail to compile without these"
+    log "   Install via: sudo rpm-ostree install -y gcc gcc-c++ make"
   else
-    log "⚠ Unsupported distro – skipping deps"
+    log "✅ All dependencies available"
   fi
 }
 
@@ -59,11 +80,9 @@ install() {
 
   log "🍺 Installing Homebrew (user-space)..."
 
-  sudo -u "$REAL_USER" bash <<EOF
-set -e
-NONINTERACTIVE=1 \
-/bin/bash -c "\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-EOF
+  # Run Homebrew installer as current user (no sudo needed)
+  NONINTERACTIVE=1 \
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 }
 
 config() {
@@ -79,10 +98,8 @@ HOMEBREW_CELLAR=$BREW_PREFIX/Cellar
 HOMEBREW_REPOSITORY=$BREW_PREFIX/Homebrew
 EOF
 
-  chown "$REAL_USER:$REAL_USER" "$ENV_FILE"
-
   # Zsh integration (optional but nice)
-  if [[ -d "$ZSH_CONFIG_DIR" ]]; then
+  if [[ -d "$ZSH_CONFIG_DIR" ]] || [[ -n "${ZSH_CONFIG_DIR:-}" ]]; then
     mkdir -p "$ZSH_CONFIG_DIR"
     cat >"$ZSH_FILE" <<'EOF'
 # Homebrew (Linuxbrew)
@@ -90,7 +107,6 @@ if [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
   eval "$($HOME/.linuxbrew/bin/brew shellenv)"
 fi
 EOF
-    chown "$REAL_USER:$REAL_USER" "$ZSH_FILE"
     log "✅ Zsh config installed"
   fi
 
