@@ -90,6 +90,7 @@ echo ""
 
 # Priority scripts (must run first, in this order)
 PRIORITY_SCRIPTS=(
+  "install-git-config.sh"
   "install-homebrew.sh"
 )
 
