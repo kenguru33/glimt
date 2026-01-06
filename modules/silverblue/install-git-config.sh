@@ -39,33 +39,10 @@ fi
 [[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* ]] || die "Fedora only"
 
 # ---------------------------------------------------------------------
-# Dependencies (check for rpm-ostree packages)
+# Dependencies (no check - packages should be installed via prereq)
 # ---------------------------------------------------------------------
-DEPS=(
-  git
-  curl
-  gnome-keyring
-)
-
 install_dependencies() {
-  log "Checking dependencies…"
-  
-  local missing_deps=()
-  for pkg in "${DEPS[@]}"; do
-    if ! rpm -q "$pkg" &>/dev/null 2>&1; then
-      missing_deps+=("$pkg")
-    fi
-  done
-
-  if [[ ${#missing_deps[@]} -gt 0 ]]; then
-    log "❌ Missing dependencies: ${missing_deps[*]}"
-    log "ℹ️  For Silverblue, install these via rpm-ostree:"
-    log "   sudo rpm-ostree install -y ${missing_deps[*]}"
-    log "   Then reboot and run this script again."
-    exit 1
-  fi
-
-  log "✅ All dependencies available"
+  log "✅ Dependencies should be installed via prereq module"
 }
 
 # ---------------------------------------------------------------------
