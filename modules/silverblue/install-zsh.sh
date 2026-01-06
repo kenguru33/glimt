@@ -31,11 +31,13 @@ write_zsh_config() {
 
 # === Step: deps ===
 deps() {
-  if rpm -q zsh &>/dev/null; then
-    echo "✅ zsh already installed"
+  # Check if zsh is available (should be installed via rpm-ostree in prereq module)
+  if command -v zsh &>/dev/null 2>&1; then
+    echo "✅ zsh is available: $(command -v zsh)"
+  elif rpm -q zsh &>/dev/null 2>&1; then
+    echo "⚠️  zsh package is installed but not yet in PATH (reboot may be required)"
   else
-    echo "📦 Installing Zsh dependencies..."
-    sudo rpm-ostree install -y zsh
+    echo "⚠️  zsh is not installed. Please install it via the prereq module first."
   fi
   echo "🛠 Ensuring $LOCAL_BIN exists..."
   mkdir -p "$LOCAL_BIN"
@@ -64,12 +66,36 @@ install() {
     chown -R "$REAL_USER:$REAL_USER" "$dir"
   done
 
-  echo "🛠 Ensuring Zsh is default shell for $REAL_USER..."
-  if [[ "$(getent passwd "$REAL_USER" | cut -d: -f7)" != "$(command -v zsh)" ]]; then
-    sudo chsh -s "$(command -v zsh)" "$REAL_USER"
-    echo "✅ Default shell set to Zsh"
+  echo "🛠 Ensuring Zsh is default shell..."
+  local zsh_path
+  zsh_path=$(command -v zsh 2>/dev/null || echo "")
+  
+  if [[ -z "$zsh_path" ]]; then
+    # Try to find zsh in common locations if not in PATH
+    if [[ -x /usr/bin/zsh ]]; then
+      zsh_path="/usr/bin/zsh"
+    elif [[ -x /bin/zsh ]]; then
+      zsh_path="/bin/zsh"
+    elif rpm -q zsh &>/dev/null 2>&1; then
+      # Package is installed but not in PATH yet (likely needs reboot)
+      echo "⚠️  zsh package is installed but not yet in PATH"
+      echo "ℹ️  Shell will be changed after reboot when zsh becomes available"
+      return 0
+    else
+      echo "❌ zsh is not installed. Please install it via the prereq module first."
+      return 1
+    fi
+  fi
+  
+  local current_shell
+  current_shell=$(getent passwd "$REAL_USER" | cut -d: -f7)
+  
+  if [[ "$current_shell" != "$zsh_path" ]]; then
+    # Change shell for the current user (no sudo needed for own shell)
+    chsh -s "$zsh_path"
+    echo "✅ Default shell set to Zsh: $zsh_path"
   else
-    echo "⏭️  Zsh already default shell"
+    echo "⏭️  Zsh already default shell: $zsh_path"
   fi
 }
 

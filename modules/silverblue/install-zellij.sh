@@ -7,7 +7,8 @@ set -uo pipefail
 MODULE_NAME="zellij"
 ACTION="${1:-all}"
 
-HOME_DIR="$HOME"
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
 BREW_PREFIX="$HOME_DIR/.linuxbrew"
 ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
@@ -21,28 +22,74 @@ log() {
 }
 
 require_user() {
-  if [[ "$EUID" -eq 0 ]]; then
-    echo "❌ Do not run this module as root." >&2
+  if [[ "$EUID" -eq 0 && -z "${SUDO_USER:-}" ]]; then
+    echo "❌ Do not run this module as root directly." >&2
     exit 1
   fi
 }
 
 check_brew() {
   # Check if brew command is available in PATH
-  if command -v brew &>/dev/null; then
+  if command -v brew &>/dev/null 2>&1; then
     return 0
   fi
   
-  # Try to source homebrew shellenv if brew is in standard location
-  if [[ -x "$BREW_PREFIX/bin/brew" ]]; then
-    eval "$("$BREW_PREFIX/bin/brew" shellenv)"
-    if command -v brew &>/dev/null; then
-      return 0
+  # Try multiple possible Homebrew locations
+  local possible_paths=(
+    "$BREW_PREFIX/bin/brew"
+    "$HOME_DIR/.linuxbrew/bin/brew"
+    "$HOME/.linuxbrew/bin/brew"
+    "/home/linuxbrew/.linuxbrew/bin/brew"
+  )
+  
+  local brew_path=""
+  for path in "${possible_paths[@]}"; do
+    if [[ -x "$path" ]]; then
+      brew_path="$path"
+      BREW_PREFIX="$(dirname "$(dirname "$path")")"
+      break
     fi
+  done
+  
+  # Check if brew exists and is executable
+  if [[ -z "$brew_path" ]]; then
+    log "❌ brew not found in any standard location"
+    log "ℹ Checked paths:"
+    for path in "${possible_paths[@]}"; do
+      log "   - $path"
+    done
+    log "ℹ Please ensure Homebrew is installed via the prereq module first"
+    log "ℹ Run: modules/silverblue/packages/install-silverblue-prereq.sh install"
+    return 1
   fi
   
-  log "❌ brew command not found"
-  log "ℹ Please ensure Homebrew is installed and available in PATH"
+  log "🔍 Found brew at: $brew_path"
+  
+  # Source homebrew shellenv
+  local shellenv_output
+  shellenv_output=$("$brew_path" shellenv 2>&1) || {
+    log "❌ Failed to get homebrew shellenv: $shellenv_output"
+    return 1
+  }
+  
+  # Evaluate the shellenv output
+  eval "$shellenv_output" 2>/dev/null || true
+  
+  # Explicitly export PATH and Homebrew variables to ensure they're available
+  export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
+  export HOMEBREW_PREFIX="$BREW_PREFIX"
+  export HOMEBREW_CELLAR="$BREW_PREFIX/Cellar"
+  export HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew"
+  
+  # Verify brew is now available
+  if command -v brew &>/dev/null 2>&1; then
+    log "✅ brew is now available: $(command -v brew)"
+    return 0
+  fi
+  
+  log "❌ brew command still not found after sourcing shellenv"
+  log "ℹ Homebrew may be installed but not properly configured"
+  log "ℹ Try running: eval \"\$($brew_path shellenv)\""
   return 1
 }
 

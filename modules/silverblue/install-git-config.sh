@@ -44,9 +44,7 @@ fi
 DEPS=(
   git
   curl
-  git-credential-libsecret
   gnome-keyring
-  libsecret
 )
 
 install_dependencies() {

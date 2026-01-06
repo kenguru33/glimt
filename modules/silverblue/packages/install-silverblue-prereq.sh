@@ -9,7 +9,7 @@ error_handler() {
   local exit_code=$?
   # Skip error message for functions that handle their own errors gracefully
   local current_func="${FUNCNAME[1]:-}"
-  if [[ "$current_func" != "install_packages" && "$current_func" != "config" && "$current_func" != "load_package_metadata" ]]; then
+  if [[ "$current_func" != "install_packages" && "$current_func" != "config" && "$current_func" != "load_package_metadata" && "$current_func" != "install_homebrew" && "$current_func" != "config_homebrew" ]]; then
     echo "❌ prereq module failed." >&2
   fi
   return $exit_code
@@ -144,7 +144,22 @@ install_repos() {
       fi
       
       if [[ ! -f "$repo_file" ]]; then
-        sudo tee "$repo_file" >/dev/null <<EOF
+        # For rpm-ostree, use URL-based gpgkey (more reliable than file path)
+        # Also ensure GPG key is imported for verification
+        if [[ "$pkg" == "1password" ]]; then
+          # Use URL-based gpgkey for 1password (works better with rpm-ostree)
+          sudo tee "$repo_file" >/dev/null <<EOF
+[$repo_name]
+name=$repo_name Stable Channel
+baseurl=$repo_url/\$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=$repo_gpg_key_url
+EOF
+        else
+          # For other packages, use file-based gpgkey if available
+          sudo tee "$repo_file" >/dev/null <<EOF
 [$repo_name]
 name=$repo_name Stable Channel
 baseurl=$repo_url/\$basearch
@@ -153,7 +168,24 @@ gpgcheck=1
 repo_gpgcheck=0
 gpgkey=file://$gpg_key
 EOF
+        fi
         log "✅ $pkg repository added"
+        
+        # Verify repository file was created correctly
+        if [[ ! -f "$repo_file" ]]; then
+          log "❌ Failed to create repository file: $repo_file"
+          return 1
+        fi
+        
+        # For 1password, verify the repository configuration
+        if [[ "$pkg" == "1password" ]]; then
+          log "🔍 Verifying 1password repository configuration..."
+          if grep -q "baseurl.*1password.com" "$repo_file" 2>/dev/null; then
+            log "✅ 1password repository URL verified"
+          else
+            log "⚠️  Warning: 1password repository URL may be incorrect"
+          fi
+        fi
       else
         log "ℹ️  $pkg repository already configured"
       fi
@@ -195,11 +227,20 @@ install_packages() {
     log "   Installing $pkg..."
     local output
     output=$(sudo rpm-ostree install -y "$pkg" 2>&1) || {
+      local exit_code=$?
       if echo "$output" | grep -q "already requested"; then
         log "   ✅ $pkg already requested in pending layer"
         packages_pending+=("$pkg")
+      elif echo "$output" | grep -qi "no package"; then
+        log "   ❌ Package $pkg not found in repositories"
+        log "   ℹ️  This may indicate a repository configuration issue"
+        if [[ "$pkg" == "1password" ]]; then
+          log "   💡 For 1password, ensure the repository was set up correctly in install_repos()"
+        fi
+        echo "$output" >&2
+        install_failed=1
       else
-        log "   ❌ Failed to install $pkg:"
+        log "   ❌ Failed to install $pkg (exit code: $exit_code):"
         echo "$output" >&2
         install_failed=1
       fi
@@ -219,11 +260,133 @@ install_packages() {
   fi
 }
 
+install_homebrew() {
+  require_user
+  
+  local brew_prefix="$HOME_DIR/.linuxbrew"
+  
+  if [[ -x "$brew_prefix/bin/brew" ]]; then
+    log "✅ Homebrew already installed"
+    # Make brew available in current shell
+    eval "$("$brew_prefix/bin/brew" shellenv)" 2>/dev/null || true
+    export PATH="$brew_prefix/bin:$brew_prefix/sbin:$PATH"
+    export HOMEBREW_PREFIX="$brew_prefix"
+    export HOMEBREW_CELLAR="$brew_prefix/Cellar"
+    export HOMEBREW_REPOSITORY="$brew_prefix/Homebrew"
+    if command -v brew &>/dev/null 2>&1; then
+      log "✅ brew is available in current shell: $(command -v brew)"
+    fi
+    return 0
+  fi
+  
+  log "🍺 Installing Homebrew (user-space)..."
+  
+  # Check for required dependencies
+  local missing_deps=()
+  local required_commands=("curl" "file" "git")
+  
+  for cmd in "${required_commands[@]}"; do
+    if ! command -v "$cmd" &>/dev/null 2>&1; then
+      missing_deps+=("$cmd")
+    fi
+  done
+  
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    log "❌ Missing required dependencies for Homebrew: ${missing_deps[*]}"
+    log "ℹ️  Please install these packages first via rpm-ostree"
+    return 1
+  fi
+  
+  # Run Homebrew installer with sudo
+  NONINTERACTIVE=1 \
+    sudo -u "$REAL_USER" /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
+    log "❌ Failed to install Homebrew"
+    return 1
+  }
+  
+  # Make brew available in current shell
+  if [[ -x "$brew_prefix/bin/brew" ]]; then
+    eval "$("$brew_prefix/bin/brew" shellenv)" 2>/dev/null || true
+    export PATH="$brew_prefix/bin:$brew_prefix/sbin:$PATH"
+    export HOMEBREW_PREFIX="$brew_prefix"
+    export HOMEBREW_CELLAR="$brew_prefix/Cellar"
+    export HOMEBREW_REPOSITORY="$brew_prefix/Homebrew"
+    if command -v brew &>/dev/null 2>&1; then
+      log "✅ Homebrew installed and available in current shell: $(command -v brew)"
+    else
+      log "✅ Homebrew installed (brew command may need shell restart)"
+    fi
+  else
+    log "✅ Homebrew installed (may need to source shellenv manually)"
+  fi
+}
+
+config_homebrew() {
+  require_user
+  
+  local brew_prefix="$HOME_DIR/.linuxbrew"
+  local env_dir="$HOME_DIR/.config/environment.d"
+  local env_file="$env_dir/99-homebrew.conf"
+  local zsh_config_dir="$HOME_DIR/.zsh/config"
+  local zsh_file="$zsh_config_dir/homebrew.zsh"
+  local bashrc_file="$HOME_DIR/.bashrc"
+  
+  if [[ ! -x "$brew_prefix/bin/brew" ]]; then
+    log "⚠️  Homebrew not installed, skipping configuration"
+    return 0
+  fi
+  
+  log "🛠 Configuring Homebrew environment..."
+  
+  # Systemd user environment (for GUI apps)
+  mkdir -p "$env_dir"
+  cat >"$env_file" <<EOF
+PATH=$brew_prefix/bin:$brew_prefix/sbin:\$PATH
+HOMEBREW_PREFIX=$brew_prefix
+HOMEBREW_CELLAR=$brew_prefix/Cellar
+HOMEBREW_REPOSITORY=$brew_prefix/Homebrew
+EOF
+  chown "$REAL_USER:$REAL_USER" "$env_file"
+  log "✅ Systemd environment config installed"
+  
+  # Bash configuration
+  # Check if homebrew config already exists in bashrc
+  if [[ ! -f "$bashrc_file" ]] || ! grep -q "Homebrew\|\.linuxbrew" "$bashrc_file" 2>/dev/null; then
+    {
+      echo ""
+      echo "# Homebrew (Linuxbrew)"
+      echo "if [[ -x \"\$HOME/.linuxbrew/bin/brew\" ]]; then"
+      echo "  eval \"\$(\$HOME/.linuxbrew/bin/brew shellenv)\""
+      echo "fi"
+    } >> "$bashrc_file"
+    chown "$REAL_USER:$REAL_USER" "$bashrc_file"
+    log "✅ Bash config added to $bashrc_file"
+  else
+    log "ℹ️  Bash config already present in $bashrc_file"
+  fi
+  
+  # Zsh configuration
+  mkdir -p "$zsh_config_dir"
+  cat >"$zsh_file" <<'EOF'
+# Homebrew (Linuxbrew)
+if [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+  eval "$($HOME/.linuxbrew/bin/brew shellenv)"
+fi
+EOF
+  chown "$REAL_USER:$REAL_USER" "$zsh_file"
+  log "✅ Zsh config installed: $zsh_file"
+  
+  log "ℹ️  Log out and back in (or reboot) for GUI apps to see Homebrew"
+}
+
 install() {
   # Set up repositories first (for packages that require them)
   install_repos
   
   install_packages
+  
+  # Install Homebrew after packages are installed
+  install_homebrew
 }
 
 config() {
@@ -253,21 +416,42 @@ config() {
   fi
   
   # Check if commands are available in PATH (expected failures are OK)
+  # Note: Some packages (like 1password) may not have CLI commands or may not be
+  # available until after reboot on Silverblue
   log "🔍 Checking if commands are available in PATH..."
   
   # Build command mapping from packages
+  # Packages without CLI commands should be excluded from PATH checks
   declare -A cmd_map
   cmd_map["curl"]="curl"
   cmd_map["jq"]="jq"
   cmd_map["zsh"]="zsh"
   cmd_map["wl-clipboard"]="wl-copy"
+  # 1password is a GUI app and may not have a CLI command, so we skip PATH check
   
   for pkg in "${PACKAGES[@]}"; do
-    local cmd="${cmd_map[$pkg]:-$pkg}"
+    # Skip PATH check for packages that don't have CLI commands or are GUI apps
+    if [[ "$pkg" == "1password" ]]; then
+      # 1password is a GUI application - verify it's installed via rpm instead
+      if rpm -q "$pkg" &>/dev/null 2>&1; then
+        log "   ✅ $pkg package is installed (GUI app, no CLI command expected)"
+      else
+        log "   ⚠️  $pkg package not yet available (reboot may be required)"
+      fi
+      continue
+    fi
+    
+    local cmd="${cmd_map[$pkg]:-}"
+    # Only check PATH if we have a command mapping (skip packages without CLI commands)
+    if [[ -z "$cmd" ]]; then
+      continue
+    fi
+    
+    # Check if command is available (non-failing check)
     if command -v "$cmd" &>/dev/null 2>&1; then
       log "   ✅ $cmd is available: $(command -v "$cmd")"
     else
-      log "   ⚠️  $cmd not yet available in PATH (from $pkg)"
+      log "   ⚠️  $cmd not yet available in PATH (from $pkg - reboot may be required)"
     fi
   done || true
   
@@ -277,10 +461,13 @@ config() {
       if command -v "$cmd" &>/dev/null 2>&1; then
         log "   ✅ $cmd is available: $(command -v "$cmd")"
       else
-        log "   ⚠️  $cmd not yet available in PATH (from wl-clipboard)"
+        log "   ⚠️  $cmd not yet available in PATH (from wl-clipboard - reboot may be required)"
       fi
     done || true
   fi
+  
+  # Configure Homebrew
+  config_homebrew
   
   log "✅ Prerequisite packages configuration complete"
 }
@@ -329,6 +516,39 @@ clean() {
       fi
     fi
   done
+  
+  # Clean up Homebrew
+  require_user
+  local brew_prefix="$HOME_DIR/.linuxbrew"
+  local env_file="$HOME_DIR/.config/environment.d/99-homebrew.conf"
+  local zsh_file="$HOME_DIR/.zsh/config/homebrew.zsh"
+  local bashrc_file="$HOME_DIR/.bashrc"
+  
+  if [[ -d "$brew_prefix" ]]; then
+    log "🧹 Removing Homebrew..."
+    rm -rf "$brew_prefix"
+    log "✅ Homebrew removed"
+  fi
+  
+  if [[ -f "$env_file" ]]; then
+    rm -f "$env_file"
+    log "✅ Homebrew environment config removed"
+  fi
+  
+  if [[ -f "$zsh_file" ]]; then
+    rm -f "$zsh_file"
+    log "✅ Homebrew zsh config removed"
+  fi
+  
+  # Remove homebrew config from bashrc if it exists
+  if [[ -f "$bashrc_file" ]]; then
+    # Remove homebrew section from bashrc
+    if grep -q "Homebrew\|\.linuxbrew" "$bashrc_file" 2>/dev/null; then
+      # Use sed to remove the homebrew section (lines between "# Homebrew" comment and "fi")
+      sed -i '/# Homebrew (Linuxbrew)/,/^fi$/d' "$bashrc_file" 2>/dev/null || true
+      log "✅ Homebrew bash config removed from $bashrc_file"
+    fi
+  fi
   
   log "✅ Clean complete"
 }
