@@ -28,112 +28,85 @@ require_user() {
   fi
 }
 
+# --------------------------------------------------
+# Homebrew detection + shellenv
+# --------------------------------------------------
 check_brew() {
-  # Check if brew command is available in PATH
-  if command -v brew &>/dev/null 2>&1; then
+  if command -v brew &>/dev/null; then
     return 0
   fi
-  
-  # Try multiple possible Homebrew locations
-  local possible_paths=(
+
+  local candidates=(
     "$BREW_PREFIX/bin/brew"
-    "$HOME_DIR/.linuxbrew/bin/brew"
-    "$HOME/.linuxbrew/bin/brew"
     "/home/linuxbrew/.linuxbrew/bin/brew"
   )
-  
-  local brew_path=""
-  for path in "${possible_paths[@]}"; do
+
+  for path in "${candidates[@]}"; do
     if [[ -x "$path" ]]; then
-      brew_path="$path"
-      BREW_PREFIX="$(dirname "$(dirname "$path")")"
-      break
+      eval "$("$path" shellenv)" >/dev/null 2>&1 || true
+      export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
+      command -v brew &>/dev/null && return 0
     fi
   done
-  
-  # Check if brew exists and is executable
-  if [[ -z "$brew_path" ]]; then
-    log "❌ brew not found in any standard location"
-    log "ℹ Checked paths:"
-    for path in "${possible_paths[@]}"; do
-      log "   - $path"
-    done
-    log "ℹ Please ensure Homebrew is installed via the prereq module first"
-    log "ℹ Run: modules/silverblue/packages/install-silverblue-prereq.sh install"
-    return 1
-  fi
-  
-  log "🔍 Found brew at: $brew_path"
-  
-  # Source homebrew shellenv
-  local shellenv_output
-  shellenv_output=$("$brew_path" shellenv 2>&1) || {
-    log "❌ Failed to get homebrew shellenv: $shellenv_output"
-    return 1
-  }
-  
-  # Evaluate the shellenv output
-  eval "$shellenv_output" 2>/dev/null || true
-  
-  # Explicitly export PATH and Homebrew variables to ensure they're available
-  export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
-  export HOMEBREW_PREFIX="$BREW_PREFIX"
-  export HOMEBREW_CELLAR="$BREW_PREFIX/Cellar"
-  export HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew"
-  
-  # Verify brew is now available
-  if command -v brew &>/dev/null 2>&1; then
-    log "✅ brew is now available: $(command -v brew)"
+
+  log "❌ brew not found"
+  return 1
+}
+
+# --------------------------------------------------
+# SAFE Homebrew install (warnings ≠ failure)
+# --------------------------------------------------
+brew_install_safe() {
+  local pkg="$1"
+
+  log "🍺 Installing $pkg via Homebrew..."
+
+  set +e
+  brew install "$pkg"
+  local rc=$?
+  set -e
+
+  if brew list --formula "$pkg" &>/dev/null; then
+    if [[ $rc -ne 0 ]]; then
+      log "⚠️  $pkg installed with warnings (acceptable)"
+    else
+      log "✅ $pkg installed"
+    fi
     return 0
   fi
-  
-  log "❌ brew command still not found after sourcing shellenv"
-  log "ℹ Homebrew may be installed but not properly configured"
-  log "ℹ Try running: eval \"\$($brew_path shellenv)\""
+
+  log "❌ $pkg not installed"
   return 1
 }
 
 deps() {
   log "📦 Checking for brew..."
-  if check_brew; then
-    log "✅ brew is available"
-  else
-    exit 1
-  fi
+  check_brew || exit 1
+  log "✅ brew is available"
 }
 
 install() {
   require_user
-
-  if ! check_brew; then
-    exit 1
-  fi
+  check_brew || exit 1
 
   log "🔌 Installing btop via Homebrew..."
 
-  # Disable automatic cleanup to avoid errors
   export HOMEBREW_NO_INSTALL_CLEANUP=1
   export HOMEBREW_NO_ENV_HINTS=1
 
-  if brew list btop &>/dev/null; then
-    log "🔄 btop already installed, upgrading..."
-    brew upgrade btop || {
-      log "⚠️  brew upgrade btop had issues, but continuing..."
-    }
-    log "✅ btop upgraded"
+  if brew list --formula btop &>/dev/null; then
+    log "🔄 btop already installed, attempting upgrade..."
+    set +e
+    brew upgrade btop
+    set -e
   else
-    log "⬇️  Installing btop..."
-    brew install btop || {
-      log "❌ brew install btop failed"
-      exit 1
-    }
-    log "✅ btop installed"
+    brew_install_safe btop
   fi
 
-  if ! command -v btop &>/dev/null 2>&1; then
-    log "❌ btop command not found after installation"
+  command -v btop &>/dev/null || {
+    log "❌ btop command not found after install"
     exit 1
-  fi
+  }
 
   log "✅ btop is ready: $(command -v btop)"
 }
@@ -143,80 +116,55 @@ config() {
 
   log "🎨 Applying Catppuccin Mocha theme to btop..."
 
-  if ! command -v btop &>/dev/null 2>&1; then
-    log "❌ btop command not found. Run 'install' first."
+  command -v btop &>/dev/null || {
+    log "❌ btop not installed"
     exit 1
-  fi
+  }
 
   mkdir -p "$BTOP_THEME_DIR"
 
-  # Download theme using curl or wget
   local theme_file="$BTOP_THEME_DIR/catppuccin_mocha.theme"
-  if command -v curl &>/dev/null 2>&1; then
-    log "⬇️  Downloading Catppuccin Mocha theme with curl..."
-    curl -fsSL -o "$theme_file" "$CATPPUCCIN_THEME_URL"
-  elif command -v wget &>/dev/null 2>&1; then
-    log "⬇️  Downloading Catppuccin Mocha theme with wget..."
-    wget -qO "$theme_file" "$CATPPUCCIN_THEME_URL"
-  else
-    log "❌ Neither curl nor wget found. Cannot download theme."
-    exit 1
-  fi
+  curl -fsSL "$CATPPUCCIN_THEME_URL" -o "$theme_file"
 
-  log "🛠 Ensuring btop config exists..."
   mkdir -p "$BTOP_CONFIG_DIR"
 
   if [[ ! -f "$BTOP_CONFIG_FILE" ]]; then
-    log "🧪 Attempting to generate config using btop..."
-    if TERM=xterm-256color btop --write-config </dev/null >/dev/null 2>&1; then
-      log "✅ Generated btop config via btop --write-config"
-    else
-      log "⚠️ btop --write-config failed. Creating minimal config manually."
-      echo 'color_theme = "catppuccin_mocha"' >"$BTOP_CONFIG_FILE"
-    fi
+    TERM=xterm-256color btop --write-config </dev/null >/dev/null 2>&1 || true
   fi
 
-  log "🎯 Setting color_theme to catppuccin_mocha..."
   if grep -q '^color_theme' "$BTOP_CONFIG_FILE" 2>/dev/null; then
     sed -i 's/^color_theme.*/color_theme = "catppuccin_mocha"/' "$BTOP_CONFIG_FILE"
   else
     echo 'color_theme = "catppuccin_mocha"' >>"$BTOP_CONFIG_FILE"
   fi
 
-  log "✅ Theme set to catppuccin_mocha in $BTOP_CONFIG_FILE"
+  log "✅ Theme applied"
 }
 
 clean() {
   require_user
 
-  log "🧹 Removing btop config and theme..."
-  rm -f "$BTOP_THEME_DIR/catppuccin_mocha.theme" 2>/dev/null || true
-  rm -f "$BTOP_CONFIG_FILE" 2>/dev/null || true
-  log "✅ btop theme and config removed."
+  log "🧹 Cleaning btop config..."
+  rm -f "$BTOP_THEME_DIR/catppuccin_mocha.theme" "$BTOP_CONFIG_FILE" 2>/dev/null || true
 
-  # Uninstall btop via Homebrew if available
-  if check_brew && brew list btop &>/dev/null; then
-    log "🔄 Uninstalling btop via Homebrew..."
-    brew uninstall btop
+  if check_brew && brew list --formula btop &>/dev/null; then
+    brew uninstall btop || true
     log "✅ btop uninstalled"
-  else
-    log "ℹ️ btop not installed via Homebrew (or brew not available)"
   fi
 }
 
 case "$ACTION" in
-deps) deps ;;
-install) install ;;
-config) config ;;
-clean) clean ;;
-all)
-  deps
-  install
-  config
-  ;;
-*)
-  echo "Usage: $0 {all|deps|install|config|clean}"
-  exit 1
-  ;;
+  deps) deps ;;
+  install) install ;;
+  config) config ;;
+  clean) clean ;;
+  all)
+    deps
+    install
+    config
+    ;;
+  *)
+    echo "Usage: $0 {all|deps|install|config|clean}"
+    exit 1
+    ;;
 esac
-

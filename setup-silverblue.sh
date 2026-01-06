@@ -1,179 +1,202 @@
 #!/usr/bin/env bash
-# Glimt module: Silverblue prereq
+# Setup script for Fedora Silverblue
 #
 # Exit code contract:
 #   0 = success
-#   2 = reboot required (controlled stop)
+#   2 = reboot required (controlled stop, NOT an error)
 #   1 = real failure
 
 set -Eeuo pipefail
 
-MODULE_NAME="prereq"
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
-
-STATE_DIR="$HOME_DIR/.config/glans"
-STATE_FILE="$STATE_DIR/prereq.state"
-mkdir -p "$STATE_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SILVERBLUE_DIR="$SCRIPT_DIR/modules/silverblue"
+PREREQ_SCRIPT="$SILVERBLUE_DIR/packages/install-silverblue-prereq.sh"
 
 # --------------------------------------------------
-# Fedora / Silverblue guard
+# Generic error trap (real errors only)
 # --------------------------------------------------
-. /etc/os-release
-[[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* ]] || {
-  log "❌ Fedora Silverblue required"
+trap 'echo "❌ setup-silverblue.sh failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
+
+# --------------------------------------------------
+# OS Check
+# --------------------------------------------------
+if [[ -r /etc/os-release ]]; then
+  . /etc/os-release
+else
+  echo "❌ Cannot detect OS. /etc/os-release missing."
   exit 1
-}
-
-# --------------------------------------------------
-# Ask user about 1Password (ONCE, default YES)
-# --------------------------------------------------
-WANT_1PASSWORD=""
-
-if [[ -f "$STATE_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$STATE_FILE"
 fi
 
-if [[ -z "${WANT_1PASSWORD:-}" ]]; then
-  if [[ -t 0 ]]; then
-    echo ""
-    echo "🔐 Optional component: 1Password"
-    echo ""
-    echo "1Password integrates with:"
-    echo "  • system keyring"
-    echo "  • SSH agent"
-    echo "  • browsers"
-    echo ""
-    read -rp "👉 Install 1Password system-wide? [Y/n]: " reply
-    case "$reply" in
-      n|N|no|NO)
-        WANT_1PASSWORD="no"
-        ;;
-      *)
-        WANT_1PASSWORD="yes"   # DEFAULT
-        ;;
-    esac
-  else
-    # Non-interactive default
-    WANT_1PASSWORD="yes"
-  fi
-
-  echo "WANT_1PASSWORD=$WANT_1PASSWORD" > "$STATE_FILE"
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *fedora* ]]; then
+  echo "❌ This script is for Fedora Silverblue only."
+  echo "   Detected OS: $ID"
+  exit 1
 fi
 
-log "🔐 1Password install choice: $WANT_1PASSWORD"
+# --------------------------------------------------
+# Helper: run prereq with clean reboot semantics
+# --------------------------------------------------
+run_prereq_or_reboot() {
+  local prereq="$1"
 
-# --------------------------------------------------
-# Pending rpm-ostree deployment guard
-# --------------------------------------------------
-pending_deployment() {
-  rpm-ostree status --json \
-    | jq -e '.deployments | map(select(.booted == false)) | length > 0' \
-    >/dev/null 2>&1
+  echo "📦 Step 1: Installing prerequisites via rpm-ostree..."
+  echo ""
+
+  # IMPORTANT:
+  # rpm-ostree uses internal pipes.
+  # With `set -o pipefail`, this can emit harmless SIGPIPE noise.
+  # Therefore we temporarily disable pipefail ONLY for this call.
+  set +o pipefail
+  trap - ERR
+  set +e
+
+  "$prereq" all
+  local rc=$?
+
+  set -e
+  trap 'echo "❌ setup-silverblue.sh failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
+  set -o pipefail
+
+  case "$rc" in
+    0)
+      return 0
+      ;;
+    2)
+      # Controlled stop: reboot required
+      exit 2
+      ;;
+    *)
+      echo ""
+      echo "❌ Prerequisite step failed."
+      echo "   Exit code: $rc"
+      exit "$rc"
+      ;;
+  esac
 }
 
-reboot_required_banner() {
-  cat <<'EOF'
+# --------------------------------------------------
+# Step 1: Prerequisites (HARD STOP ON FAILURE)
+# --------------------------------------------------
+if [[ ! -x "$PREREQ_SCRIPT" ]]; then
+  echo "❌ Prerequisite script not found or not executable:"
+  echo "   $PREREQ_SCRIPT"
+  exit 1
+fi
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 🔁 REBOOT REQUIRED
+run_prereq_or_reboot "$PREREQ_SCRIPT"
 
- rpm-ostree has a pending deployment.
- You MUST reboot before rerunning this script.
+# --------------------------------------------------
+# Step 2: Verify prerequisite packages are active
+# --------------------------------------------------
+echo ""
+echo "🔍 Step 2: Verifying all prerequisite packages are installed..."
 
- 👉 Run:
-     systemctl reboot
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PACKAGES_TXT="$SILVERBLUE_DIR/packages/rpm-ostree-packages.txt"
+if [[ ! -f "$PACKAGES_TXT" ]]; then
+  echo "❌ Packages file not found: $PACKAGES_TXT"
+  exit 1
+fi
 
-EOF
-}
+declare -a PACKAGES=()
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ "$line" =~ ^[[:space:]]*# ]] && continue
+  [[ -z "${line// }" ]] && continue
+  PACKAGES+=("$line")
+done < "$PACKAGES_TXT"
 
-if pending_deployment; then
-  reboot_required_banner
+MISSING=()
+for pkg in "${PACKAGES[@]}"; do
+  rpm -q "$pkg" &>/dev/null || MISSING+=("$pkg")
+done
+
+if (( ${#MISSING[@]} > 0 )); then
+  echo ""
+  echo "🔁 Packages are staged but not active yet."
+  echo "   Missing: ${MISSING[*]}"
+  echo ""
+  echo "👉 Reboot and rerun:"
+  echo "   systemctl reboot"
   exit 2
 fi
 
-# --------------------------------------------------
-# HARD FAILURE: Homebrew env pollution
-# --------------------------------------------------
-if systemctl --user show-environment | grep -q "$HOME_DIR/.linuxbrew"; then
-  log "❌ systemd user environment polluted with ~/.linuxbrew"
-  exit 1
-fi
-
-if echo "$PATH" | grep -q "$HOME_DIR/.linuxbrew"; then
-  log "❌ PATH polluted with ~/.linuxbrew"
-  exit 1
-fi
+echo "✅ All prerequisite packages are active!"
+echo ""
 
 # --------------------------------------------------
-# 1Password repo + key (ONLY if enabled)
+# Step 3: Run install modules (STOP ON FIRST FAILURE)
 # --------------------------------------------------
-if [[ "$WANT_1PASSWORD" == "yes" ]]; then
-  log "🔑 Configuring 1Password yum repository"
+echo "🚀 Step 3: Running install modules..."
+echo ""
 
-  # Import GPG key (idempotent)
-  sudo rpm --import https://downloads.1password.com/linux/keys/1password.asc
-
-  # Create repo file if missing
-  if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
-    sudo tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
-[1password]
-name=1Password Stable Channel
-baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://downloads.1password.com/linux/keys/1password.asc
-EOF
-    sudo chmod 644 /etc/yum.repos.d/1password.repo
-    log "✅ 1Password repository added"
-  else
-    log "ℹ️  1Password repository already present"
-  fi
-fi
-
-# --------------------------------------------------
-# rpm-ostree packages
-# --------------------------------------------------
-PACKAGES=(
-  curl
-  git
-  file
-  jq
-  zsh
-  wl-clipboard
+PRIORITY_SCRIPTS=(
+  "install-git-config.sh"
+  "install-homebrew.sh"
 )
 
-if [[ "$WANT_1PASSWORD" == "yes" ]]; then
-  PACKAGES+=(1password)
+mapfile -t ALL_SCRIPTS < <(
+  find "$SILVERBLUE_DIR" -maxdepth 1 -type f -name "install-*.sh" \
+    -not -path "*/not_used/*" \
+    -not -path "*/packages/*" \
+    -print 2>/dev/null | sort
+)
+
+if (( ${#ALL_SCRIPTS[@]} == 0 )); then
+  echo "ℹ️  No install scripts found."
+  exit 0
 fi
 
-# --------------------------------------------------
-# Install rpm-ostree packages
-# --------------------------------------------------
-log "📦 Installing rpm-ostree packages..."
-log "    Packages: ${PACKAGES[*]}"
+declare -a PRIORITY=()
+declare -a REMAINING=()
 
-output=""
-if ! output=$(sudo rpm-ostree install -y --allow-inactive "${PACKAGES[@]}" 2>&1); then
-  if echo "$output" | grep -qi "already requested"; then
-    log "ℹ️  Packages already requested in pending deployment"
-  elif echo "$output" | grep -qi "already provided"; then
-    log "ℹ️  Packages already provided by base image"
+for script in "${ALL_SCRIPTS[@]}"; do
+  name="$(basename "$script")"
+  if printf '%s\n' "${PRIORITY_SCRIPTS[@]}" | grep -qx "$name"; then
+    PRIORITY+=("$script")
   else
-    echo "$output" >&2
-    exit 1
+    REMAINING+=("$script")
   fi
+done
+
+echo "Found ${#ALL_SCRIPTS[@]} install script(s):"
+for script in "${ALL_SCRIPTS[@]}"; do
+  name="$(basename "$script")"
+  if printf '%s\n' "${PRIORITY_SCRIPTS[@]}" | grep -qx "$name"; then
+    echo "  - $name (priority)"
+  else
+    echo "  - $name"
+  fi
+done
+echo ""
+
+run_module_or_die() {
+  local script="$1"
+  local name
+  name="$(basename "$script")"
+
+  echo "▶️  Running: $name"
+  chmod +x "$script"
+  bash "$script" all
+  echo "✅ Finished: $name"
+  echo ""
+}
+
+if (( ${#PRIORITY[@]} > 0 )); then
+  echo "📌 Running priority modules..."
+  for script in "${PRIORITY[@]}"; do
+    run_module_or_die "$script"
+  done
 fi
 
-if pending_deployment; then
-  reboot_required_banner
-  exit 2
+if (( ${#REMAINING[@]} > 0 )); then
+  echo "📦 Running remaining modules..."
+  for script in "${REMAINING[@]}"; do
+    run_module_or_die "$script"
+  done
 fi
 
-log "✅ Prerequisites complete"
-exit 0
+# --------------------------------------------------
+# Done
+# --------------------------------------------------
+echo "✅ Setup complete!"
+echo ""
+echo "ℹ️  If rpm-ostree packages were installed earlier, a reboot may still be required."
