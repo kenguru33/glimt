@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Fedora Silverblue setup orchestrator
+# Glimt – Fedora Silverblue setup orchestrator (FINAL)
 #
 # Exit codes:
 #   0 = success
-#   2 = controlled stop (reboot required)
+#   2 = controlled stop (reboot or manual action required)
 #   1 = real failure
 
 set -Eeuo pipefail
@@ -12,7 +12,7 @@ ERR_TRAP='echo "❌ setup-silverblue.sh failed at: $BASH_COMMAND (line $LINENO)"
 trap "$ERR_TRAP" ERR
 
 # --------------------------------------------------
-# Resolve script location (repo root OR modules dir)
+# Resolve script location
 # --------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
@@ -27,7 +27,17 @@ else
 fi
 
 PREREQ_SCRIPT="$SILVERBLUE_DIR/packages/install-silverblue-prereq.sh"
-BOOTSTRAP_FLAG="$HOME/.config/glans/bootstrap.done"
+
+# --------------------------------------------------
+# State tracking
+# --------------------------------------------------
+STATE_DIR="$HOME/.config/glimt/setup"
+mkdir -p "$STATE_DIR"
+
+BOOTSTRAP_FLAG="$STATE_DIR/bootstrap.done"
+STEP1_DONE="$STATE_DIR/step1-prereq.done"
+STEP2_DONE="$STATE_DIR/step2-verified.done"
+AUTORESUME_FLAG="$STATE_DIR/autoresume.enabled"
 
 # --------------------------------------------------
 # OS guard
@@ -39,7 +49,7 @@ BOOTSTRAP_FLAG="$HOME/.config/glans/bootstrap.done"
 }
 
 # --------------------------------------------------
-# GLOBAL SUDO HANDLING (ONE PROMPT)
+# Sudo handling (once)
 # --------------------------------------------------
 SUDO_KEEPALIVE_PID=""
 
@@ -67,69 +77,128 @@ enable_sudo_once() {
 }
 
 # --------------------------------------------------
-# Step 0: Bootstrap (sudo valid here)
+# Auto-resume banner
 # --------------------------------------------------
-enable_sudo_once
+if [[ -f "$AUTORESUME_FLAG" ]]; then
+  echo "🔄 Resuming Glimt setup after reboot..."
+fi
 
+# --------------------------------------------------
+# Step 0: Bootstrap (once)
+# --------------------------------------------------
 if [[ ! -f "$BOOTSTRAP_FLAG" ]]; then
-  echo "🔧 First-run bootstrap phase"
+  enable_sudo_once
 
+  echo "🔧 Step 0: First-run bootstrap"
   bash "$SILVERBLUE_DIR/install-gravatar.sh" bootstrap
 
-  mkdir -p "$(dirname "$BOOTSTRAP_FLAG")"
   touch "$BOOTSTRAP_FLAG"
-
   echo "✅ Bootstrap complete"
 fi
 
 # --------------------------------------------------
-# Step 1: Prerequisites
+# Ask-and-reboot helper
 # --------------------------------------------------
-echo
-echo "📦 Installing rpm-ostree prerequisites..."
-echo
+ask_and_reboot() {
+  echo
+  read -rp "🔁 Reboot now to continue setup? [Y/n]: " reply
+  case "$reply" in
+    n|N|no|NO)
+      echo "ℹ️  Reboot later and rerun setup manually."
+      exit 2
+      ;;
+    *)
+      echo "🔧 Setup will automatically resume after reboot."
 
-set +e
-trap - ERR
-bash "$PREREQ_SCRIPT" all
-rc=$?
-trap "$ERR_TRAP" ERR
-set -e
+      USER_SYSTEMD_DIR="$HOME/.config/systemd/user"
+      mkdir -p "$USER_SYSTEMD_DIR"
 
-if [[ "$rc" -eq 2 ]]; then
-  echo "🔁 Reboot required. Rerun setup after reboot."
-  exit 2
-elif [[ "$rc" -ne 0 ]]; then
-  exit "$rc"
+      cat >"$USER_SYSTEMD_DIR/glimt-setup-resume.service" <<'EOF'
+[Unit]
+Description=Resume Glimt Silverblue setup after reboot
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/glimt/setup-silverblue.sh
+ExecStartPost=/usr/bin/systemctl --user disable glimt-setup-resume.service
+ExecStartPost=/usr/bin/rm -f %h/.config/glimt/setup/autoresume.enabled
+
+[Install]
+WantedBy=default.target
+EOF
+
+      systemctl --user daemon-reload
+      systemctl --user enable glimt-setup-resume.service
+
+      touch "$AUTORESUME_FLAG"
+      systemctl reboot
+      ;;
+  esac
+}
+
+# --------------------------------------------------
+# Step 1: rpm-ostree prerequisites
+# --------------------------------------------------
+if [[ ! -f "$STEP1_DONE" ]]; then
+  echo
+  echo "📦 Step 1: Installing rpm-ostree prerequisites..."
+  echo
+
+  set +e
+  trap - ERR
+  bash "$PREREQ_SCRIPT" all
+  rc=$?
+  trap "$ERR_TRAP" ERR
+  set -e
+
+  case "$rc" in
+    0)
+      # Nothing staged → continue
+      touch "$STEP1_DONE"
+      ;;
+    2)
+      # Packages staged → reboot required
+      touch "$STEP1_DONE"
+      ask_and_reboot
+      ;;
+    *)
+      exit "$rc"
+      ;;
+  esac
 fi
 
 # --------------------------------------------------
-# Step 2: Verify packages
+# Step 2: Verify prerequisites
+# --------------------------------------------------
+if [[ ! -f "$STEP2_DONE" ]]; then
+  echo
+  echo "🔍 Step 2: Verifying prerequisites..."
+  echo
+
+  STATE_FILE="$HOME/.config/glimt/prereq.state"
+  WANT_1PASSWORD="yes"
+  [[ -f "$STATE_FILE" ]] && source "$STATE_FILE"
+
+  PACKAGES=(curl git file jq zsh wl-clipboard)
+  [[ "$WANT_1PASSWORD" == "yes" ]] && PACKAGES+=(1password)
+
+  for pkg in "${PACKAGES[@]}"; do
+    if ! rpm -q "$pkg" &>/dev/null; then
+      echo "🔁 Package '$pkg' not active yet — reboot required"
+      exit 2
+    fi
+  done
+
+  touch "$STEP2_DONE"
+  echo "✅ Prerequisites verified"
+fi
+
+# --------------------------------------------------
+# Step 3: Run install modules
 # --------------------------------------------------
 echo
-echo "🔍 Verifying prerequisites..."
-
-STATE_FILE="$HOME/.config/glans/prereq.state"
-WANT_1PASSWORD="yes"
-[[ -f "$STATE_FILE" ]] && source "$STATE_FILE"
-
-PACKAGES=(curl git file jq zsh wl-clipboard)
-[[ "$WANT_1PASSWORD" == "yes" ]] && PACKAGES+=(1password)
-
-for pkg in "${PACKAGES[@]}"; do
-  rpm -q "$pkg" &>/dev/null || {
-    echo "🔁 Package $pkg not active yet — reboot required"
-    exit 2
-  }
-done
-
-echo "✅ Prerequisites active"
-
-# --------------------------------------------------
-# Step 3: Run install modules (steady-state)
-# --------------------------------------------------
-echo
-echo "🚀 Running install modules..."
+echo "🚀 Step 3: Running install modules..."
 echo
 
 mapfile -t MODULES < <(
@@ -141,10 +210,16 @@ mapfile -t MODULES < <(
 
 for module in "${MODULES[@]}"; do
   name="$(basename "$module")"
-  echo "▶️  $name"
+  echo "▶️  Running: $name"
   bash "$module" all
 done
 
+# --------------------------------------------------
+# Done
+# --------------------------------------------------
+rm -f "$AUTORESUME_FLAG"
+
 echo
-echo "✅ Setup complete"
+echo "✅ Glimt setup complete!"
+echo "ℹ️  Logout or reboot may be required for some changes."
 exit 0
