@@ -1,183 +1,106 @@
 #!/usr/bin/env bash
 # Glimt module: Silverblue prereq
 #
-# Exit code contract:
+# Exit codes:
 #   0 = success
 #   2 = controlled stop (sudo required OR reboot required)
 #   1 = real failure
 
 set -Eeuo pipefail
+log() { echo "[prereq] $*" >&2; }
 
-MODULE_NAME="prereq"
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
+# --------------------------------------------------
+# Resolve module root (RELATIVE, NEVER hardcoded)
+# --------------------------------------------------
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SILVERBLUE_DIR="$(dirname "$SCRIPT_DIR")"
 
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+# SILVERBLUE_DIR now points to:
+# ~/.glimt/modules/silverblue
 
+# --------------------------------------------------
+# Paths / state
+# --------------------------------------------------
+HOME_DIR="$HOME"
 STATE_DIR="$HOME_DIR/.config/glimt"
-STATE_FILE="$STATE_DIR/prereq.state"
 mkdir -p "$STATE_DIR"
 
-# --------------------------------------------------
-# Fedora / Silverblue guard
-# --------------------------------------------------
-. /etc/os-release
-[[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* ]] || {
-  log "❌ Fedora Silverblue required"
-  exit 1
-}
+GIT_STATE_FILE="$STATE_DIR/git.state"
+
+# Homebrew
+BREW_PREFIX="/home/linuxbrew/.linuxbrew"
+BREW_BIN="$BREW_PREFIX/bin/brew"
 
 # --------------------------------------------------
-# Require sudo ONCE (non-interactive)
+# Sudo guard (handled by orchestrator)
 # --------------------------------------------------
-if ! sudo -n true 2>/dev/null; then
-  log "🔐 Administrator access required"
-  exit 2
-fi
+sudo -n true 2>/dev/null || exit 2
 
 # --------------------------------------------------
-# Ask user about 1Password (ONCE)
+# STEP 0 — Git identity (ONCE)
 # --------------------------------------------------
-WANT_1PASSWORD=""
+if [[ ! -f "$GIT_STATE_FILE" ]]; then
+  [[ -t 0 ]] || exit 2
 
-if [[ -f "$STATE_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$STATE_FILE"
-fi
+  while true; do
+    read -rp "👉 Git full name: " GIT_NAME
+    [[ -n "$GIT_NAME" ]] && break
+    echo "❌ Name cannot be empty"
+  done
 
-if [[ -z "${WANT_1PASSWORD:-}" ]]; then
-  if [[ -t 0 ]]; then
-    echo
-    echo "🔐 Optional component: 1Password"
-    read -rp "👉 Install 1Password system-wide? [Y/n]: " reply
-    case "$reply" in
-      n|N|no|NO) WANT_1PASSWORD="no" ;;
-      *)         WANT_1PASSWORD="yes" ;;
-    esac
-  else
-    WANT_1PASSWORD="yes"
-  fi
+  while true; do
+    read -rp "👉 Git email: " GIT_EMAIL
+    [[ "$GIT_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
+    echo "❌ Invalid email"
+  done
 
-  echo "WANT_1PASSWORD=$WANT_1PASSWORD" >"$STATE_FILE"
-fi
+  read -rp "👉 Git editor [nvim]: " GIT_EDITOR
+  GIT_EDITOR="${GIT_EDITOR:-nvim}"
 
-log "🔐 1Password install choice: $WANT_1PASSWORD"
-
-# --------------------------------------------------
-# Pending rpm-ostree deployment detection
-# --------------------------------------------------
-pending_deployment() {
-  local json
-  set +o pipefail
-  json="$(rpm-ostree status --json 2>/dev/null)"
-  set -o pipefail
-
-  jq -e '
-    .deployments[]
-    | select(.booted == true)
-    | (
-        (.requested-packages | length > 0) or
-        (.requested-base-removals | length > 0) or
-        (.requested-base-local-replacements | length > 0)
-      )
-  ' <<<"$json" >/dev/null 2>&1
-}
-
-reboot_required_banner() {
-  cat <<'EOF'
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 🔁 REBOOT REQUIRED
-
- rpm-ostree has staged changes.
- You MUST reboot before rerunning this script.
-
- 👉 Run:
-     systemctl reboot
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+  cat >"$GIT_STATE_FILE" <<EOF
+GIT_NAME="$GIT_NAME"
+GIT_EMAIL="$GIT_EMAIL"
+GIT_EDITOR="$GIT_EDITOR"
+GIT_BRANCH="main"
+GIT_REBASE="true"
 EOF
-}
 
-if pending_deployment; then
-  reboot_required_banner
-  exit 2
+  log "💾 Git identity saved"
 fi
 
 # --------------------------------------------------
-# HARD FAILURE: Homebrew env pollution
+# STEP 0b — Apply git config (RELATIVE PATH)
 # --------------------------------------------------
-if systemctl --user show-environment | grep -q "$HOME_DIR/.linuxbrew"; then
-  log "❌ systemd user environment polluted with ~/.linuxbrew"
+GIT_CONFIG_SCRIPT="$SILVERBLUE_DIR/install-git-config.sh"
+
+if [[ ! -x "$GIT_CONFIG_SCRIPT" ]]; then
+  log "❌ Git config script not found:"
+  log "   $GIT_CONFIG_SCRIPT"
   exit 1
 fi
 
-if echo "$PATH" | grep -q "$HOME_DIR/.linuxbrew"; then
-  log "❌ PATH polluted with ~/.linuxbrew"
-  exit 1
-fi
+log "🔧 Applying Git configuration"
+bash "$GIT_CONFIG_SCRIPT" all
 
 # --------------------------------------------------
-# 1Password repo + key
+# rpm-ostree base packages
 # --------------------------------------------------
-if [[ "$WANT_1PASSWORD" == "yes" ]]; then
-  log "🔑 Configuring 1Password yum repository"
-
-  sudo -n mkdir -p /etc/pki/rpm-gpg
-
-  if [[ ! -f /etc/pki/rpm-gpg/RPM-GPG-KEY-1password ]]; then
-    sudo -n curl -fsSL \
-      https://downloads.1password.com/linux/keys/1password.asc \
-      -o /etc/pki/rpm-gpg/RPM-GPG-KEY-1password
-
-    sudo -n chmod 644 /etc/pki/rpm-gpg/RPM-GPG-KEY-1password
-    log "✅ 1Password GPG key installed"
-  else
-    log "ℹ️  1Password GPG key already present"
-  fi
-
-  if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
-    sudo -n tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
-[1password]
-name=1Password Stable Channel
-baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
-enabled=1
-gpgcheck=1
-repo_gpgcheck=0
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-1password
-EOF
-    sudo -n chmod 644 /etc/yum.repos.d/1password.repo
-    log "✅ 1Password repository added"
-  else
-    log "ℹ️  1Password repository already present"
-  fi
-fi
+sudo -n rpm-ostree install -y --allow-inactive \
+  curl git file jq zsh wl-clipboard || true
 
 # --------------------------------------------------
-# rpm-ostree packages
+# Reboot detection
 # --------------------------------------------------
-PACKAGES=(curl git file jq zsh wl-clipboard)
-[[ "$WANT_1PASSWORD" == "yes" ]] && PACKAGES+=(1password)
+rpm-ostree status | grep -q "pending deployment" && exit 2
 
-log "📦 Installing rpm-ostree packages..."
-log "    Packages: ${PACKAGES[*]}"
-
-output=""
-if ! output=$(sudo -n rpm-ostree install -y --allow-inactive "${PACKAGES[@]}" 2>&1); then
-  if echo "$output" | grep -qi "already requested"; then
-    log "ℹ️  Packages already requested"
-  elif echo "$output" | grep -qi "already provided"; then
-    log "ℹ️  Packages already provided by base image"
-  else
-    echo "$output" >&2
-    exit 1
-  fi
+# --------------------------------------------------
+# Homebrew (Linux prefix)
+# --------------------------------------------------
+if [[ ! -x "$BREW_BIN" ]]; then
+  NONINTERACTIVE=1 \
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
-if pending_deployment; then
-  reboot_required_banner
-  exit 2
-fi
-
-log "✅ Prerequisites complete"
+[[ -x "$BREW_BIN" ]] || exit 1
 exit 0

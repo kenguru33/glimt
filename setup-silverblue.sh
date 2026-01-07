@@ -7,9 +7,24 @@
 #   1 = real failure
 
 set -Eeuo pipefail
+trap 'echo "❌ setup-silverblue.sh failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
 
-ERR_TRAP='echo "❌ setup-silverblue.sh failed at: $BASH_COMMAND (line $LINENO)" >&2'
-trap "$ERR_TRAP" ERR
+# --------------------------------------------------
+# Identity reconfigure (explicit)
+# --------------------------------------------------
+if [[ "${1:-}" == "reconfigure-identity" ]]; then
+  echo "♻️  Reconfiguring identity (Git, Gravatar, SSH)"
+
+  rm -f \
+    "$HOME/.config/glimt/git.state" \
+    "$HOME/.config/glimt/set-user-avatar.config"
+
+  rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/id_ed25519.pub" 2>/dev/null || true
+
+  echo "✅ Identity reset complete"
+  echo "👉 Re-run setup-silverblue.sh"
+  exit 0
+fi
 
 # --------------------------------------------------
 # Resolve script location
@@ -51,8 +66,6 @@ AUTORESUME_FLAG="$STATE_DIR/autoresume.enabled"
 # --------------------------------------------------
 # Sudo handling (once)
 # --------------------------------------------------
-SUDO_KEEPALIVE_PID=""
-
 enable_sudo_once() {
   [[ -t 0 ]] || return 0
   command -v sudo >/dev/null || return 0
@@ -69,29 +82,20 @@ enable_sudo_once() {
       sleep 30
     done
   ) >/dev/null 2>&1 &
-
-  SUDO_KEEPALIVE_PID=$!
-  disown "$SUDO_KEEPALIVE_PID"
-
-  trap 'sudo -k; kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+  disown
 }
 
 # --------------------------------------------------
 # Auto-resume banner
 # --------------------------------------------------
-if [[ -f "$AUTORESUME_FLAG" ]]; then
-  echo "🔄 Resuming Glimt setup after reboot..."
-fi
+[[ -f "$AUTORESUME_FLAG" ]] && echo "🔄 Resuming Glimt setup after reboot..."
 
 # --------------------------------------------------
-# Step 0: Bootstrap (once)
+# Step 0: Bootstrap (NO identity here)
 # --------------------------------------------------
 if [[ ! -f "$BOOTSTRAP_FLAG" ]]; then
   enable_sudo_once
-
-  echo "🔧 Step 0: First-run bootstrap"
-  bash "$SILVERBLUE_DIR/install-gravatar.sh" bootstrap
-
+  echo "🔧 Step 0: Bootstrap"
   touch "$BOOTSTRAP_FLAG"
   echo "✅ Bootstrap complete"
 fi
@@ -100,20 +104,17 @@ fi
 # Ask-and-reboot helper
 # --------------------------------------------------
 ask_and_reboot() {
-  echo
   read -rp "🔁 Reboot now to continue setup? [Y/n]: " reply
   case "$reply" in
     n|N|no|NO)
-      echo "ℹ️  Reboot later and rerun setup manually."
+      echo "ℹ️  Reboot later and rerun setup."
       exit 2
       ;;
     *)
-      echo "🔧 Setup will automatically resume after reboot."
+      echo "🔧 Setup will resume automatically after reboot."
+      mkdir -p "$HOME/.config/systemd/user"
 
-      USER_SYSTEMD_DIR="$HOME/.config/systemd/user"
-      mkdir -p "$USER_SYSTEMD_DIR"
-
-      cat >"$USER_SYSTEMD_DIR/glimt-setup-resume.service" <<'EOF'
+      cat >"$HOME/.config/systemd/user/glimt-setup-resume.service" <<'EOF'
 [Unit]
 Description=Resume Glimt Silverblue setup after reboot
 After=graphical-session.target
@@ -130,7 +131,6 @@ EOF
 
       systemctl --user daemon-reload
       systemctl --user enable glimt-setup-resume.service
-
       touch "$AUTORESUME_FLAG"
       systemctl reboot
       ;;
@@ -138,68 +138,53 @@ EOF
 }
 
 # --------------------------------------------------
-# Step 1: rpm-ostree prerequisites
+# Step 1: rpm-ostree prereq
 # --------------------------------------------------
 if [[ ! -f "$STEP1_DONE" ]]; then
-  echo
-  echo "📦 Step 1: Installing rpm-ostree prerequisites..."
-  echo
-
+  echo "📦 Step 1: Installing prerequisites..."
   set +e
-  trap - ERR
   bash "$PREREQ_SCRIPT" all
   rc=$?
-  trap "$ERR_TRAP" ERR
   set -e
 
   case "$rc" in
-    0)
-      # Nothing staged → continue
-      touch "$STEP1_DONE"
-      ;;
-    2)
-      # Packages staged → reboot required
-      touch "$STEP1_DONE"
-      ask_and_reboot
-      ;;
-    *)
-      exit "$rc"
-      ;;
+    0) touch "$STEP1_DONE" ;;
+    2) touch "$STEP1_DONE"; ask_and_reboot ;;
+    *) exit "$rc" ;;
   esac
 fi
 
 # --------------------------------------------------
-# Step 2: Verify prerequisites
+# Step 2: Verify prereq
 # --------------------------------------------------
 if [[ ! -f "$STEP2_DONE" ]]; then
-  echo
   echo "🔍 Step 2: Verifying prerequisites..."
-  echo
-
-  STATE_FILE="$HOME/.config/glimt/prereq.state"
-  WANT_1PASSWORD="yes"
-  [[ -f "$STATE_FILE" ]] && source "$STATE_FILE"
-
-  PACKAGES=(curl git file jq zsh wl-clipboard)
-  [[ "$WANT_1PASSWORD" == "yes" ]] && PACKAGES+=(1password)
-
-  for pkg in "${PACKAGES[@]}"; do
-    if ! rpm -q "$pkg" &>/dev/null; then
-      echo "🔁 Package '$pkg' not active yet — reboot required"
-      exit 2
-    fi
+  for pkg in curl git file jq zsh wl-clipboard; do
+    rpm -q "$pkg" &>/dev/null || exit 2
   done
-
   touch "$STEP2_DONE"
   echo "✅ Prerequisites verified"
 fi
 
 # --------------------------------------------------
-# Step 3: Run install modules
+# Step 2.5: Gravatar (Git → Gravatar → GNOME)
 # --------------------------------------------------
-echo
+echo "🖼 Step 2.5: Setting user avatar..."
+set +e
+bash "$SILVERBLUE_DIR/install-gravatar.sh" all
+rc=$?
+set -e
+
+case "$rc" in
+  0) echo "✅ Avatar configured" ;;
+  2) echo "⏸️  Avatar requires manual sudo"; exit 2 ;;
+  *) exit "$rc" ;;
+esac
+
+# --------------------------------------------------
+# Step 3: Install modules
+# --------------------------------------------------
 echo "🚀 Step 3: Running install modules..."
-echo
 
 mapfile -t MODULES < <(
   find "$SILVERBLUE_DIR" -maxdepth 1 -type f -name "install-*.sh" \
@@ -209,17 +194,13 @@ mapfile -t MODULES < <(
 )
 
 for module in "${MODULES[@]}"; do
-  name="$(basename "$module")"
-  echo "▶️  Running: $name"
+  echo "▶️  Running: $(basename "$module")"
   bash "$module" all
 done
 
-# --------------------------------------------------
-# Done
-# --------------------------------------------------
 rm -f "$AUTORESUME_FLAG"
 
 echo
 echo "✅ Glimt setup complete!"
-echo "ℹ️  Logout or reboot may be required for some changes."
+echo "ℹ️  Logout or reboot may be required."
 exit 0

@@ -3,7 +3,7 @@
 #
 # Exit codes:
 #   0 = success (GNOME + GDM avatar set)
-#   2 = controlled stop (needs interactive sudo)
+#   2 = controlled stop (needs interactive sudo or input)
 #   1 = real failure
 
 set -euo pipefail
@@ -14,7 +14,11 @@ SIZE="${2:-256}"
 
 HOME_DIR="$HOME"
 CONFIG_DIR="$HOME_DIR/.config/glimt"
-CONFIG_FILE="$CONFIG_DIR/set-user-avatar.config"
+
+# State files
+GRAVATAR_CONFIG="$CONFIG_DIR/set-user-avatar.config"
+GIT_STATE="$CONFIG_DIR/git.state"
+
 FACE_IMAGE="$HOME_DIR/.face"
 
 ICON_DIR="/var/lib/AccountsService/icons"
@@ -26,13 +30,33 @@ die() { echo "❌ $*" >&2; exit 1; }
 mkdir -p "$CONFIG_DIR"
 
 # --------------------------------------------------
-# Load or prompt for email (INTERACTIVE ONLY)
+# Reconfigure (wipe state only)
+# --------------------------------------------------
+if [[ "$ACTION" == "reconfigure" ]]; then
+  rm -f "$GRAVATAR_CONFIG"
+  log "♻️  Gravatar state removed"
+  exit 0
+fi
+
+# --------------------------------------------------
+# Load Git email (optional, suggested)
+# --------------------------------------------------
+GIT_EMAIL=""
+
+if [[ -f "$GIT_STATE" ]]; then
+  # shellcheck disable=SC1090
+  source "$GIT_STATE"
+  GIT_EMAIL="${GIT_EMAIL:-}"
+fi
+
+# --------------------------------------------------
+# Load or prompt for Gravatar email
 # --------------------------------------------------
 EMAIL=""
 
-if [[ -f "$CONFIG_FILE" ]]; then
+if [[ -f "$GRAVATAR_CONFIG" ]]; then
   # shellcheck disable=SC1090
-  source "$CONFIG_FILE"
+  source "$GRAVATAR_CONFIG"
   EMAIL="${gravatar_email:-}"
 fi
 
@@ -46,13 +70,30 @@ if [[ -z "$EMAIL" ]]; then
     exit 2
   fi
 
-  while true; do
-    read -rp "📧 Email for Gravatar: " EMAIL
-    [[ "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] && break
-    echo "❌ Invalid email"
-  done
+  echo
+  echo "🖼 Gravatar (login avatar)"
 
-  echo "gravatar_email=\"$EMAIL\"" >"$CONFIG_FILE"
+  if [[ -n "$GIT_EMAIL" ]]; then
+    read -rp "👉 Use same email as Git ($GIT_EMAIL)? [Y/n]: " reply
+    case "$reply" in
+      n|N|no|NO)
+        ;;
+      *)
+        EMAIL="$GIT_EMAIL"
+        ;;
+    esac
+  fi
+
+  if [[ -z "$EMAIL" ]]; then
+    while true; do
+      read -rp "📧 Gravatar email: " EMAIL
+      [[ "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] && break
+      echo "❌ Invalid email"
+    done
+  fi
+
+  echo "gravatar_email=\"$EMAIL\"" >"$GRAVATAR_CONFIG"
+  log "💾 Gravatar email saved"
 fi
 
 # --------------------------------------------------
@@ -70,6 +111,15 @@ curl -fsSL "$URL" -o "$FACE_IMAGE"
 if command -v gsettings >/dev/null; then
   gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" || true
   log "GNOME session avatar set"
+fi
+
+# --------------------------------------------------
+# GNOME user email sync (best-effort)
+# --------------------------------------------------
+if command -v gsettings >/dev/null \
+  && gsettings list-schemas | grep -q org.gnome.desktop.account-service; then
+  gsettings set org.gnome.desktop.account-service user-email "$EMAIL" || true
+  log "GNOME user email synced"
 fi
 
 # --------------------------------------------------
