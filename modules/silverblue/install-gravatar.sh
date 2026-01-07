@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Glans module: set-user-avatar (Silverblue-safe)
+# Glimt module: set-user-avatar (Silverblue-safe)
 #
 # Exit codes:
 #   0 = success (GNOME + GDM avatar set)

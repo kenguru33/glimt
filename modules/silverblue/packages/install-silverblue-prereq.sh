@@ -14,7 +14,7 @@ log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
-STATE_DIR="$HOME_DIR/.config/glans"
+STATE_DIR="$HOME_DIR/.config/glimt"
 STATE_FILE="$STATE_DIR/prereq.state"
 mkdir -p "$STATE_DIR"
 
