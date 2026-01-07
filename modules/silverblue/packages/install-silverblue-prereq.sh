@@ -3,7 +3,7 @@
 #
 # Exit code contract:
 #   0 = success
-#   2 = reboot required (controlled stop)
+#   2 = controlled stop (sudo required OR reboot required)
 #   1 = real failure
 
 set -Eeuo pipefail
@@ -28,7 +28,15 @@ mkdir -p "$STATE_DIR"
 }
 
 # --------------------------------------------------
-# Ask user about 1Password (ONCE, default YES)
+# Require sudo ONCE (non-interactive)
+# --------------------------------------------------
+if ! sudo -n true 2>/dev/null; then
+  log "🔐 Administrator access required"
+  exit 2
+fi
+
+# --------------------------------------------------
+# Ask user about 1Password (ONCE)
 # --------------------------------------------------
 WANT_1PASSWORD=""
 
@@ -39,14 +47,8 @@ fi
 
 if [[ -z "${WANT_1PASSWORD:-}" ]]; then
   if [[ -t 0 ]]; then
-    echo ""
+    echo
     echo "🔐 Optional component: 1Password"
-    echo ""
-    echo "1Password integrates with:"
-    echo "  • system keyring"
-    echo "  • SSH agent"
-    echo "  • browsers"
-    echo ""
     read -rp "👉 Install 1Password system-wide? [Y/n]: " reply
     case "$reply" in
       n|N|no|NO) WANT_1PASSWORD="no" ;;
@@ -62,7 +64,7 @@ fi
 log "🔐 1Password install choice: $WANT_1PASSWORD"
 
 # --------------------------------------------------
-# Pending rpm-ostree deployment detection (QUIET)
+# Pending rpm-ostree deployment detection
 # --------------------------------------------------
 pending_deployment() {
   local json
@@ -116,25 +118,26 @@ if echo "$PATH" | grep -q "$HOME_DIR/.linuxbrew"; then
 fi
 
 # --------------------------------------------------
-# 1Password repo + key (Silverblue-correct)
+# 1Password repo + key
 # --------------------------------------------------
 if [[ "$WANT_1PASSWORD" == "yes" ]]; then
   log "🔑 Configuring 1Password yum repository"
 
-  sudo mkdir -p /etc/pki/rpm-gpg
+  sudo -n mkdir -p /etc/pki/rpm-gpg
 
   if [[ ! -f /etc/pki/rpm-gpg/RPM-GPG-KEY-1password ]]; then
-    sudo curl -fsSL \
+    sudo -n curl -fsSL \
       https://downloads.1password.com/linux/keys/1password.asc \
       -o /etc/pki/rpm-gpg/RPM-GPG-KEY-1password
-    sudo chmod 644 /etc/pki/rpm-gpg/RPM-GPG-KEY-1password
+
+    sudo -n chmod 644 /etc/pki/rpm-gpg/RPM-GPG-KEY-1password
     log "✅ 1Password GPG key installed"
   else
     log "ℹ️  1Password GPG key already present"
   fi
 
   if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
-    sudo tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
+    sudo -n tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
 [1password]
 name=1Password Stable Channel
 baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
@@ -143,7 +146,7 @@ gpgcheck=1
 repo_gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-1password
 EOF
-    sudo chmod 644 /etc/yum.repos.d/1password.repo
+    sudo -n chmod 644 /etc/yum.repos.d/1password.repo
     log "✅ 1Password repository added"
   else
     log "ℹ️  1Password repository already present"
@@ -153,27 +156,16 @@ fi
 # --------------------------------------------------
 # rpm-ostree packages
 # --------------------------------------------------
-PACKAGES=(
-  curl
-  git
-  file
-  jq
-  zsh
-  wl-clipboard
-)
-
+PACKAGES=(curl git file jq zsh wl-clipboard)
 [[ "$WANT_1PASSWORD" == "yes" ]] && PACKAGES+=(1password)
 
-# --------------------------------------------------
-# Install rpm-ostree packages
-# --------------------------------------------------
 log "📦 Installing rpm-ostree packages..."
 log "    Packages: ${PACKAGES[*]}"
 
 output=""
-if ! output=$(sudo rpm-ostree install -y --allow-inactive "${PACKAGES[@]}" 2>&1); then
+if ! output=$(sudo -n rpm-ostree install -y --allow-inactive "${PACKAGES[@]}" 2>&1); then
   if echo "$output" | grep -qi "already requested"; then
-    log "ℹ️  Packages already requested in pending deployment"
+    log "ℹ️  Packages already requested"
   elif echo "$output" | grep -qi "already provided"; then
     log "ℹ️  Packages already provided by base image"
   else
