@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# === GNOME session check ===
-if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
-  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
-  echo "   Skipping GNOME configuration."
-  exit 0
-fi
-
 MODULE_NAME="gnome-extensions"
 ACTION="${1:-all}"
 
@@ -16,7 +9,7 @@ HOME_DIR="$(eval echo "~$REAL_USER")"
 EXT_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
 TMP_ZIP="/tmp/gnome-ext.zip"
 
-# GNOME MAJOR VERSION ONLY (49, ikke 49.x)
+# GNOME MAJOR VERSION ONLY (e.g. 45, 46, 47, 49)
 GNOME_VERSION="$(gnome-shell --version | awk '{print int($3)}')"
 
 EXTENSIONS=(
@@ -25,11 +18,22 @@ EXTENSIONS=(
   "appindicatorsupport@rgcjonas.gmail.com"
 )
 
-log() { echo "[$MODULE_NAME] $*"; }
+log() {
+  echo "[$MODULE_NAME] $*"
+}
+
 die() {
-  echo "❌ $*" >&2
+  echo "❌ [$MODULE_NAME] $*" >&2
   exit 1
 }
+
+# --------------------------------------------------
+# GNOME session guard (LOCAL, QUIET)
+# --------------------------------------------------
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
+  log "GNOME not detected – skipping"
+  exit 0
+fi
 
 # --------------------------------------------------
 # OS detection (Fedora only)
@@ -47,45 +51,54 @@ fi
 # --------------------------------------------------
 # Dependencies
 # --------------------------------------------------
-DEPS=(curl unzip jq gnome-extensions-app dconf glib2)
+DEPS=(curl unzip jq gnome-extensions-app glib2)
 
 install_deps() {
-  log "Installing dependencies..."
   sudo dnf install -y "${DEPS[@]}"
 }
 
 # --------------------------------------------------
-# Helpers
+# GSettings helpers (SCHEMA-SAFE)
+# --------------------------------------------------
+has_schema() {
+  gsettings list-schemas 2>/dev/null | grep -qx "$1"
+}
+
+gs_set_safe() {
+  local schema="$1"
+  shift
+
+  if has_schema "$schema"; then
+    gsettings set "$schema" "$@" >/dev/null 2>&1 || true
+  fi
+}
+
+# --------------------------------------------------
+# Extension helpers
 # --------------------------------------------------
 enable_extension_safe() {
   local uuid="$1"
 
-  if sudo -u "$REAL_USER" gnome-extensions list | grep -q "$uuid"; then
-    sudo -u "$REAL_USER" gnome-extensions enable "$uuid" || true
-    log "Enabled $uuid"
-  else
-    log "Extension $uuid not registered yet (will enable after login)"
+  if gnome-extensions list | grep -q "$uuid"; then
+    gnome-extensions enable "$uuid" >/dev/null 2>&1 || true
   fi
 }
 
 reload_notice() {
-  echo
-  echo "🔁 Extensions installed."
-  echo "🚨 Log out and back in to complete activation."
-  echo
+  log "Extensions installed."
+  log "Log out and back in to complete activation."
 }
 
 # --------------------------------------------------
 # Install extensions
 # --------------------------------------------------
 install_extensions() {
-  log "Installing GNOME extensions..."
-  sudo -u "$REAL_USER" mkdir -p "$EXT_DIR"
+  log "Installing GNOME extensions…"
+  mkdir -p "$EXT_DIR"
 
   for EXT_ID in "${EXTENSIONS[@]}"; do
     log "Processing $EXT_ID"
 
-    # Fedora backend does not index Tiling Shell UUID
     if [[ "$EXT_ID" == "tilingshell@ferrarodomenico.com" ]]; then
       SEARCH="tiling-shell"
     else
@@ -96,10 +109,7 @@ install_extensions() {
       "https://extensions.gnome.org/extension-query/?search=${SEARCH}" |
       jq -r --arg uuid "$EXT_ID" '.extensions[] | select(.uuid == $uuid)')"
 
-    if [[ -z "$METADATA" ]]; then
-      log "Extension $EXT_ID not found"
-      continue
-    fi
+    [[ -z "$METADATA" ]] && continue
 
     PK_ID="$(echo "$METADATA" | jq -r '.pk')"
 
@@ -107,34 +117,26 @@ install_extensions() {
       "https://extensions.gnome.org/extension-info/?pk=${PK_ID}&shell_version=${GNOME_VERSION}")"
 
     DL_PATH="$(echo "$VERSION_JSON" | jq -r '.download_url')"
-
-    if [[ "$DL_PATH" == "null" ]]; then
-      log "No compatible version for GNOME $GNOME_VERSION"
-      continue
-    fi
+    [[ "$DL_PATH" == "null" ]] && continue
 
     DL_URL="https://extensions.gnome.org${DL_PATH}"
-
-    log "Downloading $EXT_ID (GNOME $GNOME_VERSION)"
     curl -fsSL "$DL_URL" -o "$TMP_ZIP"
 
     TMP_DIR="$(mktemp -d)"
     unzip -oq "$TMP_ZIP" -d "$TMP_DIR"
 
     METADATA_JSON="$(find "$TMP_DIR" -name metadata.json | head -n1)"
-    [[ -z "$METADATA_JSON" ]] && die "metadata.json not found for $EXT_ID"
+    [[ -z "$METADATA_JSON" ]] && continue
 
     ACTUAL_UUID="$(jq -r '.uuid' "$METADATA_JSON")"
     DEST="$EXT_DIR/$ACTUAL_UUID"
 
-    log "Installing to $DEST"
-    sudo -u "$REAL_USER" rm -rf "$DEST"
-    sudo -u "$REAL_USER" mkdir -p "$DEST"
-    sudo -u "$REAL_USER" cp -r "$(dirname "$METADATA_JSON")"/* "$DEST"
+    rm -rf "$DEST"
+    mkdir -p "$DEST"
+    cp -r "$(dirname "$METADATA_JSON")"/* "$DEST"
 
     if [[ -d "$DEST/schemas" ]]; then
-      log "Compiling schemas for $ACTUAL_UUID"
-      sudo -u "$REAL_USER" glib-compile-schemas "$DEST/schemas"
+      glib-compile-schemas "$DEST/schemas" >/dev/null 2>&1 || true
     fi
 
     enable_extension_safe "$ACTUAL_UUID"
@@ -144,29 +146,21 @@ install_extensions() {
 }
 
 # --------------------------------------------------
-# Configure extensions
+# Configure extensions (QUIET, NON-FATAL)
 # --------------------------------------------------
 config_extensions() {
-  log "Configuring extensions..."
+  log "Configuring GNOME extensions…"
 
-  log "Blur My Shell"
-  sudo -u "$REAL_USER" gsettings set \
-    org.gnome.shell.extensions.blur-my-shell brightness 0.8
-  sudo -u "$REAL_USER" gsettings set \
-    org.gnome.shell.extensions.blur-my-shell sigma 30
-  sudo -u "$REAL_USER" gsettings set \
-    org.gnome.shell.extensions.blur-my-shell color-and-noise true
-  sudo -u "$REAL_USER" gsettings set \
-    org.gnome.shell.extensions.blur-my-shell hacks-level 1
+  # Blur My Shell
+  gs_set_safe org.gnome.shell.extensions.blur-my-shell brightness 0.8
+  gs_set_safe org.gnome.shell.extensions.blur-my-shell sigma 30
+  gs_set_safe org.gnome.shell.extensions.blur-my-shell color-and-noise true
+  gs_set_safe org.gnome.shell.extensions.blur-my-shell hacks-level 1
 
-  log "AppIndicator"
-  sudo -u "$REAL_USER" gsettings set \
-    org.gnome.shell.extensions.appindicator use-symbolic-icons true
+  # AppIndicator
+  gs_set_safe org.gnome.shell.extensions.appindicator use-symbolic-icons true
 
-  log "Tiling Shell"
-  log "Tiling Shell has NO GSettings schema"
-  log "Configure via UI:"
-  log "  gnome-extensions prefs tilingshell@ferrarodomenico.com"
+  # Tiling Shell → no schema → intentionally skipped
 }
 
 # --------------------------------------------------
