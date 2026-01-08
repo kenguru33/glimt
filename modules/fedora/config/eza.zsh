@@ -24,11 +24,11 @@ ga=38;5;246:\
 
 # === eza Aliases with Icons ===
 if command -v eza &>/dev/null; then
-  alias ls='eza'
-  alias ll='eza -al --group-directories-first'
-  alias la='eza -a'
-  alias l='eza -l'
-  alias lt='eza --tree'
+  alias ls='eza --icons'
+  alias ll='eza -al --icons --group-directories-first'
+  alias la='eza -a --icons'
+  alias l='eza -l --icons'
+  alias lt='eza --tree --icons'
 
   if (( $+functions[_ls] )) && [[ ! $+functions[_eza] ]]; then
     compdef _ls eza
