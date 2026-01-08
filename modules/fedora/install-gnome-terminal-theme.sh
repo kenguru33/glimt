@@ -1,5 +1,13 @@
 #!/bin/bash
 set -e
+
+# === GNOME session check ===
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
+  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
+  echo "   Skipping GNOME configuration."
+  exit 0
+fi
+
 trap 'echo "❌ GNOME Terminal theme setup failed. Exiting." >&2' ERR
 
 MODULE_NAME="gnome-terminal-theme"
@@ -31,7 +39,7 @@ deps() {
 # === Install theme ===
 install() {
   echo "🎨 Configuring GNOME Terminal theme..."
-  
+
   if ! command -v gsettings >/dev/null 2>&1; then
     echo "⚠️  gsettings not available. Skipping terminal theme."
     return 0
@@ -39,17 +47,17 @@ install() {
 
   # Set Catppuccin Mocha theme (dark theme)
   PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
-  
+
   # Background color (Catppuccin Mocha base)
   gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" background-color '#1e1e2e' || true
   gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" foreground-color '#cdd6f4' || true
-  
+
   # Use custom colors
   gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" use-theme-colors false || true
-  
+
   # Font
   gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" font 'JetBrains Mono Nerd Font 12' || true
-  
+
   echo "✅ GNOME Terminal theme configured."
 }
 
@@ -61,7 +69,7 @@ config() {
 # === Clean ===
 clean() {
   echo "🧹 Resetting GNOME Terminal theme..."
-  
+
   if ! command -v gsettings >/dev/null 2>&1; then
     echo "⚠️  gsettings not available."
     return 0
@@ -69,21 +77,24 @@ clean() {
 
   PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
   gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" use-theme-colors true || true
-  
+
   echo "✅ Terminal theme reset."
 }
 
 # === Entry Point ===
 case "$ACTION" in
-  all)    deps; install; config ;;
-  deps)   deps ;;
-  install) install ;;
-  config) config ;;
-  clean)  clean ;;
-  *)
-    echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 1
-    ;;
+all)
+  deps
+  install
+  config
+  ;;
+deps) deps ;;
+install) install ;;
+config) config ;;
+clean) clean ;;
+*)
+  echo "❌ Unknown action: $ACTION"
+  echo "Usage: $0 [all|deps|install|config|clean]"
+  exit 1
+  ;;
 esac
-

@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# === GNOME session check ===
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
+  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
+  echo "   Skipping GNOME configuration."
+  exit 0
+fi
+
 MODULE_NAME="gnome-config"
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
@@ -108,28 +115,27 @@ clean_config() {
 
 # === Entry Point ===
 case "$ACTION" in
-  all)
-    install_dependencies
-    install_config
-    configure_gnome
-    ;;
-  deps)
-    install_dependencies
-    ;;
-  install)
-    install_config
-    configure_gnome
-    ;;
-  config)
-    configure_gnome
-    ;;
-  clean)
-    clean_config
-    ;;
-  *)
-    echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 1
-    ;;
+all)
+  install_dependencies
+  install_config
+  configure_gnome
+  ;;
+deps)
+  install_dependencies
+  ;;
+install)
+  install_config
+  configure_gnome
+  ;;
+config)
+  configure_gnome
+  ;;
+clean)
+  clean_config
+  ;;
+*)
+  echo "❌ Unknown action: $ACTION"
+  echo "Usage: $0 [all|deps|install|config|clean]"
+  exit 1
+  ;;
 esac
-

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# === GNOME session check ===
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
+  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
+  echo "   Skipping GNOME configuration."
+  exit 0
+fi
+
 MODULE_NAME="gnome-extensions"
 ACTION="${1:-all}"
 
