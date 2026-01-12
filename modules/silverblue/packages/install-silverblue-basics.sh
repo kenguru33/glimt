@@ -1,21 +1,57 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Failed at line $LINENO"' ERR
+trap 'echo "❌ [$MODULE] Failed at line $LINENO" >&2' ERR
 
 MODULE="silverblue-basics"
-log() { echo "🔧 [$MODULE] $*"; }
+
+log() {
+  echo "🔧 [$MODULE] $*"
+}
 
 # ------------------------------------------------------------
 # Guards
 # ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
-  echo "❌ Not running on Silverblue"
+  echo "❌ rpm-ostree not found (not Silverblue)"
+  exit 1
+}
+
+command -v jq >/dev/null || {
+  echo "❌ jq required to run this script"
   exit 1
 }
 
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(eval echo "~$REAL_USER")"
 SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
+
+# ------------------------------------------------------------
+# Wait for rpm-ostree to be ready
+# ------------------------------------------------------------
+wait_for_rpm_ostree() {
+  local timeout=600
+  local interval=2
+  local elapsed=0
+
+  log "Waiting for rpm-ostree to become ready"
+
+  while true; do
+    if rpm-ostree status --json 2>/dev/null | jq -e '
+      (.transaction != null) or
+      (.deployments[].staged // false)
+    ' >/dev/null; then
+      if ((elapsed >= timeout)); then
+        echo "❌ rpm-ostree still busy after ${timeout}s" >&2
+        exit 1
+      fi
+
+      sleep "$interval"
+      elapsed=$((elapsed + interval))
+    else
+      break
+    fi
+  done
+}
 
 # ------------------------------------------------------------
 # rpm-ostree packages
@@ -28,24 +64,28 @@ RPM_PACKAGES=(
   git-credential-libsecret
 )
 
-missing=()
-for pkg in "${RPM_PACKAGES[@]}"; do
-  rpm -q "$pkg" &>/dev/null || missing+=("$pkg")
-done
-
 REBOOT_REQUIRED=false
 
-if ((${#missing[@]} > 0)); then
-  log "Layering packages: ${missing[*]}"
-  sudo rpm-ostree install "${missing[@]}"
+wait_for_rpm_ostree
+
+missing_pkgs=()
+for pkg in "${RPM_PACKAGES[@]}"; do
+  rpm -q "$pkg" &>/dev/null || missing_pkgs+=("$pkg")
+done
+
+if ((${#missing_pkgs[@]} > 0)); then
+  log "Layering packages: ${missing_pkgs[*]}"
+  sudo rpm-ostree install "${missing_pkgs[@]}"
   REBOOT_REQUIRED=true
 else
-  log "rpm-ostree packages already present"
+  log "rpm-ostree packages already installed"
 fi
 
 # ------------------------------------------------------------
-# 1Password
+# 1Password (system install)
 # ------------------------------------------------------------
+wait_for_rpm_ostree
+
 if ! rpm -q 1password &>/dev/null; then
   log "Installing 1Password"
 
@@ -68,10 +108,10 @@ else
 fi
 
 # ------------------------------------------------------------
-# Homebrew (user space)
+# Homebrew (user-space)
 # ------------------------------------------------------------
 if ! sudo -u "$REAL_USER" command -v brew >/dev/null; then
-  log "Installing Homebrew for $REAL_USER"
+  log "Installing Homebrew for user: $REAL_USER"
 
   sudo -u "$REAL_USER" env NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -80,24 +120,26 @@ else
 fi
 
 # ------------------------------------------------------------
-# Homebrew shellenv (zsh)
+# Homebrew shellenv for zsh
 # ------------------------------------------------------------
 BREW_PREFIX="$REAL_HOME/.linuxbrew"
 ZSHRC="$REAL_HOME/.zshrc"
 
 if [[ -d "$BREW_PREFIX" ]] && ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
-  log "Adding Homebrew shellenv to .zshrc"
+  log "Configuring Homebrew shellenv in .zshrc"
   cat >>"$ZSHRC" <<EOF
 
 # Homebrew
 eval "\$($BREW_PREFIX/bin/brew shellenv)"
 EOF
+else
+  log "Homebrew shellenv already configured"
 fi
 
 # ------------------------------------------------------------
-# Create systemd user unit to set zsh (runs once after reboot)
+# One-shot systemd user unit to switch shell to zsh
 # ------------------------------------------------------------
-log "Installing one-shot zsh shell switcher (user service)"
+log "Installing one-shot zsh shell switcher (user systemd service)"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
@@ -134,7 +176,7 @@ sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 echo
 if $REBOOT_REQUIRED; then
   echo "⚠️  Reboot required to apply rpm-ostree changes"
-  echo "👉 systemctl reboot"
+  echo "👉 Run: systemctl reboot"
 else
-  echo "✅ All changes active"
+  echo "✅ All components already installed and active"
 fi
