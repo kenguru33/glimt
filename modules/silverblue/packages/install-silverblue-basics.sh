@@ -21,6 +21,7 @@ command -v jq >/dev/null || {
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(eval echo "~$REAL_USER")"
 SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
+USER_BIN_DIR="$REAL_HOME/.local/bin"
 
 # ------------------------------------------------------------
 # Wait for rpm-ostree (ONLY transaction matters)
@@ -78,12 +79,9 @@ BREW_ROOT="/home/linuxbrew"
 BREW_PREFIX="$BREW_ROOT/.linuxbrew"
 
 log "Preparing Homebrew prefix at $BREW_PREFIX"
-
-# Create directory and fix ownership (idempotent)
 sudo mkdir -p "$BREW_PREFIX"
 sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_ROOT"
 
-# Install Homebrew if missing
 if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
   log "Installing Homebrew for $REAL_USER"
 
@@ -98,7 +96,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# Ensure Homebrew is on PATH (zsh)
+# Add Homebrew to PATH (zsh)
 # ------------------------------------------------------------
 ZSHRC="$REAL_HOME/.zshrc"
 BREW_SHELLENV='eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
@@ -113,33 +111,55 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# One-shot zsh shell switch (post-reboot, safe)
+# Helper script to switch shell (avoids systemd parsing issues)
 # ------------------------------------------------------------
-log "Installing one-shot zsh shell switcher"
+log "Creating zsh shell switch helper"
+
+mkdir -p "$USER_BIN_DIR"
+
+ZSH_HELPER="$USER_BIN_DIR/set-zsh-shell.sh"
+
+cat >"$ZSH_HELPER" <<'EOF'
+#!/usr/bin/env bash
+set -e
+
+ZSH_BIN="/usr/bin/zsh"
+USER_NAME="$(id -un)"
+CURRENT_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
+
+if [[ -x "$ZSH_BIN" && "$CURRENT_SHELL" != "$ZSH_BIN" ]]; then
+  chsh -s "$ZSH_BIN" "$USER_NAME"
+fi
+EOF
+
+chmod +x "$ZSH_HELPER"
+chown "$REAL_USER:$REAL_USER" "$ZSH_HELPER"
+
+# ------------------------------------------------------------
+# One-shot systemd user unit (simple, valid, safe)
+# ------------------------------------------------------------
+log "Installing one-shot zsh shell switcher (user unit)"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
-cat >"$SYSTEMD_USER_DIR/set-zsh-shell.service" <<'EOF'
+cat >"$SYSTEMD_USER_DIR/set-zsh-shell.service" <<EOF
 [Unit]
 Description=Set zsh as default shell (one-shot)
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c '
-if [[ -x /usr/bin/zsh ]]; then
-  USER=$(id -un)
-  CURRENT=$(getent passwd "$USER" | cut -d: -f7)
-  [[ "$CURRENT" != "/usr/bin/zsh" ]] && chsh -s /usr/bin/zsh "$USER"
-fi
-systemctl --user disable set-zsh-shell.service
-rm -f ~/.config/systemd/user/set-zsh-shell.service
-'
+ExecStart=$ZSH_HELPER
+ExecStartPost=/usr/bin/systemctl --user disable set-zsh-shell.service
+ExecStartPost=/usr/bin/rm -f $SYSTEMD_USER_DIR/set-zsh-shell.service
 
 [Install]
 WantedBy=default.target
 EOF
 
+chown "$REAL_USER:$REAL_USER" "$SYSTEMD_USER_DIR/set-zsh-shell.service"
+
 sudo -u "$REAL_USER" systemctl --user daemon-reexec
+sudo -u "$REAL_USER" systemctl --user daemon-reload
 sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 
 # ------------------------------------------------------------
