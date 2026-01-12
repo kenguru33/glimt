@@ -3,10 +3,7 @@ set -Eeuo pipefail
 trap 'echo "❌ [$MODULE] Failed at line $LINENO" >&2' ERR
 
 MODULE="silverblue-basics"
-
-log() {
-  echo "🔧 [$MODULE] $*"
-}
+log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
 # Guards
@@ -17,7 +14,7 @@ command -v rpm-ostree >/dev/null || {
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq is required to run this script"
+  echo "❌ jq is required"
   exit 1
 }
 
@@ -26,67 +23,36 @@ REAL_HOME="$(eval echo "~$REAL_USER")"
 SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
 
 # ------------------------------------------------------------
-# Correct rpm-ostree wait (transaction only)
+# Wait for rpm-ostree (transaction only – correct)
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
   local timeout=600
   local interval=2
   local elapsed=0
 
-  log "Waiting for rpm-ostree transaction to finish"
+  log "Waiting for rpm-ostree to be idle"
 
   while true; do
-    tx="$(rpm-ostree status --json 2>/dev/null | jq -r '.transaction')"
+    tx="$(rpm-ostree status --json | jq -r '.transaction')"
+    [[ "$tx" == "null" ]] && break
 
-    if [[ "$tx" == "null" ]]; then
-      break
-    fi
-
-    if ((elapsed >= timeout)); then
-      echo "❌ rpm-ostree transaction still active after ${timeout}s" >&2
+    ((elapsed >= timeout)) && {
+      echo "❌ rpm-ostree busy for ${timeout}s" >&2
       exit 1
-    fi
+    }
 
     sleep "$interval"
     elapsed=$((elapsed + interval))
   done
 }
 
-# ------------------------------------------------------------
-# rpm-ostree packages
-# ------------------------------------------------------------
-RPM_PACKAGES=(
-  curl
-  jq
-  zsh
-  wl-clipboard
-  git-credential-libsecret
-)
-
-REBOOT_REQUIRED=false
-
 wait_for_rpm_ostree
 
-missing_pkgs=()
-for pkg in "${RPM_PACKAGES[@]}"; do
-  rpm -q "$pkg" &>/dev/null || missing_pkgs+=("$pkg")
-done
-
-if ((${#missing_pkgs[@]} > 0)); then
-  log "Layering packages: ${missing_pkgs[*]}"
-  sudo rpm-ostree install "${missing_pkgs[@]}"
-  REBOOT_REQUIRED=true
-else
-  log "rpm-ostree packages already installed"
-fi
-
 # ------------------------------------------------------------
-# 1Password
+# 1Password repo + key (MUST be before any rpm-ostree install)
 # ------------------------------------------------------------
-wait_for_rpm_ostree
-
-if ! rpm -q 1password &>/dev/null; then
-  log "Installing 1Password"
+if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
+  log "Adding 1Password repository and GPG key"
 
   sudo rpm --import https://downloads.1password.com/linux/keys/1password.asc
 
@@ -99,19 +65,43 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://downloads.1password.com/linux/keys/1password.asc
 EOF
+else
+  log "1Password repo already present"
+fi
 
-  sudo rpm-ostree install 1password
+# ------------------------------------------------------------
+# rpm-ostree packages (single transaction)
+# ------------------------------------------------------------
+RPM_PACKAGES=(
+  curl
+  jq
+  zsh
+  wl-clipboard
+  git-credential-libsecret
+  1password
+)
+
+missing=()
+for pkg in "${RPM_PACKAGES[@]}"; do
+  rpm -q "$pkg" &>/dev/null || missing+=("$pkg")
+done
+
+REBOOT_REQUIRED=false
+
+if ((${#missing[@]} > 0)); then
+  wait_for_rpm_ostree
+  log "Installing packages: ${missing[*]}"
+  sudo rpm-ostree install "${missing[@]}"
   REBOOT_REQUIRED=true
 else
-  log "1Password already installed"
+  log "All rpm-ostree packages already installed"
 fi
 
 # ------------------------------------------------------------
 # Homebrew (user-space)
 # ------------------------------------------------------------
 if ! sudo -u "$REAL_USER" command -v brew >/dev/null; then
-  log "Installing Homebrew for user: $REAL_USER"
-
+  log "Installing Homebrew for $REAL_USER"
   sudo -u "$REAL_USER" env NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
@@ -119,24 +109,22 @@ else
 fi
 
 # ------------------------------------------------------------
-# Homebrew shellenv for zsh
+# Homebrew shellenv (zsh)
 # ------------------------------------------------------------
 BREW_PREFIX="$REAL_HOME/.linuxbrew"
 ZSHRC="$REAL_HOME/.zshrc"
 
 if [[ -d "$BREW_PREFIX" ]] && ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
-  log "Configuring Homebrew shellenv in .zshrc"
+  log "Configuring Homebrew shellenv"
   cat >>"$ZSHRC" <<EOF
 
 # Homebrew
 eval "\$($BREW_PREFIX/bin/brew shellenv)"
 EOF
-else
-  log "Homebrew shellenv already configured"
 fi
 
 # ------------------------------------------------------------
-# One-shot systemd user unit to switch shell to zsh
+# One-shot systemd user unit to set zsh after reboot
 # ------------------------------------------------------------
 log "Installing one-shot zsh shell switcher"
 
@@ -174,8 +162,8 @@ sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 # ------------------------------------------------------------
 echo
 if $REBOOT_REQUIRED; then
-  echo "⚠️  Reboot required to apply rpm-ostree changes"
-  echo "👉 Run: systemctl reboot"
+  echo "⚠️  Reboot required"
+  echo "👉 systemctl reboot"
 else
-  echo "✅ All components already installed and active"
+  echo "✅ System already in desired state"
 fi
