@@ -5,13 +5,16 @@ trap 'echo "❌ [$MODULE] Failed at line $LINENO" >&2' ERR
 MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
+# ------------------------------------------------------------
+# Guards
+# ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
-  echo "❌ Not Silverblue"
+  echo "❌ Not running on Silverblue (rpm-ostree missing)"
   exit 1
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq required"
+  echo "❌ jq is required"
   exit 1
 }
 
@@ -20,7 +23,7 @@ REAL_HOME="$(eval echo "~$REAL_USER")"
 SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
 
 # ------------------------------------------------------------
-# Wait for rpm-ostree (transaction only)
+# Wait for rpm-ostree (ONLY transaction matters)
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
   while rpm-ostree status --json | jq -e '.transaction != null' >/dev/null; do
@@ -31,11 +34,10 @@ wait_for_rpm_ostree() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# Add 1Password repo (NO rpm --import)
+# 1Password repo (Silverblue-correct: NO rpm --import)
 # ------------------------------------------------------------
 if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
   log "Adding 1Password repository"
-
   sudo tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
 [1password]
 name=1Password Stable Channel
@@ -50,7 +52,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree packages (single transaction)
+# rpm-ostree install (ONE idempotent transaction)
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -61,38 +63,29 @@ RPM_PACKAGES=(
   1password
 )
 
-missing=()
-for pkg in "${RPM_PACKAGES[@]}"; do
-  rpm -q "$pkg" &>/dev/null || missing+=("$pkg")
-done
-
-REBOOT_REQUIRED=false
-
-if ((${#missing[@]} > 0)); then
-  wait_for_rpm_ostree
-  log "Installing packages: ${missing[*]}"
-  sudo rpm-ostree install "${missing[@]}"
-  REBOOT_REQUIRED=true
-else
-  log "All rpm-ostree packages already installed"
-fi
+log "Ensuring rpm-ostree packages are requested"
+wait_for_rpm_ostree
+sudo rpm-ostree install --idempotent "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (user space)
+# Homebrew (user space, idempotent)
 # ------------------------------------------------------------
 if ! sudo -u "$REAL_USER" command -v brew >/dev/null; then
-  log "Installing Homebrew"
+  log "Installing Homebrew for $REAL_USER"
   sudo -u "$REAL_USER" env NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+else
+  log "Homebrew already installed"
 fi
 
 # ------------------------------------------------------------
-# Homebrew shellenv
+# Homebrew shellenv (zsh)
 # ------------------------------------------------------------
 BREW_PREFIX="$REAL_HOME/.linuxbrew"
 ZSHRC="$REAL_HOME/.zshrc"
 
 if [[ -d "$BREW_PREFIX" ]] && ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
+  log "Configuring Homebrew shellenv"
   cat >>"$ZSHRC" <<EOF
 
 # Homebrew
@@ -101,7 +94,7 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# One-shot zsh shell switch (post reboot)
+# One-shot zsh shell switch (post-reboot)
 # ------------------------------------------------------------
 mkdir -p "$SYSTEMD_USER_DIR"
 
@@ -132,9 +125,5 @@ sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 # Summary
 # ------------------------------------------------------------
 echo
-if $REBOOT_REQUIRED; then
-  echo "⚠️  Reboot required"
-  echo "👉 systemctl reboot"
-else
-  echo "✅ System already configured"
-fi
+echo "⚠️  If this is the first run, a reboot is required"
+echo "👉 systemctl reboot"
