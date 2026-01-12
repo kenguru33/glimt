@@ -9,7 +9,7 @@ log() { echo "🔧 [$MODULE] $*"; }
 # Guards
 # ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
-  echo "❌ Not running on Silverblue (rpm-ostree missing)"
+  echo "❌ Not running on Fedora Silverblue"
   exit 1
 }
 
@@ -26,6 +26,7 @@ SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
 # Wait for rpm-ostree (ONLY transaction matters)
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
+  log "Waiting for rpm-ostree to be idle"
   while rpm-ostree status --json | jq -e '.transaction != null' >/dev/null; do
     sleep 2
   done
@@ -34,7 +35,7 @@ wait_for_rpm_ostree() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# 1Password repo (Silverblue-correct: NO rpm --import)
+# 1Password repository (Silverblue-correct)
 # ------------------------------------------------------------
 if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
   log "Adding 1Password repository"
@@ -52,7 +53,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree install (ONE idempotent transaction)
+# rpm-ostree packages (ONE idempotent transaction)
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -65,10 +66,13 @@ RPM_PACKAGES=(
 
 log "Ensuring rpm-ostree packages are requested"
 wait_for_rpm_ostree
-sudo rpm-ostree install --idempotent "${RPM_PACKAGES[@]}"
+sudo rpm-ostree install \
+  --idempotent \
+  --allow-inactive \
+  "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (user space, idempotent)
+# Homebrew (user-space, idempotent)
 # ------------------------------------------------------------
 if ! sudo -u "$REAL_USER" command -v brew >/dev/null; then
   log "Installing Homebrew for $REAL_USER"
@@ -94,8 +98,10 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# One-shot zsh shell switch (post-reboot)
+# One-shot zsh shell switch (post-reboot, safe)
 # ------------------------------------------------------------
+log "Installing one-shot zsh shell switcher"
+
 mkdir -p "$SYSTEMD_USER_DIR"
 
 cat >"$SYSTEMD_USER_DIR/set-zsh-shell.service" <<'EOF'
@@ -125,5 +131,5 @@ sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 # Summary
 # ------------------------------------------------------------
 echo
-echo "⚠️  If this is the first run, a reboot is required"
+echo "⚠️  Reboot required to apply rpm-ostree changes"
 echo "👉 systemctl reboot"
