@@ -18,8 +18,7 @@ command -v jq >/dev/null || {
   exit 1
 }
 
-REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME="$(eval echo "~$REAL_USER")"
+REAL_HOME="$(eval echo "~${SUDO_USER:-$USER}")"
 
 # ------------------------------------------------------------
 # Wait for rpm-ostree (ONLY transaction matters)
@@ -31,13 +30,10 @@ wait_for_rpm_ostree() {
   done
 }
 
-# ------------------------------------------------------------
-# Phase 1: system setup (safe before reboot)
-# ------------------------------------------------------------
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# 1Password repository (Silverblue-correct)
+# 1Password repository
 # ------------------------------------------------------------
 if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
   log "Adding 1Password repository"
@@ -50,12 +46,10 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://downloads.1password.com/linux/keys/1password.asc
 EOF
-else
-  log "1Password repo already present"
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree packages (idempotent + base-safe)
+# rpm-ostree packages
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -68,73 +62,85 @@ RPM_PACKAGES=(
 
 log "Ensuring rpm-ostree packages are requested"
 wait_for_rpm_ostree
-sudo rpm-ostree install \
-  --idempotent \
-  --allow-inactive \
-  "${RPM_PACKAGES[@]}"
+sudo rpm-ostree install --idempotent --allow-inactive "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (Linux-supported prefix ONLY)
+# Homebrew (Linux-supported prefix, Silverblue real path)
 # ------------------------------------------------------------
-BREW_ROOT="/home/linuxbrew"
+BREW_ROOT="/var/home/linuxbrew"
 BREW_PREFIX="$BREW_ROOT/.linuxbrew"
 
 log "Preparing Homebrew prefix at $BREW_PREFIX"
 sudo mkdir -p "$BREW_PREFIX"
-sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_ROOT"
+sudo chown -R "$(stat -c '%U' "$REAL_HOME")":"$(stat -c '%G' "$REAL_HOME")" "$BREW_ROOT"
 
-if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
-  log "Installing Homebrew for $REAL_USER"
-  sudo -u "$REAL_USER" env \
+if ! sudo -u "$(stat -c '%U' "$REAL_HOME")" env HOME="$REAL_HOME" command -v brew >/dev/null; then
+  log "Installing Homebrew"
+  sudo -u "$(stat -c '%U' "$REAL_HOME")" env \
     HOME="$REAL_HOME" \
-    USER="$REAL_USER" \
-    LOGNAME="$REAL_USER" \
     NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-else
-  log "Homebrew already installed"
 fi
 
 # ------------------------------------------------------------
-# Add Homebrew to PATH (zsh)
+# Homebrew shellenv (.zshrc)
 # ------------------------------------------------------------
 ZSHRC="$REAL_HOME/.zshrc"
-BREW_SHELLENV='eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
 
-if ! grep -q '/home/linuxbrew/.linuxbrew/bin/brew shellenv' "$ZSHRC" 2>/dev/null; then
-  log "Adding Homebrew to PATH in .zshrc"
-  cat >>"$ZSHRC" <<EOF
+if ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
+  log "Configuring Homebrew in .zshrc"
+  cat >>"$ZSHRC" <<'EOF'
 
-# Homebrew
-$BREW_SHELLENV
+# Homebrew (Silverblue)
+if [[ -x /var/home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
 EOF
 fi
 
 # ------------------------------------------------------------
-# Phase 2: set zsh as shell (ONLY when it exists)
+# Phase 2: dynamic post-boot oneshot
 # ------------------------------------------------------------
-if [[ -x /usr/bin/zsh ]]; then
-  CURRENT_SHELL="$(getent passwd "$REAL_USER" | cut -d: -f7)"
+POSTBOOT_UNIT="/etc/systemd/system/silverblue-postboot.service"
 
-  if [[ "$CURRENT_SHELL" != "/usr/bin/zsh" ]]; then
-    log "Setting zsh as default shell for $REAL_USER (one-time)"
-    sudo usermod --shell /usr/bin/zsh "$REAL_USER"
-  else
-    log "zsh already set as default shell"
-  fi
-else
-  log "zsh not available yet (expected before reboot)"
+if [[ ! -f "$POSTBOOT_UNIT" ]]; then
+  log "Installing post-boot oneshot to set zsh shell (dynamic user)"
+
+  sudo tee "$POSTBOOT_UNIT" >/dev/null <<'EOF'
+[Unit]
+Description=Silverblue post-boot setup (set zsh shell)
+After=multi-user.target
+ConditionPathExists=/usr/bin/zsh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c '
+USER="$(getent passwd | awk -F: '\''$3 >= 1000 { print $1; exit }'\'')"
+CURRENT="$(getent passwd "$USER" | cut -d: -f7)"
+
+if [[ "$CURRENT" != "/usr/bin/zsh" ]]; then
+  usermod --shell /usr/bin/zsh "$USER"
+fi
+
+systemctl disable silverblue-postboot.service
+rm -f /etc/systemd/system/silverblue-postboot.service
+'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable silverblue-postboot.service
 fi
 
 # ------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------
 echo
-if [[ ! -x /usr/bin/zsh ]]; then
-  echo "⚠️  Reboot required to activate rpm-ostree changes"
-  echo "👉 After reboot, run this script ONCE more"
-  echo "👉 zsh will then be set automatically"
-else
-  echo "✅ Setup complete"
-  echo "👉 Next login will use zsh"
-fi
+echo "✅ Phase 1 complete"
+echo "👉 Reboot required"
+echo "👉 zsh will be set automatically for the primary user"
+echo
+echo "Run:"
+echo "  systemctl reboot"
