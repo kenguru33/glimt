@@ -72,29 +72,29 @@ sudo rpm-ostree install \
   "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (user-space, idempotent)
+# Homebrew (user-space, permission-safe)
 # ------------------------------------------------------------
-if ! sudo -u "$REAL_USER" command -v brew >/dev/null; then
+BREW_PREFIX="$REAL_HOME/.linuxbrew"
+
+# Fix ownership if a previous run poisoned it
+if [[ -d "$BREW_PREFIX" ]]; then
+  if [[ "$(stat -c '%U' "$BREW_PREFIX")" != "$REAL_USER" ]]; then
+    log "Fixing ownership of ~/.linuxbrew"
+    sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_PREFIX"
+  fi
+fi
+
+if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
   log "Installing Homebrew for $REAL_USER"
-  sudo -u "$REAL_USER" env NONINTERACTIVE=1 \
+
+  sudo -u "$REAL_USER" env \
+    HOME="$REAL_HOME" \
+    USER="$REAL_USER" \
+    LOGNAME="$REAL_USER" \
+    NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
   log "Homebrew already installed"
-fi
-
-# ------------------------------------------------------------
-# Homebrew shellenv (zsh)
-# ------------------------------------------------------------
-BREW_PREFIX="$REAL_HOME/.linuxbrew"
-ZSHRC="$REAL_HOME/.zshrc"
-
-if [[ -d "$BREW_PREFIX" ]] && ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
-  log "Configuring Homebrew shellenv"
-  cat >>"$ZSHRC" <<EOF
-
-# Homebrew
-eval "\$($BREW_PREFIX/bin/brew shellenv)"
-EOF
 fi
 
 # ------------------------------------------------------------
