@@ -72,36 +72,44 @@ sudo rpm-ostree install \
   "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (user-space, Silverblue-safe)
+# Homebrew (Linux-supported prefix ONLY)
 # ------------------------------------------------------------
-BREW_PREFIX="$REAL_HOME/.linuxbrew"
+BREW_ROOT="/home/linuxbrew"
+BREW_PREFIX="$BREW_ROOT/.linuxbrew"
 
 log "Preparing Homebrew prefix at $BREW_PREFIX"
+
+# Create directory and fix ownership (idempotent)
 sudo mkdir -p "$BREW_PREFIX"
-sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_PREFIX"
+sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_ROOT"
 
-if ! sudo -u "$REAL_USER" env \
-  HOME="$REAL_HOME" \
-  USER="$REAL_USER" \
-  LOGNAME="$REAL_USER" \
-  HOMEBREW_PREFIX="$BREW_PREFIX" \
-  HOMEBREW_CELLAR="$BREW_PREFIX/Cellar" \
-  HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew" \
-  command -v brew >/dev/null; then
-
+# Install Homebrew if missing
+if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
   log "Installing Homebrew for $REAL_USER"
 
   sudo -u "$REAL_USER" env \
     HOME="$REAL_HOME" \
     USER="$REAL_USER" \
     LOGNAME="$REAL_USER" \
-    HOMEBREW_PREFIX="$BREW_PREFIX" \
-    HOMEBREW_CELLAR="$BREW_PREFIX/Cellar" \
-    HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew" \
     NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
   log "Homebrew already installed"
+fi
+
+# ------------------------------------------------------------
+# Ensure Homebrew is on PATH (zsh)
+# ------------------------------------------------------------
+ZSHRC="$REAL_HOME/.zshrc"
+BREW_SHELLENV='eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+
+if ! grep -q '/home/linuxbrew/.linuxbrew/bin/brew shellenv' "$ZSHRC" 2>/dev/null; then
+  log "Adding Homebrew to PATH in .zshrc"
+  cat >>"$ZSHRC" <<EOF
+
+# Homebrew
+$BREW_SHELLENV
+EOF
 fi
 
 # ------------------------------------------------------------
