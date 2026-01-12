@@ -11,7 +11,6 @@ EXTENSIONS=(
   blur-my-shell@aunetx
   tilingshell@ferrarodomenico.com
   appindicatorsupport@rgcjonas.gmail.com
-  gsconnect@andyholmes.github.io
 )
 
 GNOME_MAJOR="$(gnome-shell --version | awk '{print int($3)}')"
@@ -72,7 +71,7 @@ SERVICE="$HOME/.config/systemd/user/enable-gnome-extensions-once.service"
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/.config/systemd/user"
 
-cat > "$BIN" <<'EOF'
+cat >"$BIN" <<'EOF'
 #!/usr/bin/env bash
 set -e
 
@@ -80,7 +79,6 @@ EXTENSIONS=(
   blur-my-shell@aunetx
   tilingshell@ferrarodomenico.com
   appindicatorsupport@rgcjonas.gmail.com
-  gsconnect@andyholmes.github.io
 )
 
 for e in "${EXTENSIONS[@]}"; do
@@ -95,7 +93,7 @@ EOF
 
 chmod +x "$BIN"
 
-cat > "$SERVICE" <<EOF
+cat >"$SERVICE" <<EOF
 [Unit]
 Description=Enable GNOME extensions after first login
 After=graphical-session.target
