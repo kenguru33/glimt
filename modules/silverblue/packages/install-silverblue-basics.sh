@@ -20,8 +20,6 @@ command -v jq >/dev/null || {
 
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(eval echo "~$REAL_USER")"
-SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
-USER_BIN_DIR="$REAL_HOME/.local/bin"
 
 # ------------------------------------------------------------
 # Wait for rpm-ostree (ONLY transaction matters)
@@ -84,7 +82,6 @@ sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_ROOT"
 
 if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
   log "Installing Homebrew for $REAL_USER"
-
   sudo -u "$REAL_USER" env \
     HOME="$REAL_HOME" \
     USER="$REAL_USER" \
@@ -111,60 +108,24 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# Helper script to switch shell (avoids systemd parsing issues)
+# Set zsh as default shell (ONE-TIME, deliberate bypass of PAM)
 # ------------------------------------------------------------
-log "Creating zsh shell switch helper"
+CURRENT_SHELL="$(getent passwd "$REAL_USER" | cut -d: -f7)"
 
-mkdir -p "$USER_BIN_DIR"
-
-ZSH_HELPER="$USER_BIN_DIR/set-zsh-shell.sh"
-
-cat >"$ZSH_HELPER" <<'EOF'
-#!/usr/bin/env bash
-set -e
-
-ZSH_BIN="/usr/bin/zsh"
-USER_NAME="$(id -un)"
-CURRENT_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
-
-if [[ -x "$ZSH_BIN" && "$CURRENT_SHELL" != "$ZSH_BIN" ]]; then
-  chsh -s "$ZSH_BIN" "$USER_NAME"
+if [[ "$CURRENT_SHELL" != "/usr/bin/zsh" ]]; then
+  log "Setting zsh as default shell for $REAL_USER (one-time)"
+  sudo usermod --shell /usr/bin/zsh "$REAL_USER"
+else
+  log "zsh already set as default shell"
 fi
-EOF
-
-chmod +x "$ZSH_HELPER"
-chown "$REAL_USER:$REAL_USER" "$ZSH_HELPER"
-
-# ------------------------------------------------------------
-# One-shot systemd user unit (simple, valid, safe)
-# ------------------------------------------------------------
-log "Installing one-shot zsh shell switcher (user unit)"
-
-mkdir -p "$SYSTEMD_USER_DIR"
-
-cat >"$SYSTEMD_USER_DIR/set-zsh-shell.service" <<EOF
-[Unit]
-Description=Set zsh as default shell (one-shot)
-
-[Service]
-Type=oneshot
-ExecStart=$ZSH_HELPER
-ExecStartPost=/usr/bin/systemctl --user disable set-zsh-shell.service
-ExecStartPost=/usr/bin/rm -f $SYSTEMD_USER_DIR/set-zsh-shell.service
-
-[Install]
-WantedBy=default.target
-EOF
-
-chown "$REAL_USER:$REAL_USER" "$SYSTEMD_USER_DIR/set-zsh-shell.service"
-
-sudo -u "$REAL_USER" systemctl --user daemon-reexec
-sudo -u "$REAL_USER" systemctl --user daemon-reload
-sudo -u "$REAL_USER" systemctl --user enable set-zsh-shell.service
 
 # ------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------
 echo
-echo "⚠️  Reboot required to apply rpm-ostree changes"
-echo "👉 systemctl reboot"
+echo "✅ Bootstrap complete"
+echo "👉 Reboot required to activate rpm-ostree changes"
+echo "👉 Next login will use zsh"
+echo
+echo "Run:"
+echo "  systemctl reboot"
