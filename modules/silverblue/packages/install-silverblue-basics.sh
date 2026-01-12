@@ -72,25 +72,32 @@ sudo rpm-ostree install \
   "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (user-space, permission-safe)
+# Homebrew (user-space, Silverblue-safe)
 # ------------------------------------------------------------
 BREW_PREFIX="$REAL_HOME/.linuxbrew"
 
-# Fix ownership if a previous run poisoned it
-if [[ -d "$BREW_PREFIX" ]]; then
-  if [[ "$(stat -c '%U' "$BREW_PREFIX")" != "$REAL_USER" ]]; then
-    log "Fixing ownership of ~/.linuxbrew"
-    sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_PREFIX"
-  fi
-fi
+log "Preparing Homebrew prefix at $BREW_PREFIX"
+sudo mkdir -p "$BREW_PREFIX"
+sudo chown -R "$REAL_USER:$REAL_USER" "$BREW_PREFIX"
 
-if ! sudo -u "$REAL_USER" env HOME="$REAL_HOME" command -v brew >/dev/null; then
+if ! sudo -u "$REAL_USER" env \
+  HOME="$REAL_HOME" \
+  USER="$REAL_USER" \
+  LOGNAME="$REAL_USER" \
+  HOMEBREW_PREFIX="$BREW_PREFIX" \
+  HOMEBREW_CELLAR="$BREW_PREFIX/Cellar" \
+  HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew" \
+  command -v brew >/dev/null; then
+
   log "Installing Homebrew for $REAL_USER"
 
   sudo -u "$REAL_USER" env \
     HOME="$REAL_HOME" \
     USER="$REAL_USER" \
     LOGNAME="$REAL_USER" \
+    HOMEBREW_PREFIX="$BREW_PREFIX" \
+    HOMEBREW_CELLAR="$BREW_PREFIX/Cellar" \
+    HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew" \
     NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
