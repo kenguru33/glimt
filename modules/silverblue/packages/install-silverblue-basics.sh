@@ -31,6 +31,9 @@ wait_for_rpm_ostree() {
   done
 }
 
+# ------------------------------------------------------------
+# Phase 1: system setup (safe before reboot)
+# ------------------------------------------------------------
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
@@ -52,7 +55,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree packages (ONE idempotent transaction)
+# rpm-ostree packages (idempotent + base-safe)
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -108,24 +111,30 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# Set zsh as default shell (ONE-TIME, deliberate bypass of PAM)
+# Phase 2: set zsh as shell (ONLY when it exists)
 # ------------------------------------------------------------
-CURRENT_SHELL="$(getent passwd "$REAL_USER" | cut -d: -f7)"
+if [[ -x /usr/bin/zsh ]]; then
+  CURRENT_SHELL="$(getent passwd "$REAL_USER" | cut -d: -f7)"
 
-if [[ "$CURRENT_SHELL" != "/usr/bin/zsh" ]]; then
-  log "Setting zsh as default shell for $REAL_USER (one-time)"
-  sudo usermod --shell /usr/bin/zsh "$REAL_USER"
+  if [[ "$CURRENT_SHELL" != "/usr/bin/zsh" ]]; then
+    log "Setting zsh as default shell for $REAL_USER (one-time)"
+    sudo usermod --shell /usr/bin/zsh "$REAL_USER"
+  else
+    log "zsh already set as default shell"
+  fi
 else
-  log "zsh already set as default shell"
+  log "zsh not available yet (expected before reboot)"
 fi
 
 # ------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------
 echo
-echo "✅ Bootstrap complete"
-echo "👉 Reboot required to activate rpm-ostree changes"
-echo "👉 Next login will use zsh"
-echo
-echo "Run:"
-echo "  systemctl reboot"
+if [[ ! -x /usr/bin/zsh ]]; then
+  echo "⚠️  Reboot required to activate rpm-ostree changes"
+  echo "👉 After reboot, run this script ONCE more"
+  echo "👉 zsh will then be set automatically"
+else
+  echo "✅ Setup complete"
+  echo "👉 Next login will use zsh"
+fi
