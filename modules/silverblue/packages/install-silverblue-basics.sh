@@ -17,7 +17,7 @@ command -v rpm-ostree >/dev/null || {
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq required to run this script"
+  echo "❌ jq is required to run this script"
   exit 1
 }
 
@@ -26,30 +26,29 @@ REAL_HOME="$(eval echo "~$REAL_USER")"
 SYSTEMD_USER_DIR="$REAL_HOME/.config/systemd/user"
 
 # ------------------------------------------------------------
-# Wait for rpm-ostree to be ready
+# Correct rpm-ostree wait (transaction only)
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
   local timeout=600
   local interval=2
   local elapsed=0
 
-  log "Waiting for rpm-ostree to become ready"
+  log "Waiting for rpm-ostree transaction to finish"
 
   while true; do
-    if rpm-ostree status --json 2>/dev/null | jq -e '
-      (.transaction != null) or
-      (.deployments[].staged // false)
-    ' >/dev/null; then
-      if ((elapsed >= timeout)); then
-        echo "❌ rpm-ostree still busy after ${timeout}s" >&2
-        exit 1
-      fi
+    tx="$(rpm-ostree status --json 2>/dev/null | jq -r '.transaction')"
 
-      sleep "$interval"
-      elapsed=$((elapsed + interval))
-    else
+    if [[ "$tx" == "null" ]]; then
       break
     fi
+
+    if ((elapsed >= timeout)); then
+      echo "❌ rpm-ostree transaction still active after ${timeout}s" >&2
+      exit 1
+    fi
+
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
   done
 }
 
@@ -82,7 +81,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 1Password (system install)
+# 1Password
 # ------------------------------------------------------------
 wait_for_rpm_ostree
 
@@ -139,7 +138,7 @@ fi
 # ------------------------------------------------------------
 # One-shot systemd user unit to switch shell to zsh
 # ------------------------------------------------------------
-log "Installing one-shot zsh shell switcher (user systemd service)"
+log "Installing one-shot zsh shell switcher"
 
 mkdir -p "$SYSTEMD_USER_DIR"
 
