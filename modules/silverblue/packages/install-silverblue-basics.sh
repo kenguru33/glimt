@@ -6,6 +6,25 @@ MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
+# Resolve module root (RELATIVE, NEVER hardcoded)
+# ------------------------------------------------------------
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SILVERBLUE_DIR="$(dirname "$SCRIPT_DIR")"
+# ~/.glimt/modules/silverblue
+
+# ------------------------------------------------------------
+# Paths / state
+# ------------------------------------------------------------
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME="$(eval echo "~$REAL_USER")"
+
+STATE_DIR="$REAL_HOME/.config/glimt"
+mkdir -p "$STATE_DIR"
+
+GIT_STATE_FILE="$STATE_DIR/git.state"
+
+# ------------------------------------------------------------
 # Guards
 # ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
@@ -18,8 +37,51 @@ command -v jq >/dev/null || {
   exit 1
 }
 
-REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME="$(eval echo "~$REAL_USER")"
+# ------------------------------------------------------------
+# STEP 0 — Git identity (ONCE)
+# ------------------------------------------------------------
+if [[ ! -f "$GIT_STATE_FILE" ]]; then
+  [[ -t 0 ]] || exit 2
+
+  while true; do
+    read -rp "👉 Git full name: " GIT_NAME
+    [[ -n "$GIT_NAME" ]] && break
+    echo "❌ Name cannot be empty"
+  done
+
+  while true; do
+    read -rp "👉 Git email: " GIT_EMAIL
+    [[ "$GIT_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
+    echo "❌ Invalid email"
+  done
+
+  read -rp "👉 Git editor [nvim]: " GIT_EDITOR
+  GIT_EDITOR="${GIT_EDITOR:-nvim}"
+
+  cat >"$GIT_STATE_FILE" <<EOF
+GIT_NAME="$GIT_NAME"
+GIT_EMAIL="$GIT_EMAIL"
+GIT_EDITOR="$GIT_EDITOR"
+GIT_BRANCH="main"
+GIT_REBASE="true"
+EOF
+
+  log "💾 Git identity saved"
+fi
+
+# ------------------------------------------------------------
+# STEP 0b — Apply git config (RELATIVE PATH)
+# ------------------------------------------------------------
+GIT_CONFIG_SCRIPT="$SILVERBLUE_DIR/install-git-config.sh"
+
+if [[ ! -x "$GIT_CONFIG_SCRIPT" ]]; then
+  log "❌ Git config script not found:"
+  log "   $GIT_CONFIG_SCRIPT"
+  exit 1
+fi
+
+log "🔧 Applying Git configuration"
+bash "$GIT_CONFIG_SCRIPT" all
 
 # ------------------------------------------------------------
 # Wait for rpm-ostree to be idle
@@ -158,6 +220,7 @@ fi
 echo
 echo "✅ Silverblue basics installed:"
 echo "   • Base RPM packages"
+echo "   • Git configured"
 echo "   • Homebrew"
 echo "   • Homebrew configured for zsh, bash, fish"
 echo
