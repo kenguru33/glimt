@@ -6,11 +6,11 @@ MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
-# Resolve repo root (RELATIVE, NEVER hardcoded)
+# Resolve script + modules directory (robust)
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-REPO_ROOT="$(dirname "$SCRIPT_PATH")"
-MODULES_DIR="$REPO_ROOT/modules"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+MODULES_DIR="$SCRIPT_DIR/modules"
 
 # ------------------------------------------------------------
 # Paths / state
@@ -96,7 +96,7 @@ have_all_rpms() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# Base RPM packages
+# Base RPM packages (FOUNDATION)
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -115,24 +115,24 @@ else
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree automatic updates (FOUNDATION POLICY)
+# rpm-ostree automatic updates
 # ------------------------------------------------------------
 ENABLE_AUTO_UPDATES="${ENABLE_AUTO_UPDATES:-1}"
 
 if [[ "$ENABLE_AUTO_UPDATES" == "1" ]]; then
   if ! systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1; then
-    log "Enabling rpm-ostree automatic updates (staged, no reboot)"
+    log "Enabling rpm-ostree automatic updates"
     wait_for_rpm_ostree
     sudo systemctl enable --now rpm-ostreed-automatic.timer
   else
     log "rpm-ostree automatic updates already enabled"
   fi
 else
-  log "rpm-ostree automatic updates disabled by configuration"
+  log "rpm-ostree automatic updates disabled"
 fi
 
 # ------------------------------------------------------------
-# Homebrew install (user-space)
+# Homebrew install (user-space, Silverblue-safe)
 # ------------------------------------------------------------
 BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
 BREW_BIN="$BREW_PREFIX/bin/brew"
@@ -156,16 +156,35 @@ fi
 # ------------------------------------------------------------
 # STEP — Run ALL modules (AFTER prerequisites)
 # ------------------------------------------------------------
+MANUAL_ACTIONS=0
+
 if [[ -d "$MODULES_DIR" ]]; then
   log "🔁 Running modules in $MODULES_DIR"
 
-  while IFS= read -r module; do
-    [[ -x "$module" ]] || continue
-    log "▶️  Running module: $(basename "$module")"
+  for module in "$MODULES_DIR"/*.sh; do
+    [[ -f "$module" ]] || continue
+    name="$(basename "$module")"
+
+    log "▶️  Running module: $name"
     bash "$module" all
-  done < <(find "$MODULES_DIR" -maxdepth 1 -type f -name '*.sh' | sort)
+    rc=$?
+
+    case "$rc" in
+    0)
+      log "✔ Module $name completed"
+      ;;
+    2)
+      log "⏸️  Module $name requires manual action"
+      MANUAL_ACTIONS=1
+      ;;
+    *)
+      echo "❌ Module $name failed with exit code $rc" >&2
+      exit 1
+      ;;
+    esac
+  done
 else
-  log "ℹ️  No modules directory found, skipping"
+  log "ℹ️  No modules directory found at $MODULES_DIR"
 fi
 
 # ------------------------------------------------------------
@@ -175,7 +194,12 @@ echo
 echo "✅ Silverblue basics installed:"
 echo "   • Base RPM packages"
 echo "   • Homebrew"
-echo "   • All modules executed"
+echo "   • Modules executed"
+
+if ((MANUAL_ACTIONS)); then
+  echo "   • ⚠️  Some modules require manual action"
+fi
+
 echo "   • rpm-ostree automatic updates: $(
   systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1 && echo enabled || echo disabled
 )"
@@ -194,3 +218,5 @@ echo "ℹ️  Shell is NOT changed."
 echo "   Choose manually if desired:"
 echo "     chsh -s /usr/bin/zsh"
 echo "     chsh -s /usr/bin/fish"
+
+exit 0
