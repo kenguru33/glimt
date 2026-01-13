@@ -9,10 +9,7 @@ log() { echo "🔧 [$MODULE] $*"; }
 # Resolve repo root (RELATIVE, NEVER hardcoded)
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-# SCRIPT_DIR now points to repo root
-
-REPO_ROOT="$SCRIPT_DIR"
+REPO_ROOT="$(dirname "$SCRIPT_PATH")"
 
 # ------------------------------------------------------------
 # Paths / state
@@ -94,6 +91,13 @@ wait_for_rpm_ostree() {
   done
 }
 
+# ------------------------------------------------------------
+# Reboot detection (atomic)
+# ------------------------------------------------------------
+reboot_required() {
+  rpm-ostree status --json | jq -e '.deployments | length > 1' >/dev/null
+}
+
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
@@ -119,6 +123,7 @@ RPM_PACKAGES=(
   zsh
   wl-clipboard
   git-credential-libsecret
+  fish
 )
 
 if have_all_rpms "${RPM_PACKAGES[@]}"; then
@@ -261,11 +266,18 @@ echo "   • Homebrew configured for zsh, bash, fish"
 echo "   • rpm-ostree automatic updates: $(
   systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1 && echo enabled || echo disabled
 )"
+
+if reboot_required; then
+  echo
+  echo "⚠️  A reboot is required to apply system changes."
+  echo "👉 systemctl reboot"
+else
+  echo
+  echo "✅ No reboot required."
+fi
+
 echo
 echo "ℹ️  Shell is NOT changed."
 echo "   Choose manually if desired:"
 echo "     chsh -s /usr/bin/zsh"
 echo "     chsh -s /usr/bin/fish"
-echo
-echo "⚠️  Reboot required to apply rpm-ostree changes."
-echo "👉 systemctl reboot"
