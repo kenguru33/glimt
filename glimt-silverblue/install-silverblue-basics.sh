@@ -37,7 +37,7 @@ command -v jq >/dev/null || {
 }
 
 # ------------------------------------------------------------
-# Sudo warm-up + keepalive (REQUIRED)
+# Sudo warm-up + keepalive (ONE TIME)
 # ------------------------------------------------------------
 log "Requesting administrator access (one-time)"
 sudo -v
@@ -168,8 +168,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# STEP — Run ALL modules
-#   - set-user-avatar runs with sudo
+# STEP — Run ALL modules (NO sudo here)
 # ------------------------------------------------------------
 MANUAL_ACTIONS=0
 
@@ -183,11 +182,7 @@ if [[ -d "$MODULES_DIR" ]]; then
     log "▶️  Running module: $name"
 
     set +e
-    if [[ "$name" == "set-user-avatar.sh" ]]; then
-      sudo bash "$module" all
-    else
-      bash "$module" all
-    fi
+    bash "$module" all
     rc=$?
     set -e
 
@@ -219,7 +214,7 @@ echo "   • Homebrew"
 echo "   • Modules executed"
 
 if ((MANUAL_ACTIONS)); then
-  echo "   • ⚠️  Some modules required elevated privileges"
+  echo "   • ⚠️  Some modules required manual input"
 fi
 
 echo "   • rpm-ostree automatic updates: $(
