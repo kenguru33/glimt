@@ -6,7 +6,7 @@ MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
-# Resolve script + modules directory (robust)
+# Resolve script + modules directory
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
@@ -96,7 +96,7 @@ have_all_rpms() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# Base RPM packages (FOUNDATION)
+# Base RPM packages
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -132,7 +132,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# Homebrew install (user-space, Silverblue-safe)
+# Homebrew install
 # ------------------------------------------------------------
 BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
 BREW_BIN="$BREW_PREFIX/bin/brew"
@@ -154,7 +154,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# STEP — Run ALL modules (AFTER prerequisites)
+# STEP — Run ALL modules (SAFE under set -e)
 # ------------------------------------------------------------
 MANUAL_ACTIONS=0
 
@@ -166,8 +166,11 @@ if [[ -d "$MODULES_DIR" ]]; then
     name="$(basename "$module")"
 
     log "▶️  Running module: $name"
+
+    set +e
     bash "$module" all
     rc=$?
+    set -e
 
     case "$rc" in
     0)
