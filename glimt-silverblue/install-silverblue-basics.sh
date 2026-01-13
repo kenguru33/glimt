@@ -127,12 +127,10 @@ if [[ "$ENABLE_AUTO_UPDATES" == "1" ]]; then
   else
     log "rpm-ostree automatic updates already enabled"
   fi
-else
-  log "rpm-ostree automatic updates disabled"
 fi
 
 # ------------------------------------------------------------
-# Homebrew install
+# Homebrew install (MUST run as user)
 # ------------------------------------------------------------
 BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
 BREW_BIN="$BREW_PREFIX/bin/brew"
@@ -154,7 +152,8 @@ else
 fi
 
 # ------------------------------------------------------------
-# STEP — Run ALL modules (SAFE under set -e)
+# STEP — Run ALL modules
+#   - Only set-user-avatar runs with sudo
 # ------------------------------------------------------------
 MANUAL_ACTIONS=0
 
@@ -168,7 +167,11 @@ if [[ -d "$MODULES_DIR" ]]; then
     log "▶️  Running module: $name"
 
     set +e
-    bash "$module" all
+    if [[ "$name" == "set-user-avatar.sh" ]]; then
+      sudo bash "$module" all
+    else
+      bash "$module" all
+    fi
     rc=$?
     set -e
 
@@ -200,7 +203,7 @@ echo "   • Homebrew"
 echo "   • Modules executed"
 
 if ((MANUAL_ACTIONS)); then
-  echo "   • ⚠️  Some modules require manual action"
+  echo "   • ⚠️  Some modules required elevated privileges"
 fi
 
 echo "   • rpm-ostree automatic updates: $(
