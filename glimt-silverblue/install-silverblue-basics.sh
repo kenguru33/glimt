@@ -37,6 +37,22 @@ command -v jq >/dev/null || {
 }
 
 # ------------------------------------------------------------
+# Sudo warm-up + keepalive (REQUIRED)
+# ------------------------------------------------------------
+log "Requesting administrator access (one-time)"
+sudo -v
+
+(
+  while true; do
+    sleep 60
+    sudo -n true || exit
+  done
+) &
+SUDO_KEEPALIVE_PID=$!
+
+trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
+
+# ------------------------------------------------------------
 # STEP 0 — Git identity (ONCE)
 # ------------------------------------------------------------
 if [[ ! -f "$GIT_STATE_FILE" ]]; then
@@ -130,7 +146,7 @@ if [[ "$ENABLE_AUTO_UPDATES" == "1" ]]; then
 fi
 
 # ------------------------------------------------------------
-# Homebrew install (MUST run as user)
+# Homebrew install (USER ONLY)
 # ------------------------------------------------------------
 BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
 BREW_BIN="$BREW_PREFIX/bin/brew"
@@ -153,7 +169,7 @@ fi
 
 # ------------------------------------------------------------
 # STEP — Run ALL modules
-#   - Only set-user-avatar runs with sudo
+#   - set-user-avatar runs with sudo
 # ------------------------------------------------------------
 MANUAL_ACTIONS=0
 

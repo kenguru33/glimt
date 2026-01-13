@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 # Glimt module: set-user-avatar (Silverblue-safe)
-#
-# Exit codes:
-#   0 = success
-#   2 = controlled stop (needs interactive sudo or input)
-#   1 = real failure
 
 MODULE_NAME="set-user-avatar"
 
@@ -14,7 +9,11 @@ trap 'echo "❌ [$MODULE_NAME] failed at line $LINENO" >&2' ERR
 ACTION="${1:-all}"
 SIZE="${2:-256}"
 
-HOME_DIR="$HOME"
+# --------------------------------------------------
+# Resolve real user (CRITICAL when run via sudo)
+# --------------------------------------------------
+REAL_USER="${SUDO_USER:-$USER}"
+HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_DIR="$HOME_DIR/.config/glimt"
 
 GRAVATAR_CONFIG="$CONFIG_DIR/set-user-avatar.config"
@@ -23,7 +22,7 @@ GIT_STATE="$CONFIG_DIR/git.state"
 FACE_IMAGE="$HOME_DIR/.face"
 
 ICON_DIR="/var/lib/AccountsService/icons"
-USER_FILE="/var/lib/AccountsService/users/$USER"
+USER_FILE="/var/lib/AccountsService/users/$REAL_USER"
 
 log() { echo "[$MODULE_NAME] $*"; }
 
@@ -112,34 +111,25 @@ fi
 # --------------------------------------------------
 # GDM avatar (idempotent)
 # --------------------------------------------------
-if [[ -f "$USER_FILE" ]] && grep -q "^Icon=$ICON_DIR/$USER$" "$USER_FILE" 2>/dev/null; then
+if [[ -f "$USER_FILE" ]] && grep -q "^Icon=$ICON_DIR/$REAL_USER$" "$USER_FILE" 2>/dev/null; then
   log "GDM avatar already set"
   exit 0
 fi
 
-log "Attempting to set GDM avatar (requires sudo)"
+log "Setting GDM avatar for user: $REAL_USER"
 
-sudo -n install -m 644 "$FACE_IMAGE" "$ICON_DIR/$USER" 2>/dev/null || {
+sudo -n install -m 644 "$FACE_IMAGE" "$ICON_DIR/$REAL_USER" || {
   echo
   echo "🔐 GDM avatar requires administrator access."
-  echo "👉 Re-run setup interactively or run:"
-  echo "   sudo set-user-avatar"
-  echo
   exit 2
 }
 
 sudo -n bash -c "cat > '$USER_FILE' <<EOF
 [User]
-Icon=$ICON_DIR/$USER
-EOF" || {
-  echo "🔐 Failed to write AccountsService config"
-  exit 2
-}
+Icon=$ICON_DIR/$REAL_USER
+EOF"
 
-sudo -n systemctl restart accounts-daemon || {
-  echo "🔐 Failed to restart accounts-daemon"
-  exit 2
-}
+sudo -n systemctl restart accounts-daemon
 
 log "GDM avatar installed"
 exit 0
