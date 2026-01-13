@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Glimt module: set-user-avatar (Silverblue-safe)
-
-MODULE_NAME="set-user-avatar"
+# Actions: all | reconfigure
 
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] failed at line $LINENO" >&2' ERR
+trap 'echo "❌ [set-user-avatar] failed at line $LINENO" >&2' ERR
 
+MODULE_NAME="set-user-avatar"
 ACTION="${1:-all}"
 SIZE="${2:-256}"
 
@@ -25,8 +25,21 @@ ICON_DIR="/var/lib/AccountsService/icons"
 USER_FILE="/var/lib/AccountsService/users/$REAL_USER"
 
 log() { echo "[$MODULE_NAME] $*"; }
+die() {
+  echo "❌ [$MODULE_NAME] $*" >&2
+  exit 1
+}
 
 mkdir -p "$CONFIG_DIR"
+
+# --------------------------------------------------
+# sudo handling (REUSE ticket, prompt only if needed)
+# --------------------------------------------------
+ensure_sudo() {
+  if [[ "$EUID" -ne 0 ]]; then
+    sudo -v || die "Administrator access required"
+  fi
+}
 
 # --------------------------------------------------
 # Reconfigure (wipe state only, HARD STOP)
@@ -97,39 +110,36 @@ fi
 HASH="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]' | md5sum | cut -d' ' -f1)"
 URL="https://www.gravatar.com/avatar/$HASH?s=$SIZE&d=identicon"
 
-log "Downloading avatar"
+log "⬇️  Downloading avatar"
 curl -fsSL "$URL" -o "$FACE_IMAGE"
 
 # --------------------------------------------------
-# GNOME session avatar
+# GNOME session avatar (user scope)
 # --------------------------------------------------
 if command -v gsettings >/dev/null; then
   gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" || true
-  log "GNOME session avatar set"
+  log "🧑 GNOME session avatar set"
 fi
 
 # --------------------------------------------------
-# GDM avatar (idempotent)
+# GDM avatar (AccountsService, system scope)
 # --------------------------------------------------
-if [[ -f "$USER_FILE" ]] && grep -q "^Icon=$ICON_DIR/$REAL_USER$" "$USER_FILE" 2>/dev/null; then
-  log "GDM avatar already set"
-  exit 0
-fi
+ensure_sudo
 
-log "Setting GDM avatar for user: $REAL_USER"
+log "🖥 Setting GDM avatar for user: $REAL_USER"
 
-sudo -n install -m 644 "$FACE_IMAGE" "$ICON_DIR/$REAL_USER" || {
-  echo
-  echo "🔐 GDM avatar requires administrator access."
-  exit 2
-}
+# Install icon (idempotent)
+install -m 644 "$FACE_IMAGE" "$ICON_DIR/$REAL_USER"
 
-sudo -n bash -c "cat > '$USER_FILE' <<EOF
+# Write user file
+cat >"$USER_FILE" <<EOF
 [User]
 Icon=$ICON_DIR/$REAL_USER
-EOF"
+EOF
 
-sudo -n systemctl restart accounts-daemon
+# Restart AccountsService only if running
+systemctl is-active accounts-daemon >/dev/null 2>&1 &&
+  systemctl restart accounts-daemon
 
-log "GDM avatar installed"
+log "✅ GDM avatar installed"
 exit 0
