@@ -121,6 +121,18 @@ RPM_PACKAGES=(
   fish
   wl-clipboard
   git-credential-libsecret
+
+  # Build tools for Homebrew
+  gcc
+  gcc-c++
+  make
+  pkg-config
+  glibc-devel
+
+  # Common build deps
+  openssl-devel
+  libffi-devel
+  zlib-devel
 )
 
 if have_all_rpms "${RPM_PACKAGES[@]}"; then
