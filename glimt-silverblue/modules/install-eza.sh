@@ -3,14 +3,19 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ eza module failed." >&2' ERR
+trap 'echo "❌ eza module failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="eza"
 ACTION="${1:-all}"
 
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
-BREW_PREFIX="$HOME_DIR/.linuxbrew"
+
+# --------------------------------------------------
+# Homebrew (canonical Silverblue location)
+# --------------------------------------------------
+BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
+BREW_BIN="$BREW_PREFIX/bin/brew"
 
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 ZSH_FILE="$ZSH_CONFIG_DIR/eza.zsh"
@@ -26,122 +31,69 @@ require_user() {
   fi
 }
 
+# --------------------------------------------------
+# Homebrew check (simple + reliable)
+# --------------------------------------------------
 check_brew() {
-  # Check if brew command is available in PATH
-  if command -v brew &>/dev/null 2>&1; then
+  if [[ -x "$BREW_BIN" ]]; then
+    eval "$("$BREW_BIN" shellenv)"
     return 0
   fi
-  
-  # Try multiple possible Homebrew locations
-  local possible_paths=(
-    "$BREW_PREFIX/bin/brew"
-    "$HOME_DIR/.linuxbrew/bin/brew"
-    "$HOME/.linuxbrew/bin/brew"
-    "/home/linuxbrew/.linuxbrew/bin/brew"
-  )
-  
-  local brew_path=""
-  for path in "${possible_paths[@]}"; do
-    if [[ -x "$path" ]]; then
-      brew_path="$path"
-      BREW_PREFIX="$(dirname "$(dirname "$path")")"
-      break
-    fi
-  done
-  
-  # Check if brew exists and is executable
-  if [[ -z "$brew_path" ]]; then
-    log "❌ brew not found in any standard location"
-    log "ℹ Checked paths:"
-    for path in "${possible_paths[@]}"; do
-      log "   - $path"
-    done
-    log "ℹ Please ensure Homebrew is installed via the prereq module first"
-    log "ℹ Run: modules/silverblue/packages/install-silverblue-prereq.sh install"
-    return 1
-  fi
-  
-  log "🔍 Found brew at: $brew_path"
-  
-  # Source homebrew shellenv
-  local shellenv_output
-  shellenv_output=$("$brew_path" shellenv 2>&1) || {
-    log "❌ Failed to get homebrew shellenv: $shellenv_output"
-    return 1
-  }
-  
-  # Evaluate the shellenv output
-  eval "$shellenv_output" 2>/dev/null || true
-  
-  # Explicitly export PATH and Homebrew variables to ensure they're available
-  export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
-  export HOMEBREW_PREFIX="$BREW_PREFIX"
-  export HOMEBREW_CELLAR="$BREW_PREFIX/Cellar"
-  export HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew"
-  
-  # Verify brew is now available
-  if command -v brew &>/dev/null 2>&1; then
-    log "✅ brew is now available: $(command -v brew)"
-    return 0
-  fi
-  
-  log "❌ brew command still not found after sourcing shellenv"
-  log "ℹ Homebrew may be installed but not properly configured"
-  log "ℹ Try running: eval \"\$($brew_path shellenv)\""
+
+  log "❌ Homebrew not found at $BREW_BIN"
+  log "ℹ Ensure install-silverblue-basics.sh has completed successfully"
   return 1
 }
 
+# --------------------------------------------------
+# deps
+# --------------------------------------------------
 deps() {
-  log "📦 Checking for brew..."
-  if check_brew; then
-    log "✅ brew is available"
-  else
-    exit 1
-  fi
+  log "Checking Homebrew availability"
+  check_brew
 }
 
+# --------------------------------------------------
+# install
+# --------------------------------------------------
 install() {
   require_user
+  check_brew
 
-  if ! check_brew; then
-    exit 1
-  fi
-
-  log "🔌 Installing eza via Homebrew..."
+  log "Installing eza via Homebrew"
 
   if brew list eza &>/dev/null; then
-    log "🔄 eza already installed, upgrading..."
-    brew upgrade eza
-    log "✅ eza upgraded"
+    log "eza already installed – upgrading"
+    brew upgrade eza || true
   else
-    log "⬇️  Installing eza..."
     brew install eza
-    log "✅ eza installed"
   fi
 
-  if ! command -v eza &>/dev/null 2>&1; then
+  command -v eza >/dev/null || {
     log "❌ eza command not found after installation"
     exit 1
-  fi
+  }
 
-  log "✅ eza is ready: $(command -v eza)"
+  log "eza ready: $(command -v eza)"
 }
 
+# --------------------------------------------------
+# config
+# --------------------------------------------------
 config() {
   require_user
+  check_brew
 
-  log "🔧 Configuring eza (aliases)..."
-
-  if ! command -v eza &>/dev/null 2>&1; then
-    log "❌ eza command not found. Run 'install' first."
+  command -v eza >/dev/null || {
+    log "❌ eza not installed; run install first"
     exit 1
-  fi
+  }
 
-  # Create zsh config if zsh config directory exists
-  if [[ -d "$ZSH_CONFIG_DIR" ]]; then
-    mkdir -p "$ZSH_CONFIG_DIR"
-    cat >"$ZSH_FILE" <<'EOF'
-# eza - modern ls replacement
+  log "Writing Zsh aliases"
+
+  mkdir -p "$ZSH_CONFIG_DIR"
+  cat >"$ZSH_FILE" <<'EOF'
+# eza – modern ls replacement
 if command -v eza &>/dev/null; then
   alias ls='eza --group-directories-first --icons=auto'
   alias ll='eza -l --group-directories-first --icons=auto'
@@ -149,37 +101,31 @@ if command -v eza &>/dev/null; then
   alias lt='eza -T --group-directories-first --icons=auto'
 fi
 EOF
-    log "✅ Zsh config installed at $ZSH_FILE"
-  else
-    log "ℹ️ Zsh config directory $ZSH_CONFIG_DIR does not exist; skipping shell config"
-  fi
 
-  log "✅ eza configuration complete"
+  chown "$REAL_USER:$REAL_USER" "$ZSH_FILE"
+  log "Zsh config installed at $ZSH_FILE"
 }
 
+# --------------------------------------------------
+# clean
+# --------------------------------------------------
 clean() {
   require_user
 
-  log "🧹 Removing eza config..."
+  log "Removing eza config"
+  rm -f "$ZSH_FILE"
 
-  # Remove zsh config
-  if [[ -f "$ZSH_FILE" ]]; then
-    rm -f "$ZSH_FILE"
-    log "✅ Removed zsh config"
-  fi
-
-  # Uninstall eza via Homebrew if available
   if check_brew && brew list eza &>/dev/null; then
-    log "🔄 Uninstalling eza via Homebrew..."
+    log "Uninstalling eza"
     brew uninstall eza
-    log "✅ eza uninstalled"
-  else
-    log "ℹ️ eza not installed via Homebrew (or brew not available)"
   fi
 
-  log "✅ Clean complete"
+  log "Clean complete"
 }
 
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
 case "$ACTION" in
 deps) deps ;;
 install) install ;;
@@ -196,3 +142,4 @@ all)
   ;;
 esac
 
+exit 0
