@@ -121,6 +121,8 @@ RPM_PACKAGES=(
   fish
   wl-clipboard
   git-credential-libsecret
+  gnome-shell-extension-blur-my-shell
+  gnome-shell-extension-gsconnect
 
   # Build tools for Homebrew
   gcc
