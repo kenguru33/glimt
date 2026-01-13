@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Zsh env setup failed. Exiting." >&2' ERR
+trap 'echo "❌ Zsh env setup failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="zsh-env"
 ACTION="${1:-all}"
+
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 
@@ -12,8 +13,14 @@ CONFIG_DIR="$HOME_DIR/.zsh/config"
 ZSHRC_FILE="$HOME_DIR/.zshrc"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZSHRC_TEMPLATE="$SCRIPT_DIR/config/zshrc"
+# --------------------------------------------------
+# Resolve repo root (modules/ → repo/)
+# --------------------------------------------------
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+MODULES_DIR="$(dirname "$SCRIPT_PATH")"
+REPO_ROOT="$(dirname "$MODULES_DIR")"
+
+ZSHRC_TEMPLATE="$REPO_ROOT/config/zshrc"
 
 declare -A PLUGINS=(
   ["zsh-autosuggestions"]="https://github.com/zsh-users/zsh-autosuggestions.git"
@@ -31,7 +38,7 @@ write_zsh_config() {
   local file="$CONFIG_DIR/$name.zsh"
 
   mkdir -p "$CONFIG_DIR"
-  echo "$content" >"$file"
+  printf '%s\n' "$content" >"$file"
   chown "$REAL_USER:$REAL_USER" "$file"
   log "Wrote $file"
 }
@@ -56,7 +63,7 @@ deps() {
 # Step: install
 # --------------------------------------------------
 install() {
-  log "Installing / updating Zsh plugins..."
+  log "Installing / updating Zsh plugins"
   mkdir -p "$PLUGIN_DIR"
 
   for name in "${!PLUGINS[@]}"; do
@@ -64,10 +71,10 @@ install() {
     dir="$PLUGIN_DIR/$name"
 
     if [[ -d "$dir/.git" ]]; then
-      log "Updating $name..."
+      log "Updating $name"
       git -C "$dir" pull --quiet --rebase
     else
-      log "Installing $name..."
+      log "Installing $name"
       rm -rf "$dir"
       git clone --depth=1 "$repo" "$dir"
     fi
@@ -76,40 +83,36 @@ install() {
   done
 
   # --------------------------------------------------
-# Set Zsh as default shell (SAFE, NON-BLOCKING)
-# --------------------------------------------------
-zsh_path="$(command -v zsh 2>/dev/null || true)"
-[[ -z "$zsh_path" && -x /usr/bin/zsh ]] && zsh_path="/usr/bin/zsh"
+  # Set Zsh as default shell (best-effort, non-blocking)
+  # --------------------------------------------------
+  zsh_path="$(command -v zsh 2>/dev/null || true)"
+  [[ -z "$zsh_path" && -x /usr/bin/zsh ]] && zsh_path="/usr/bin/zsh"
 
-if [[ -n "$zsh_path" ]]; then
-  current_shell="$(getent passwd "$REAL_USER" | cut -d: -f7)"
+  if [[ -n "$zsh_path" ]]; then
+    current_shell="$(getent passwd "$REAL_USER" | cut -d: -f7)"
 
-  if [[ "$current_shell" == "$zsh_path" ]]; then
-    log "Zsh already default shell: $zsh_path"
-  else
-    log "Requesting default shell change to Zsh (non-blocking)..."
+    if [[ "$current_shell" == "$zsh_path" ]]; then
+      log "Zsh already default shell"
+    else
+      log "Requesting default shell change to Zsh (best effort)"
 
-    (
-      # Detach completely from TTY and stdin
-      exec </dev/null >/dev/null 2>&1
+      (
+        exec </dev/null >/dev/null 2>&1
+        timeout 5s sudo -n usermod -s "$zsh_path" "$REAL_USER"
+      ) &
 
-      # Hard timeout: if this hangs, it dies
-      timeout 5s sudo -n usermod -s "$zsh_path" "$REAL_USER"
-    ) &
-
-    log "ℹ️  Shell change requested in background"
-    log "👉 If it does not take effect, run manually:"
-    log "   sudo usermod -s $zsh_path $REAL_USER"
+      log "ℹ️  Shell change requested in background"
+      log "👉 If it does not take effect, run manually:"
+      log "   sudo usermod -s $zsh_path $REAL_USER"
+    fi
   fi
-fi
-
 }
 
 # --------------------------------------------------
 # Step: config
 # --------------------------------------------------
 config() {
-  log "Writing Zsh plugin configs..."
+  log "Writing Zsh plugin configs"
 
   write_zsh_config "autosuggestions" \
     '[[ -f ~/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source ~/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh'
@@ -117,7 +120,12 @@ config() {
   write_zsh_config "syntax-highlighting" \
     '[[ -f ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
 
-  log "Installing .zshrc template..."
+  log "Installing .zshrc template"
+
+  [[ -f "$ZSHRC_TEMPLATE" ]] || {
+    echo "❌ Missing template: $ZSHRC_TEMPLATE" >&2
+    exit 1
+  }
 
   if [[ -f "$ZSHRC_FILE" ]]; then
     backup="$ZSHRC_FILE.backup.$(date +%Y%m%d%H%M%S)"
@@ -134,7 +142,7 @@ config() {
 # Step: clean
 # --------------------------------------------------
 clean() {
-  log "Cleaning Zsh environment..."
+  log "Cleaning Zsh environment"
 
   rm -rf "$PLUGIN_DIR"
   rm -rf "$CONFIG_DIR"
@@ -147,17 +155,19 @@ clean() {
 # Entry point
 # --------------------------------------------------
 case "$ACTION" in
-  all)
-    deps
-    install
-    config
-    ;;
-  deps) deps ;;
-  install) install ;;
-  config) config ;;
-  clean) clean ;;
-  *)
-    echo "Usage: $0 {all|deps|install|config|clean}"
-    exit 1
-    ;;
+all)
+  deps
+  install
+  config
+  ;;
+deps) deps ;;
+install) install ;;
+config) config ;;
+clean) clean ;;
+*)
+  echo "Usage: $0 {all|deps|install|config|clean}"
+  exit 1
+  ;;
 esac
+
+exit 0
