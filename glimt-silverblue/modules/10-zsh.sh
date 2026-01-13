@@ -44,32 +44,17 @@ write_zsh_config() {
 }
 
 # --------------------------------------------------
-# Schedule shell change on first login AFTER zsh exists
+# Schedule SYSTEM one-shot to set shell after reboot
 # --------------------------------------------------
 schedule_zsh_shell_change() {
-  log "Scheduling default shell change to zsh on first login after reboot"
+  log "Scheduling system one-shot to set default shell to zsh after reboot"
 
-  mkdir -p "$HOME_DIR/.config/systemd/user"
-
-  cat >"$HOME_DIR/.config/systemd/user/set-default-shell-zsh.service" <<EOF
-[Unit]
-Description=Set default shell to zsh (one-time)
-ConditionPathExists=/usr/bin/zsh
-After=default.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/usermod -s /usr/bin/zsh $REAL_USER
-ExecStart=/usr/bin/systemctl --user disable set-default-shell-zsh.service
-
-[Install]
-WantedBy=default.target
-EOF
-
-  systemctl --user daemon-reload
-  systemctl --user enable set-default-shell-zsh.service
-
-  log "ℹ️  Default shell will be set on first login after zsh is available"
+  sudo systemd-run \
+    --unit=set-default-shell-zsh \
+    --description="Set default shell to zsh for $REAL_USER" \
+    --property=Type=oneshot \
+    --property=ConditionPathExists=/usr/bin/zsh \
+    /usr/sbin/usermod -s /usr/bin/zsh "$REAL_USER"
 }
 
 # --------------------------------------------------
@@ -154,8 +139,7 @@ clean() {
   rm -rf "$CONFIG_DIR"
   rm -f "$ZSHRC_FILE"
 
-  systemctl --user disable set-default-shell-zsh.service 2>/dev/null || true
-  rm -f "$HOME_DIR/.config/systemd/user/set-default-shell-zsh.service"
+  sudo systemctl disable set-default-shell-zsh 2>/dev/null || true
 
   log "Zsh cleanup complete"
 }
