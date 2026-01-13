@@ -6,10 +6,11 @@
 #   2 = controlled stop (needs interactive sudo or input)
 #   1 = real failure
 
+MODULE_NAME="set-user-avatar"
+
 set -Eeuo pipefail
 trap 'echo "❌ [$MODULE_NAME] failed at line $LINENO" >&2' ERR
 
-MODULE_NAME="set-user-avatar"
 ACTION="${1:-all}"
 SIZE="${2:-256}"
 
@@ -92,7 +93,7 @@ if [[ -z "$EMAIL" ]]; then
 fi
 
 # --------------------------------------------------
-# Download avatar (idempotent)
+# Download avatar
 # --------------------------------------------------
 HASH="$(printf '%s' "$EMAIL" | tr '[:upper:]' '[:lower:]' | md5sum | cut -d' ' -f1)"
 URL="https://www.gravatar.com/avatar/$HASH?s=$SIZE&d=identicon"
@@ -101,7 +102,7 @@ log "Downloading avatar"
 curl -fsSL "$URL" -o "$FACE_IMAGE"
 
 # --------------------------------------------------
-# GNOME session avatar (user space)
+# GNOME session avatar
 # --------------------------------------------------
 if command -v gsettings >/dev/null; then
   gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" || true
@@ -109,7 +110,7 @@ if command -v gsettings >/dev/null; then
 fi
 
 # --------------------------------------------------
-# GDM avatar (idempotent, sudo -n only)
+# GDM avatar (idempotent)
 # --------------------------------------------------
 if [[ -f "$USER_FILE" ]] && grep -q "^Icon=$ICON_DIR/$USER$" "$USER_FILE" 2>/dev/null; then
   log "GDM avatar already set"
