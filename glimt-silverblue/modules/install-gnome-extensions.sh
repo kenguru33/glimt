@@ -7,7 +7,6 @@ ACTION="${1:-all}"
 
 HOME_DIR="$HOME"
 EXT_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
-SCHEMA_DIR="$HOME_DIR/.local/share/glib-2.0/schemas"
 
 GNOME_VERSION="$(gnome-shell --version | awk '{print $3}')"
 TMP_ZIP="$(mktemp)"
@@ -22,12 +21,12 @@ EXTENSIONS=(
 # Guards
 # --------------------------------------------------
 command -v gnome-extensions >/dev/null || {
-  echo "❌ gnome-extensions not available (layer it via rpm-ostree)"
+  echo "❌ gnome-extensions not available (layer via rpm-ostree)"
   exit 1
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq not available (layer it via rpm-ostree)"
+  echo "❌ jq not available (layer via rpm-ostree)"
   exit 1
 }
 
@@ -36,7 +35,7 @@ command -v curl >/dev/null || {
   exit 1
 }
 
-mkdir -p "$EXT_DIR" "$SCHEMA_DIR"
+mkdir -p "$EXT_DIR"
 
 # --------------------------------------------------
 install_extensions() {
@@ -50,10 +49,10 @@ install_extensions() {
         jq -r --arg uuid "$EXT_ID" '.extensions[] | select(.uuid == $uuid)'
     )"
 
-    if [[ -z "$METADATA" ]]; then
+    [[ -z "$METADATA" ]] && {
       echo "❌ Extension not found: $EXT_ID"
       continue
-    fi
+    }
 
     PK_ID="$(jq -r '.pk' <<<"$METADATA")"
 
@@ -62,10 +61,10 @@ install_extensions() {
     )"
 
     DL_PATH="$(jq -r '.download_url' <<<"$VERSION_JSON")"
-    if [[ "$DL_PATH" == "null" ]]; then
+    [[ "$DL_PATH" == "null" ]] && {
       echo "⚠️ No compatible version for GNOME $GNOME_VERSION ($EXT_ID)"
       continue
-    fi
+    }
 
     curl -fsSL "https://extensions.gnome.org${DL_PATH}" -o "$TMP_ZIP"
 
@@ -73,6 +72,7 @@ install_extensions() {
     unzip -oq "$TMP_ZIP" -d "$TMP_UNPACK"
 
     META_FILE="$(find "$TMP_UNPACK" -name metadata.json | head -n1)"
+    EXT_ROOT="$(dirname "$META_FILE")"
     UUID="$(jq -r '.uuid' "$META_FILE")"
 
     DEST="$EXT_DIR/$UUID"
@@ -80,18 +80,10 @@ install_extensions() {
 
     rm -rf "$DEST"
     mkdir -p "$DEST"
-    cp -r "$(dirname "$META_FILE")"/* "$DEST"
 
-    if [[ -d "$DEST/schemas" ]]; then
-      echo "🔧 Installing schemas for $UUID"
-      cp "$DEST/schemas"/*.xml "$SCHEMA_DIR/" 2>/dev/null || true
-    fi
+    # ---- COPY ENTIRE EXTENSION TREE (CORRECT) ----
+    cp -r "$EXT_ROOT"/* "$DEST"
   done
-
-  if [[ -d "$SCHEMA_DIR" ]]; then
-    echo "🧠 Compiling user schemas"
-    glib-compile-schemas "$SCHEMA_DIR"
-  fi
 
   schedule_enable_extensions
 }
@@ -126,8 +118,6 @@ EOF
 config_extensions() {
   echo "⚙️ Configuring extensions…"
 
-  export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
-
   # ---- Blur My Shell ----
   if gsettings list-schemas | grep -q org.gnome.shell.extensions.blur-my-shell; then
     echo "🎨 Blur My Shell"
@@ -156,13 +146,9 @@ clean_extensions() {
   echo "🧼 Removing GNOME extensions…"
 
   for UUID in "${EXTENSIONS[@]}"; do
-    echo "❌ Removing $UUID"
     gnome-extensions disable "$UUID" 2>/dev/null || true
     rm -rf "$EXT_DIR/$UUID"
   done
-
-  echo "🧠 Rebuilding schema cache"
-  [[ -d "$SCHEMA_DIR" ]] && glib-compile-schemas "$SCHEMA_DIR" || true
 }
 
 # --------------------------------------------------
