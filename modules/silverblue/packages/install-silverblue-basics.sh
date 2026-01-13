@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE] Failed at line $LINENO" >&2' ERR
+trap 'echo "❌ silverblue-basics failed at line $LINENO" >&2' ERR
 
 MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
@@ -9,19 +9,20 @@ log() { echo "🔧 [$MODULE] $*"; }
 # Guards
 # ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
-  echo "❌ Not running on Fedora Silverblue"
+  echo "❌ This script is intended for Fedora Silverblue / Atomic"
   exit 1
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq is required"
+  echo "❌ jq is required (install once with rpm-ostree install jq)"
   exit 1
 }
 
-REAL_HOME="$(eval echo "~${SUDO_USER:-$USER}")"
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME="$(eval echo "~$REAL_USER")"
 
 # ------------------------------------------------------------
-# Wait for rpm-ostree (ONLY transaction matters)
+# Wait for rpm-ostree to be idle
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
   log "Waiting for rpm-ostree to be idle"
@@ -33,23 +34,7 @@ wait_for_rpm_ostree() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# 1Password repository
-# ------------------------------------------------------------
-if [[ ! -f /etc/yum.repos.d/1password.repo ]]; then
-  log "Adding 1Password repository"
-  sudo tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
-[1password]
-name=1Password Stable Channel
-baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://downloads.1password.com/linux/keys/1password.asc
-EOF
-fi
-
-# ------------------------------------------------------------
-# rpm-ostree packages
+# Base RPM packages (image-safe, idempotent)
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
@@ -57,90 +42,129 @@ RPM_PACKAGES=(
   zsh
   wl-clipboard
   git-credential-libsecret
-  1password
 )
 
-log "Ensuring rpm-ostree packages are requested"
+log "Ensuring base RPM packages are installed"
 wait_for_rpm_ostree
-sudo rpm-ostree install --idempotent --allow-inactive "${RPM_PACKAGES[@]}"
+sudo rpm-ostree install \
+  --idempotent \
+  --allow-inactive \
+  "${RPM_PACKAGES[@]}"
 
 # ------------------------------------------------------------
-# Homebrew (Linux-supported prefix, Silverblue real path)
+# Homebrew install (user-space)
 # ------------------------------------------------------------
-BREW_ROOT="/var/home/linuxbrew"
-BREW_PREFIX="$BREW_ROOT/.linuxbrew"
+BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
+BREW_BIN="$BREW_PREFIX/bin/brew"
 
-log "Preparing Homebrew prefix at $BREW_PREFIX"
-sudo mkdir -p "$BREW_PREFIX"
-sudo chown -R "$(stat -c '%U' "$REAL_HOME")":"$(stat -c '%G' "$REAL_HOME")" "$BREW_ROOT"
+if [[ ! -x "$BREW_BIN" ]]; then
+  log "Installing Homebrew for $REAL_USER"
 
-if ! sudo -u "$(stat -c '%U' "$REAL_HOME")" env HOME="$REAL_HOME" command -v brew >/dev/null; then
-  log "Installing Homebrew"
-  sudo -u "$(stat -c '%U' "$REAL_HOME")" env \
+  sudo mkdir -p "$BREW_PREFIX"
+  sudo chown -R "$REAL_USER:$REAL_USER" /var/home/linuxbrew
+
+  sudo -u "$REAL_USER" env \
     HOME="$REAL_HOME" \
+    USER="$REAL_USER" \
+    LOGNAME="$REAL_USER" \
     NONINTERACTIVE=1 \
     bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+else
+  log "Homebrew already installed"
 fi
 
 # ------------------------------------------------------------
-# Homebrew shellenv (.zshrc)
+# Helper: append block once
+# ------------------------------------------------------------
+add_if_missing() {
+  local file="$1"
+  local marker="$2"
+  local content="$3"
+
+  [[ -f "$file" ]] || touch "$file"
+  if ! grep -q "$marker" "$file"; then
+    log "Configuring $(basename "$file")"
+    printf "\n%s\n" "$content" >>"$file"
+  fi
+}
+
+# ------------------------------------------------------------
+# zsh (~/.zshrc)
 # ------------------------------------------------------------
 ZSHRC="$REAL_HOME/.zshrc"
-
-if ! grep -q 'brew shellenv' "$ZSHRC" 2>/dev/null; then
-  log "Configuring Homebrew in .zshrc"
-  cat >>"$ZSHRC" <<'EOF'
-
-# Homebrew (Silverblue)
+add_if_missing "$ZSHRC" "linuxbrew/.linuxbrew/bin/brew shellenv" '
+# Homebrew
 if [[ -x /var/home/linuxbrew/.linuxbrew/bin/brew ]]; then
   eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
-EOF
+
+# Homebrew zsh completions
+if [[ -d /var/home/linuxbrew/.linuxbrew/share/zsh/site-functions ]]; then
+  fpath+=(/var/home/linuxbrew/.linuxbrew/share/zsh/site-functions)
 fi
-
-# ------------------------------------------------------------
-# Phase 2: dynamic post-boot oneshot
-# ------------------------------------------------------------
-POSTBOOT_UNIT="/etc/systemd/system/silverblue-postboot.service"
-
-if [[ ! -f "$POSTBOOT_UNIT" ]]; then
-  log "Installing post-boot oneshot to set zsh shell (dynamic user)"
-
-  sudo tee "$POSTBOOT_UNIT" >/dev/null <<'EOF'
-[Unit]
-Description=Silverblue post-boot setup (set zsh shell)
-After=multi-user.target
-ConditionPathExists=/usr/bin/zsh
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/bash -c '
-USER="$(getent passwd | awk -F: '\''$3 >= 1000 { print $1; exit }'\'')"
-CURRENT="$(getent passwd "$USER" | cut -d: -f7)"
-
-if [[ "$CURRENT" != "/usr/bin/zsh" ]]; then
-  usermod --shell /usr/bin/zsh "$USER"
-fi
-
-systemctl disable silverblue-postboot.service
-rm -f /etc/systemd/system/silverblue-postboot.service
 '
 
-[Install]
-WantedBy=multi-user.target
-EOF
+# ------------------------------------------------------------
+# bash (~/.bashrc)
+# ------------------------------------------------------------
+BASHRC="$REAL_HOME/.bashrc"
+add_if_missing "$BASHRC" "linuxbrew/.linuxbrew/bin/brew shellenv" '
+# Homebrew
+if [ -x /var/home/linuxbrew/.linuxbrew/bin/brew ]; then
+  eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+'
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable silverblue-postboot.service
+# ------------------------------------------------------------
+# fish (~/.config/fish/config.fish)
+# ------------------------------------------------------------
+FISH_CONFIG="$REAL_HOME/.config/fish/config.fish"
+mkdir -p "$(dirname "$FISH_CONFIG")"
+
+if ! grep -q "linuxbrew/.linuxbrew/bin/brew shellenv" "$FISH_CONFIG" 2>/dev/null; then
+  log "Configuring fish Homebrew integration"
+  cat >>"$FISH_CONFIG" <<'EOF'
+
+# Homebrew
+if test -x /var/home/linuxbrew/.linuxbrew/bin/brew
+  eval (/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+end
+
+# Homebrew fish completions
+if test -d /var/home/linuxbrew/.linuxbrew/share/fish/vendor_completions.d
+  set -gx fish_complete_path \
+    /var/home/linuxbrew/.linuxbrew/share/fish/vendor_completions.d \
+    $fish_complete_path
+end
+EOF
+fi
+
+# ------------------------------------------------------------
+# brew doctor guard (non-fatal)
+# ------------------------------------------------------------
+if sudo -u "$REAL_USER" "$BREW_BIN" doctor >/dev/null 2>&1; then
+  log "brew doctor: OK"
+else
+  echo
+  echo "⚠️  brew doctor reported warnings."
+  echo "👉 Common on Silverblue, usually safe."
+  echo "👉 Inspect manually with:"
+  echo "   brew doctor"
 fi
 
 # ------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------
 echo
-echo "✅ Phase 1 complete"
-echo "👉 Reboot required"
-echo "👉 zsh will be set automatically for the primary user"
+echo "✅ Silverblue basics installed:"
+echo "   • Base RPM packages"
+echo "   • Homebrew"
+echo "   • Homebrew configured for zsh, bash, fish"
 echo
-echo "Run:"
-echo "  systemctl reboot"
+echo "ℹ️  Shell is NOT changed."
+echo "   Choose manually if desired:"
+echo "     chsh -s /usr/bin/zsh"
+echo "     chsh -s /usr/bin/fish"
+echo
+echo "⚠️  Reboot required to apply rpm-ostree changes."
+echo "👉 systemctl reboot"
