@@ -1,20 +1,31 @@
 #!/usr/bin/env bash
-# Glimt module: fzf (fuzzy finder)
+# Glimt module: fzf (fuzzy finder + fzf-tab)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ fzf module failed." >&2' ERR
+trap 'echo "❌ fzf module failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="fzf"
 ACTION="${1:-all}"
 
+# --------------------------------------------------
+# User context
+# --------------------------------------------------
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 BREW_PREFIX="$HOME_DIR/.linuxbrew"
 
+# --------------------------------------------------
+# Zsh paths
+# --------------------------------------------------
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 ZSH_FILE="$ZSH_CONFIG_DIR/fzf.zsh"
+ZSH_PLUGIN_DIR="$HOME_DIR/.zsh/plugins"
+FZF_TAB_DIR="$ZSH_PLUGIN_DIR/fzf-tab"
 
+# --------------------------------------------------
+# Logging helpers
+# --------------------------------------------------
 log() {
   printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2
 }
@@ -26,173 +37,147 @@ require_user() {
   fi
 }
 
+# --------------------------------------------------
+# Homebrew detection
+# --------------------------------------------------
 check_brew() {
-  # Check if brew command is available in PATH
-  if command -v brew &>/dev/null 2>&1; then
+  if command -v brew &>/dev/null; then
     return 0
   fi
-  
-  # Try multiple possible Homebrew locations
+
   local possible_paths=(
     "$BREW_PREFIX/bin/brew"
     "$HOME_DIR/.linuxbrew/bin/brew"
-    "$HOME/.linuxbrew/bin/brew"
     "/home/linuxbrew/.linuxbrew/bin/brew"
   )
-  
-  local brew_path=""
+
   for path in "${possible_paths[@]}"; do
     if [[ -x "$path" ]]; then
-      brew_path="$path"
       BREW_PREFIX="$(dirname "$(dirname "$path")")"
-      break
+      eval "$("$path" shellenv)" >/dev/null 2>&1 || true
+      export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
+      return 0
     fi
   done
-  
-  # Check if brew exists and is executable
-  if [[ -z "$brew_path" ]]; then
-    log "❌ brew not found in any standard location"
-    log "ℹ Checked paths:"
-    for path in "${possible_paths[@]}"; do
-      log "   - $path"
-    done
-    log "ℹ Please ensure Homebrew is installed via the prereq module first"
-    log "ℹ Run: modules/silverblue/packages/install-silverblue-prereq.sh install"
-    return 1
-  fi
-  
-  log "🔍 Found brew at: $brew_path"
-  
-  # Source homebrew shellenv
-  local shellenv_output
-  shellenv_output=$("$brew_path" shellenv 2>&1) || {
-    log "❌ Failed to get homebrew shellenv: $shellenv_output"
-    return 1
-  }
-  
-  # Evaluate the shellenv output
-  eval "$shellenv_output" 2>/dev/null || true
-  
-  # Explicitly export PATH and Homebrew variables to ensure they're available
-  export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/sbin:$PATH"
-  export HOMEBREW_PREFIX="$BREW_PREFIX"
-  export HOMEBREW_CELLAR="$BREW_PREFIX/Cellar"
-  export HOMEBREW_REPOSITORY="$BREW_PREFIX/Homebrew"
-  
-  # Verify brew is now available
-  if command -v brew &>/dev/null 2>&1; then
-    log "✅ brew is now available: $(command -v brew)"
-    return 0
-  fi
-  
-  log "❌ brew command still not found after sourcing shellenv"
-  log "ℹ Homebrew may be installed but not properly configured"
-  log "ℹ Try running: eval \"\$($brew_path shellenv)\""
+
+  log "❌ Homebrew not found"
   return 1
 }
 
+# --------------------------------------------------
+# Actions
+# --------------------------------------------------
 deps() {
-  log "📦 Checking for brew..."
-  if check_brew; then
-    log "✅ brew is available"
-  else
-    exit 1
-  fi
+  log "📦 Checking Homebrew..."
+  check_brew || exit 1
+  log "✅ Homebrew available"
 }
 
 install() {
   require_user
+  check_brew || exit 1
 
-  if ! check_brew; then
-    exit 1
-  fi
-
-  log "🔌 Installing fzf via Homebrew..."
-
+  log "⬇️  Installing fzf..."
   if brew list fzf &>/dev/null; then
-    log "🔄 fzf already installed, upgrading..."
     brew upgrade fzf
-    log "✅ fzf upgraded"
   else
-    log "⬇️  Installing fzf..."
     brew install fzf
-    log "✅ fzf installed"
   fi
 
-  if ! command -v fzf &>/dev/null 2>&1; then
-    log "❌ fzf command not found after installation"
+  command -v fzf &>/dev/null || {
+    log "❌ fzf binary not found after install"
     exit 1
-  fi
+  }
 
-  log "✅ fzf is ready: $(command -v fzf)"
+  log "🔌 Installing fzf-tab plugin..."
+  mkdir -p "$ZSH_PLUGIN_DIR"
+
+  if [[ ! -d "$FZF_TAB_DIR" ]]; then
+    git clone https://github.com/Aloxaf/fzf-tab "$FZF_TAB_DIR"
+    log "✅ fzf-tab installed"
+  else
+    log "🔄 fzf-tab already installed"
+  fi
 }
 
 config() {
   require_user
 
-  log "🔧 Configuring fzf (shell integration)..."
+  log "🔧 Configuring fzf + fzf-tab..."
+  mkdir -p "$ZSH_CONFIG_DIR"
 
-  if ! command -v fzf &>/dev/null 2>&1; then
-    log "❌ fzf command not found. Run 'install' first."
-    exit 1
-  fi
+  cat >"$ZSH_FILE" <<'EOF'
+# --------------------------------------------------
+# fzf + fzf-tab configuration (Glimt)
+# --------------------------------------------------
 
-  if [[ -d "$ZSH_CONFIG_DIR" ]]; then
-    mkdir -p "$ZSH_CONFIG_DIR"
-    cat >"$ZSH_FILE" <<'EOF'
-# fzf - fuzzy finder configuration and keybindings
-if command -v fzf &>/dev/null; then
-  # Use fd for file search if available
-  if command -v fd &>/dev/null; then
-    export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
-  else
-    export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/\.git/*"'
-  fi
+# Initialize completion FIRST
+autoload -Uz compinit
+compinit
 
-  export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
-  export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
+# --------------------------------------------------
+# fzf-tab (must load AFTER compinit)
+# --------------------------------------------------
+if [[ -f ~/.zsh/plugins/fzf-tab/fzf-tab.plugin.zsh ]]; then
+  source ~/.zsh/plugins/fzf-tab/fzf-tab.plugin.zsh
+fi
 
-  # Setup zsh key bindings if installed via Homebrew
-  if [[ -f "$(brew --prefix 2>/dev/null)/opt/fzf/shell/key-bindings.zsh" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh"
-  fi
+# --------------------------------------------------
+# fzf defaults
+# --------------------------------------------------
+if command -v fd &>/dev/null; then
+  export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+else
+  export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/\.git/*"'
+fi
 
-  if [[ -f "$(brew --prefix 2>/dev/null)/opt/fzf/shell/completion.zsh" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/completion.zsh"
-  fi
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
+
+# --------------------------------------------------
+# fzf keybindings ONLY (safe with fzf-tab)
+# --------------------------------------------------
+if command -v brew &>/dev/null; then
+  FZF_KEYS="$(brew --prefix)/opt/fzf/shell/key-bindings.zsh"
+  [[ -f "$FZF_KEYS" ]] && source "$FZF_KEYS"
+fi
+
+# --------------------------------------------------
+# fzf-tab behavior
+# --------------------------------------------------
+zstyle ':completion:*' menu no
+zstyle ':fzf-tab:*' switch-group ',' '.'
+zstyle ':fzf-tab:*' fzf-command fzf
+zstyle ':fzf-tab:*' accept-line enter
+
+# Preview files with bat if available
+if command -v bat &>/dev/null; then
+  zstyle ':fzf-tab:complete:*:*' fzf-preview \
+    '[[ -f $realpath ]] && bat --style=numbers --color=always $realpath || ls -la $realpath'
 fi
 EOF
-    log "✅ Zsh config installed at $ZSH_FILE"
-  else
-    log "ℹ️ Zsh config directory $ZSH_CONFIG_DIR does not exist; skipping shell config"
-  fi
 
-  log "✅ fzf configuration complete"
+  log "✅ Zsh config written: $ZSH_FILE"
 }
 
 clean() {
   require_user
 
-  log "🧹 Removing fzf config..."
+  log "🧹 Cleaning fzf setup..."
 
-  # Remove zsh config
-  if [[ -f "$ZSH_FILE" ]]; then
-    rm -f "$ZSH_FILE"
-    log "✅ Removed zsh config"
-  fi
+  [[ -f "$ZSH_FILE" ]] && rm -f "$ZSH_FILE"
+  [[ -d "$FZF_TAB_DIR" ]] && rm -rf "$FZF_TAB_DIR"
 
-  # Uninstall fzf via Homebrew if available
   if check_brew && brew list fzf &>/dev/null; then
-    log "🔄 Uninstalling fzf via Homebrew..."
     brew uninstall fzf
-    log "✅ fzf uninstalled"
-  else
-    log "ℹ️ fzf not installed via Homebrew (or brew not available)"
   fi
 
   log "✅ Clean complete"
 }
 
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
 case "$ACTION" in
 deps) deps ;;
 install) install ;;
@@ -208,4 +193,3 @@ all)
   exit 1
   ;;
 esac
-
