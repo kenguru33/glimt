@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Glimt module: jetbrains-toolbox
+# Glimt module: jetbrains-toolbox (Homebrew, Linux)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
@@ -44,10 +44,8 @@ check_brew() {
 # --------------------------------------------------
 deps() {
   require_user
-  log "📦 Checking dependencies..."
-
+  log "📦 Checking dependencies"
   check_brew
-
   log "✅ Homebrew available"
 }
 
@@ -56,24 +54,23 @@ install() {
   require_user
   check_brew
 
-  log "📦 Installing JetBrains Toolbox via Homebrew..."
+  log "📦 Installing JetBrains Toolbox via Homebrew (Linux formula)"
 
-  if brew list --cask jetbrains-toolbox >/dev/null 2>&1; then
+  if brew list jetbrains-toolbox >/dev/null 2>&1; then
     log "🔄 JetBrains Toolbox already installed – upgrading"
-    brew upgrade --cask jetbrains-toolbox || true
+    brew upgrade jetbrains-toolbox || true
   else
-    brew install --cask jetbrains-toolbox
+    brew install jetbrains-toolbox
   fi
 
   log "✅ JetBrains Toolbox installed"
+  log "👉 Start it once to let it create desktop integration"
 }
 
 # --------------------------------------------------
 config() {
   require_user
-
   log "ℹ️ No additional configuration required"
-  log "👉 Toolbox manages desktop files, icons, and updates itself"
 }
 
 # --------------------------------------------------
@@ -81,10 +78,10 @@ clean() {
   require_user
   check_brew || true
 
-  log "🧹 Removing JetBrains Toolbox..."
+  log "🧹 Removing JetBrains Toolbox"
 
-  if brew list --cask jetbrains-toolbox >/dev/null 2>&1; then
-    brew uninstall --cask jetbrains-toolbox
+  if brew list jetbrains-toolbox >/dev/null 2>&1; then
+    brew uninstall jetbrains-toolbox
     log "✅ JetBrains Toolbox removed"
   else
     log "ℹ️ JetBrains Toolbox not installed"
