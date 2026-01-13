@@ -44,15 +44,44 @@ write_zsh_config() {
 }
 
 # --------------------------------------------------
-# Step: deps
+# Schedule shell change on first login AFTER zsh exists
+# --------------------------------------------------
+schedule_zsh_shell_change() {
+  log "Scheduling default shell change to zsh on first login after reboot"
+
+  mkdir -p "$HOME_DIR/.config/systemd/user"
+
+  cat >"$HOME_DIR/.config/systemd/user/set-default-shell-zsh.service" <<EOF
+[Unit]
+Description=Set default shell to zsh (one-time)
+ConditionPathExists=/usr/bin/zsh
+After=default.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/usermod -s /usr/bin/zsh $REAL_USER
+ExecStart=/usr/bin/systemctl --user disable set-default-shell-zsh.service
+
+[Install]
+WantedBy=default.target
+EOF
+
+  systemctl --user daemon-reload
+  systemctl --user enable set-default-shell-zsh.service
+
+  log "ℹ️  Default shell will be set on first login after zsh is available"
+}
+
+# --------------------------------------------------
+# deps
 # --------------------------------------------------
 deps() {
   if command -v zsh &>/dev/null; then
-    log "zsh available: $(command -v zsh)"
+    log "zsh already available: $(command -v zsh)"
   elif rpm -q zsh &>/dev/null; then
     log "⚠️  zsh installed but pending (reboot required)"
   else
-    log "⚠️  zsh not installed (handled by prereq module)"
+    log "⚠️  zsh not installed (handled by base install)"
   fi
 
   mkdir -p "$LOCAL_BIN"
@@ -60,7 +89,7 @@ deps() {
 }
 
 # --------------------------------------------------
-# Step: install
+# install
 # --------------------------------------------------
 install() {
   log "Installing / updating Zsh plugins"
@@ -82,24 +111,11 @@ install() {
     chown -R "$REAL_USER:$REAL_USER" "$dir"
   done
 
-  # --------------------------------------------------
-  # Schedule shell change when Fedora zsh becomes available
-  # (rpm-ostree pending → after reboot)
-  # --------------------------------------------------
-  log "Scheduling one-shot default shell change to /usr/bin/zsh"
-
-  sudo systemd-run \
-    --unit=set-default-shell-zsh \
-    --description="Set default shell to zsh for $REAL_USER" \
-    --property=Type=oneshot \
-    --property=ConditionPathExists=/usr/bin/zsh \
-    /usr/sbin/usermod -s /usr/bin/zsh "$REAL_USER"
-
-  log "ℹ️  Default shell will be set automatically after zsh is available"
+  schedule_zsh_shell_change
 }
 
 # --------------------------------------------------
-# Step: config
+# config
 # --------------------------------------------------
 config() {
   log "Writing Zsh plugin configs"
@@ -129,7 +145,7 @@ config() {
 }
 
 # --------------------------------------------------
-# Step: clean
+# clean
 # --------------------------------------------------
 clean() {
   log "Cleaning Zsh environment"
@@ -137,6 +153,9 @@ clean() {
   rm -rf "$PLUGIN_DIR"
   rm -rf "$CONFIG_DIR"
   rm -f "$ZSHRC_FILE"
+
+  systemctl --user disable set-default-shell-zsh.service 2>/dev/null || true
+  rm -f "$HOME_DIR/.config/systemd/user/set-default-shell-zsh.service"
 
   log "Zsh cleanup complete"
 }
