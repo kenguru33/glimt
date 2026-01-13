@@ -10,6 +10,7 @@ log() { echo "🔧 [$MODULE] $*"; }
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(dirname "$SCRIPT_PATH")"
+MODULES_DIR="$REPO_ROOT/modules"
 
 # ------------------------------------------------------------
 # Paths / state
@@ -68,21 +69,7 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# STEP 0b — Apply git config (modules/)
-# ------------------------------------------------------------
-GIT_CONFIG_SCRIPT="$REPO_ROOT/modules/install-git-config.sh"
-
-if [[ ! -x "$GIT_CONFIG_SCRIPT" ]]; then
-  log "❌ Git config script not found:"
-  log "   $GIT_CONFIG_SCRIPT"
-  exit 1
-fi
-
-log "🔧 Applying Git configuration"
-bash "$GIT_CONFIG_SCRIPT" all
-
-# ------------------------------------------------------------
-# Wait for rpm-ostree to be idle
+# Helpers
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
   log "Waiting for rpm-ostree to be idle"
@@ -91,18 +78,10 @@ wait_for_rpm_ostree() {
   done
 }
 
-# ------------------------------------------------------------
-# Reboot detection (atomic)
-# ------------------------------------------------------------
 reboot_required() {
   rpm-ostree status --json | jq -e '.deployments | length > 1' >/dev/null
 }
 
-wait_for_rpm_ostree
-
-# ------------------------------------------------------------
-# rpm-ostree package idempotency helper
-# ------------------------------------------------------------
 have_all_rpms() {
   local wanted=("$@")
   local installed
@@ -114,23 +93,24 @@ have_all_rpms() {
   return 0
 }
 
+wait_for_rpm_ostree
+
 # ------------------------------------------------------------
-# Base RPM packages (image-safe)
+# Base RPM packages
 # ------------------------------------------------------------
 RPM_PACKAGES=(
   curl
   jq
   zsh
+  fish
   wl-clipboard
   git-credential-libsecret
-  fish
 )
 
 if have_all_rpms "${RPM_PACKAGES[@]}"; then
   log "Base RPM packages already installed"
 else
   log "Installing base RPM packages"
-  wait_for_rpm_ostree
   sudo rpm-ostree install --idempotent --allow-inactive "${RPM_PACKAGES[@]}"
 fi
 
@@ -161,9 +141,7 @@ if [[ ! -x "$BREW_BIN" ]]; then
   log "Installing Homebrew for $REAL_USER"
 
   sudo mkdir -p "$BREW_PREFIX"
-  if [[ -d /var/home/linuxbrew ]]; then
-    sudo chown -R "$REAL_USER:$REAL_USER" /var/home/linuxbrew
-  fi
+  sudo chown -R "$REAL_USER:$REAL_USER" /var/home/linuxbrew
 
   sudo -u "$REAL_USER" env \
     HOME="$REAL_HOME" \
@@ -176,82 +154,18 @@ else
 fi
 
 # ------------------------------------------------------------
-# Helper: append block once
+# STEP — Run ALL modules (AFTER prerequisites)
 # ------------------------------------------------------------
-add_if_missing() {
-  local file="$1"
-  local marker="$2"
-  local content="$3"
+if [[ -d "$MODULES_DIR" ]]; then
+  log "🔁 Running modules in $MODULES_DIR"
 
-  [[ -f "$file" ]] || touch "$file"
-  if ! grep -q "$marker" "$file"; then
-    log "Configuring $(basename "$file")"
-    printf "\n%s\n" "$content" >>"$file"
-  fi
-}
-
-# ------------------------------------------------------------
-# zsh (~/.zshrc)
-# ------------------------------------------------------------
-ZSHRC="$REAL_HOME/.zshrc"
-add_if_missing "$ZSHRC" "linuxbrew/.linuxbrew/bin/brew shellenv" '
-# Homebrew
-if [[ -x /var/home/linuxbrew/.linuxbrew/bin/brew ]]; then
-  eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
-
-# Homebrew zsh completions
-if [[ -d /var/home/linuxbrew/.linuxbrew/share/zsh/site-functions ]]; then
-  fpath+=(/var/home/linuxbrew/.linuxbrew/share/zsh/site-functions)
-fi
-'
-
-# ------------------------------------------------------------
-# bash (~/.bashrc)
-# ------------------------------------------------------------
-BASHRC="$REAL_HOME/.bashrc"
-add_if_missing "$BASHRC" "linuxbrew/.linuxbrew/bin/brew shellenv" '
-# Homebrew
-if [ -x /var/home/linuxbrew/.linuxbrew/bin/brew ]; then
-  eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
-'
-
-# ------------------------------------------------------------
-# fish (~/.config/fish/config.fish)
-# ------------------------------------------------------------
-FISH_CONFIG="$REAL_HOME/.config/fish/config.fish"
-mkdir -p "$(dirname "$FISH_CONFIG")"
-
-if ! grep -q "linuxbrew/.linuxbrew/bin/brew shellenv" "$FISH_CONFIG" 2>/dev/null; then
-  log "Configuring fish Homebrew integration"
-  cat >>"$FISH_CONFIG" <<'EOF'
-
-# Homebrew
-if test -x /var/home/linuxbrew/.linuxbrew/bin/brew
-  eval (/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)
-end
-
-# Homebrew fish completions
-if test -d /var/home/linuxbrew/.linuxbrew/share/fish/vendor_completions.d
-  set -gx fish_complete_path \
-    /var/home/linuxbrew/.linuxbrew/share/fish/vendor_completions.d \
-    $fish_complete_path
-end
-EOF
-fi
-
-# ------------------------------------------------------------
-# brew doctor guard (non-fatal)
-# ------------------------------------------------------------
-if sudo -u "$REAL_USER" "$BREW_BIN" doctor >/dev/null 2>&1; then
-  log "brew doctor: OK"
+  while IFS= read -r module; do
+    [[ -x "$module" ]] || continue
+    log "▶️  Running module: $(basename "$module")"
+    bash "$module" all
+  done < <(find "$MODULES_DIR" -maxdepth 1 -type f -name '*.sh' | sort)
 else
-  echo
-  echo "⚠️  brew doctor reported warnings."
-  echo "👉 Common on Silverblue, usually safe."
-  echo "👉 Inspect manually with:"
-  echo "   brew doctor"
+  log "ℹ️  No modules directory found, skipping"
 fi
 
 # ------------------------------------------------------------
@@ -260,9 +174,8 @@ fi
 echo
 echo "✅ Silverblue basics installed:"
 echo "   • Base RPM packages"
-echo "   • Git configured"
 echo "   • Homebrew"
-echo "   • Homebrew configured for zsh, bash, fish"
+echo "   • All modules executed"
 echo "   • rpm-ostree automatic updates: $(
   systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1 && echo enabled || echo disabled
 )"
