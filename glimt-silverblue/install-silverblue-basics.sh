@@ -6,12 +6,13 @@ MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
-# Resolve module root (RELATIVE, NEVER hardcoded)
+# Resolve repo root (RELATIVE, NEVER hardcoded)
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-SILVERBLUE_DIR="$(dirname "$SCRIPT_DIR")"
-# ~/.glimt/modules/silverblue
+# SCRIPT_DIR now points to repo root
+
+REPO_ROOT="$SCRIPT_DIR"
 
 # ------------------------------------------------------------
 # Paths / state
@@ -70,9 +71,9 @@ EOF
 fi
 
 # ------------------------------------------------------------
-# STEP 0b — Apply git config (RELATIVE PATH)
+# STEP 0b — Apply git config (modules/)
 # ------------------------------------------------------------
-GIT_CONFIG_SCRIPT="$SILVERBLUE_DIR/install-git-config.sh"
+GIT_CONFIG_SCRIPT="$REPO_ROOT/modules/install-git-config.sh"
 
 if [[ ! -x "$GIT_CONFIG_SCRIPT" ]]; then
   log "❌ Git config script not found:"
