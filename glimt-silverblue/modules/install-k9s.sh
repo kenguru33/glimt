@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ An error occurred in K9s installer. Exiting." >&2' ERR
+trap 'echo "❌ [k9s] installer failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="k9s"
 ACTION="${1:-all}"
@@ -22,34 +22,40 @@ die() {
 
 require_user() {
   if [[ "$EUID" -eq 0 && -z "${SUDO_USER:-}" ]]; then
-    die "Do not run this module as root directly."
+    die "Do not run this module as root directly"
   fi
 }
 
 # --------------------------------------------------
-# Resolve repo root (config/ sits next to modules/)
+# Repo layout
+#
+# repo-root/
+# ├── config/k9s.zsh
+# └── modules/install-k9s.sh   ← this script
 # --------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CONFIG_TEMPLATE_DIR="$REPO_ROOT/config"
 TARGET_CONFIG_DIR="$HOME_DIR/.zsh/config"
 TARGET_CONFIG_FILE="$TARGET_CONFIG_DIR/k9s.zsh"
 
 # --------------------------------------------------
-# Homebrew detection (Linuxbrew)
+# Homebrew (Linuxbrew) detection
 # --------------------------------------------------
 check_brew() {
-  command -v brew >/dev/null 2>&1 && return 0
+  if command -v brew >/dev/null 2>&1; then
+    return 0
+  fi
 
-  local paths=(
+  local candidates=(
     "$HOME_DIR/.linuxbrew/bin/brew"
     "/home/linuxbrew/.linuxbrew/bin/brew"
   )
 
-  for p in "${paths[@]}"; do
-    if [[ -x "$p" ]]; then
-      eval "$("$p" shellenv)"
+  for brew_bin in "${candidates[@]}"; do
+    if [[ -x "$brew_bin" ]]; then
+      eval "$("$brew_bin" shellenv)"
       command -v brew >/dev/null 2>&1 && return 0
     fi
   done
@@ -62,12 +68,9 @@ check_brew() {
 # --------------------------------------------------
 install_dependencies() {
   require_user
-  log "📦 Checking Homebrew (Linuxbrew)..."
+  log "📦 Checking Homebrew…"
 
-  if ! check_brew; then
-    die "Homebrew not found. Install prereqs first."
-  fi
-
+  check_brew || die "Homebrew not found. Run prereq module first."
   log "✅ Homebrew available"
 }
 
@@ -75,7 +78,7 @@ install_k9s() {
   require_user
   check_brew || die "Homebrew not available"
 
-  log "🔧 Installing k9s via Homebrew..."
+  log "🔧 Installing k9s…"
 
   if brew list k9s >/dev/null 2>&1; then
     brew upgrade k9s
@@ -90,24 +93,27 @@ config_k9s() {
   require_user
   check_brew || die "Homebrew not available"
 
-  command -v k9s >/dev/null 2>&1 || die "k9s not found in PATH"
+  command -v k9s >/dev/null 2>&1 || die "k9s not in PATH (run install first)"
 
-  log "🧠 Installing shell config and theme..."
+  log "🧠 Installing k9s shell config…"
 
-  # ---- Zsh config ----
+  # ---- Zsh config (THIS was missing before) ----
   [[ -f "$CONFIG_TEMPLATE_DIR/k9s.zsh" ]] ||
     die "Missing config template: $CONFIG_TEMPLATE_DIR/k9s.zsh"
 
   mkdir -p "$TARGET_CONFIG_DIR"
   cp "$CONFIG_TEMPLATE_DIR/k9s.zsh" "$TARGET_CONFIG_FILE"
-  log "✅ Installed Zsh config: $TARGET_CONFIG_FILE"
+
+  log "✅ Installed: $TARGET_CONFIG_FILE"
 
   # ---- Completions ----
   mkdir -p "$HOME_DIR/.local/share/bash-completion/completions"
-  k9s completion bash >"$HOME_DIR/.local/share/bash-completion/completions/k9s" || true
+  k9s completion bash \
+    >"$HOME_DIR/.local/share/bash-completion/completions/k9s" || true
 
   mkdir -p "$HOME_DIR/.config/fish/completions"
-  k9s completion fish >"$HOME_DIR/.config/fish/completions/k9s.fish" || true
+  k9s completion fish \
+    >"$HOME_DIR/.config/fish/completions/k9s.fish" || true
 
   # ---- Catppuccin theme ----
   local SKIN_DIR="$HOME_DIR/.config/k9s/skins"
@@ -117,8 +123,6 @@ config_k9s() {
     https://raw.githubusercontent.com/catppuccin/k9s/main/dist/catppuccin-mocha.yaml \
     -o "$SKIN_DIR/catppuccin-mocha.yaml"
 
-  log "🎨 Catppuccin Mocha installed"
-
   # ---- config.yaml ----
   mkdir -p "$HOME_DIR/.config/k9s"
   cat >"$HOME_DIR/.config/k9s/config.yaml" <<EOF
@@ -127,13 +131,12 @@ k9s:
     skin: catppuccin-mocha
 EOF
 
-  log "✅ K9s configured"
+  log "🎨 Catppuccin Mocha configured"
 }
 
 clean_k9s() {
   require_user
-
-  log "🧹 Cleaning K9s..."
+  log "🧹 Removing k9s…"
 
   rm -f "$TARGET_CONFIG_FILE"
   rm -rf "$HOME_DIR/.config/k9s"
