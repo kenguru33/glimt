@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Glimt module: vscode (Flatpak)
+# Glimt module: vscode (Flatpak, user)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
@@ -32,9 +32,11 @@ deps() {
     exit 1
   }
 
-  if ! flatpak remotes | awk '{print $1}' | grep -qx flathub; then
-    log "➕ Adding Flathub remote"
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  # Ensure Flathub exists (USER scope)
+  if ! flatpak --user remotes | awk '{print $1}' | grep -qx flathub; then
+    log "➕ Adding Flathub remote (user)"
+    flatpak --user remote-add --if-not-exists \
+      flathub https://flathub.org/repo/flathub.flatpakrepo
   fi
 
   mkdir -p "$LOCAL_BIN"
@@ -44,12 +46,12 @@ deps() {
 install() {
   require_user
 
-  log "📦 Installing VS Code (Flatpak)"
+  log "📦 Installing VS Code (Flatpak, user)"
 
-  if flatpak list | grep -q com.visualstudio.code; then
-    log "✅ VS Code already installed"
+  if flatpak --user list | awk '{print $1}' | grep -qx com.visualstudio.code; then
+    log "✅ VS Code already installed (user)"
   else
-    flatpak install -y flathub com.visualstudio.code
+    flatpak install --user -y flathub com.visualstudio.code
   fi
 }
 
@@ -65,9 +67,7 @@ exec flatpak run com.visualstudio.code "$@"
 EOF
 
   chmod +x "$LOCAL_BIN/code"
-
-  # Refresh command cache for current shell if possible
-  command -v hash >/dev/null && hash -r || true
+  hash -r 2>/dev/null || true
 
   log "✅ 'code' command installed"
 }
@@ -76,9 +76,9 @@ EOF
 clean() {
   require_user
 
-  log "🧹 Removing VS Code"
+  log "🧹 Removing VS Code (user)"
 
-  flatpak uninstall -y com.visualstudio.code || true
+  flatpak uninstall --user -y com.visualstudio.code || true
   rm -f "$LOCAL_BIN/code"
 
   log "✅ VS Code removed"
