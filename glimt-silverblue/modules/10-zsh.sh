@@ -50,7 +50,7 @@ deps() {
   if command -v zsh &>/dev/null; then
     log "zsh available: $(command -v zsh)"
   elif rpm -q zsh &>/dev/null; then
-    log "⚠️  zsh installed but not yet active (reboot may be required)"
+    log "⚠️  zsh installed but pending (reboot required)"
   else
     log "⚠️  zsh not installed (handled by prereq module)"
   fi
@@ -83,29 +83,19 @@ install() {
   done
 
   # --------------------------------------------------
-  # Set Zsh as default shell (best-effort, non-blocking)
+  # Schedule shell change when Fedora zsh becomes available
+  # (rpm-ostree pending → after reboot)
   # --------------------------------------------------
-  zsh_path="$(command -v zsh 2>/dev/null || true)"
-  [[ -z "$zsh_path" && -x /usr/bin/zsh ]] && zsh_path="/usr/bin/zsh"
+  log "Scheduling one-shot default shell change to /usr/bin/zsh"
 
-  if [[ -n "$zsh_path" ]]; then
-    current_shell="$(getent passwd "$REAL_USER" | cut -d: -f7)"
+  sudo systemd-run \
+    --unit=set-default-shell-zsh \
+    --description="Set default shell to zsh for $REAL_USER" \
+    --property=Type=oneshot \
+    --property=ConditionPathExists=/usr/bin/zsh \
+    /usr/sbin/usermod -s /usr/bin/zsh "$REAL_USER"
 
-    if [[ "$current_shell" == "$zsh_path" ]]; then
-      log "Zsh already default shell"
-    else
-      log "Requesting default shell change to Zsh (best effort)"
-
-      (
-        exec </dev/null >/dev/null 2>&1
-        timeout 5s sudo -n usermod -s "$zsh_path" "$REAL_USER"
-      ) &
-
-      log "ℹ️  Shell change requested in background"
-      log "👉 If it does not take effect, run manually:"
-      log "   sudo usermod -s $zsh_path $REAL_USER"
-    fi
-  fi
+  log "ℹ️  Default shell will be set automatically after zsh is available"
 }
 
 # --------------------------------------------------
