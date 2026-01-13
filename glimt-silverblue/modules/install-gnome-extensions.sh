@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ gnome-extensions module failed." >&2' ERR
+trap 'echo "❌ gnome-extensions module failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="gnome-extensions"
 ACTION="${1:-all}"
@@ -47,7 +47,7 @@ install_extensions() {
 
     METADATA="$(
       curl -fsSL "https://extensions.gnome.org/extension-query/?search=${EXT_ID}" |
-      jq -r --arg uuid "$EXT_ID" '.extensions[] | select(.uuid == $uuid)'
+        jq -r --arg uuid "$EXT_ID" '.extensions[] | select(.uuid == $uuid)'
     )"
 
     if [[ -z "$METADATA" ]]; then
@@ -86,9 +86,6 @@ install_extensions() {
       echo "🔧 Installing schemas for $UUID"
       cp "$DEST/schemas"/*.xml "$SCHEMA_DIR/" 2>/dev/null || true
     fi
-
-    echo "🟢 Enabling $UUID"
-    gnome-extensions enable "$UUID" || true
   done
 
   if [[ -d "$SCHEMA_DIR" ]]; then
@@ -96,8 +93,33 @@ install_extensions() {
     glib-compile-schemas "$SCHEMA_DIR"
   fi
 
-  echo
-  echo "🚨 Logout and log back in to fully activate extensions"
+  schedule_enable_extensions
+}
+
+# --------------------------------------------------
+schedule_enable_extensions() {
+  echo "🕒 Scheduling extension enablement on next login"
+
+  mkdir -p "$HOME_DIR/.config/systemd/user"
+
+  cat >"$HOME_DIR/.config/systemd/user/enable-gnome-extensions.service" <<EOF
+[Unit]
+Description=Enable GNOME Shell extensions after login
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/gnome-extensions enable blur-my-shell@aunetx
+ExecStart=/usr/bin/gnome-extensions enable rounded-window-corners@fxgn
+ExecStart=/usr/bin/gnome-extensions enable tilingshell@ferrarodomenico.com
+ExecStart=/usr/bin/systemctl --user disable enable-gnome-extensions.service
+
+[Install]
+WantedBy=default.target
+EOF
+
+  systemctl --user daemon-reload
+  systemctl --user enable enable-gnome-extensions.service
 }
 
 # --------------------------------------------------
@@ -114,7 +136,7 @@ config_extensions() {
     gsettings set org.gnome.shell.extensions.blur-my-shell color-and-noise true
     gsettings set org.gnome.shell.extensions.blur-my-shell hacks-level 1
 
-    command -v dconf >/dev/null && \
+    command -v dconf >/dev/null &&
       dconf write /org/gnome/shell/extensions/blur-my-shell/panel/override-background-dynamically false || true
   else
     echo "⏳ Blur My Shell schema not available yet (login required)"
