@@ -1,73 +1,106 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ Starship install failed. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ Starship install failed at line $LINENO" >&2' ERR
 
 MODULE_NAME="starship"
 ACTION="${1:-all}"
+
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
+
 LOCAL_BIN="$HOME_DIR/.local/bin"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE_FILE="$SCRIPT_DIR/config/starship.zsh"
+
+# --------------------------------------------------
+# Resolve repo root (modules/ -> repo/)
+# --------------------------------------------------
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+MODULES_DIR="$(dirname "$SCRIPT_PATH")"
+REPO_ROOT="$(dirname "$MODULES_DIR")"
+
+TEMPLATE_FILE="$REPO_ROOT/config/starship.zsh"
 TARGET_FILE="$CONFIG_DIR/starship.zsh"
 
-# === Step: deps ===
+log() { echo "[$MODULE_NAME] $*"; }
+
+# --------------------------------------------------
+# Step: deps
+# --------------------------------------------------
 deps() {
-  echo "📦 Checking dependencies for Starship..."
-  if ! command -v curl >/dev/null; then
-    echo "📦 Installing curl..."
+  log "Checking dependencies for Starship"
+  command -v curl >/dev/null || {
+    log "curl missing – installing"
     sudo dnf install -y curl
-  fi
+  }
 }
 
-# === Step: install ===
+# --------------------------------------------------
+# Step: install
+# --------------------------------------------------
 install() {
-  echo "🚀 Installing Starship..."
+  log "Installing Starship"
+
   mkdir -p "$LOCAL_BIN"
+
   if [[ ! -x "$LOCAL_BIN/starship" ]]; then
-    curl -fsSL https://starship.rs/install.sh | sh -s -- -y --bin-dir "$LOCAL_BIN"
-    echo "✅ Starship installed to $LOCAL_BIN"
+    curl -fsSL https://starship.rs/install.sh |
+      sh -s -- -y --bin-dir "$LOCAL_BIN"
+
+    chown "$REAL_USER:$REAL_USER" "$LOCAL_BIN/starship"
+    log "Starship installed to $LOCAL_BIN"
   else
-    echo "⏭️  Starship already installed"
+    log "Starship already installed"
   fi
-  chown "$REAL_USER:$REAL_USER" "$LOCAL_BIN/starship"
 }
 
-# === Step: config ===
+# --------------------------------------------------
+# Step: config
+# --------------------------------------------------
 config() {
-  echo "📝 Installing starship.zsh config from template..."
+  log "Installing starship.zsh config"
+
+  [[ -f "$TEMPLATE_FILE" ]] || {
+    echo "❌ Missing template: $TEMPLATE_FILE" >&2
+    exit 1
+  }
 
   mkdir -p "$CONFIG_DIR"
   cp "$TEMPLATE_FILE" "$TARGET_FILE"
   chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
-  echo "✅ Installed $TARGET_FILE"
+
+  log "Installed $TARGET_FILE"
 }
 
-# === Step: clean ===
+# --------------------------------------------------
+# Step: clean
+# --------------------------------------------------
 clean() {
-  echo "🧹 Cleaning Starship setup..."
+  log "Cleaning Starship setup"
 
-  echo "❌ Removing starship binary"
   rm -f "$LOCAL_BIN/starship"
-
-  echo "❌ Removing starship.zsh config"
   rm -f "$TARGET_FILE"
 
-  echo "✅ Clean complete."
+  log "Clean complete"
 }
 
-# === Entry Point ===
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
 case "$ACTION" in
-  all)    deps; install; config ;;
-  deps)   deps ;;
-  install) install ;;
-  config) config ;;
-  clean)  clean ;;
-  *)
-    echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|install|config|clean]"
-    exit 1
-    ;;
+all)
+  deps
+  install
+  config
+  ;;
+deps) deps ;;
+install) install ;;
+config) config ;;
+clean) clean ;;
+*)
+  echo "❌ Unknown action: $ACTION"
+  echo "Usage: $0 [all|deps|install|config|clean]"
+  exit 1
+  ;;
 esac
 
+exit 0
