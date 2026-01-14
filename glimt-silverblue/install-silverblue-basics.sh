@@ -115,14 +115,12 @@ wait_for_rpm_ostree
 # Base RPM packages
 # ------------------------------------------------------------
 RPM_PACKAGES=(
-  curl
-  jq
   zsh
   fish
-  wl-clipboard
   git-credential-libsecret
   gnome-shell-extension-blur-my-shell
   gnome-shell-extension-gsconnect
+  gnome-shell-extension-appindicator
 
   # Build tools for Homebrew
   gcc
