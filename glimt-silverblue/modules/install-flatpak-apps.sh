@@ -25,6 +25,10 @@ require_user() {
 FLATPAK_APPS=(
   "com.spotify.Client"
   "com.discordapp.Discord"
+  "com.axosoft.GitKraken"
+  "dev.k8slens.OpenLens"
+  "com.github.tchx84.Flatseal"
+  "org.gnome.World.PikaBackup"
 )
 
 # --------------------------------------------------
