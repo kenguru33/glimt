@@ -6,38 +6,37 @@ MODULE="silverblue-basics"
 log() { echo "🔧 [$MODULE] $*"; }
 
 # ------------------------------------------------------------
-# Resolve script + modules directory
+# Paths
 # ------------------------------------------------------------
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/modules"
 
 # ------------------------------------------------------------
-# Paths / state
+# User / state
 # ------------------------------------------------------------
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(eval echo "~$REAL_USER")"
 
 STATE_DIR="$REAL_HOME/.config/glimt"
 mkdir -p "$STATE_DIR"
-
 GIT_STATE_FILE="$STATE_DIR/git.state"
 
 # ------------------------------------------------------------
 # Guards
 # ------------------------------------------------------------
 command -v rpm-ostree >/dev/null || {
-  echo "❌ This script is intended for Fedora Silverblue / Atomic"
+  echo "❌ Fedora Silverblue / Atomic only"
   exit 1
 }
 
 command -v jq >/dev/null || {
-  echo "❌ jq is required (install once with rpm-ostree install jq)"
+  echo "❌ jq is required (rpm-ostree install jq)"
   exit 1
 }
 
 # ------------------------------------------------------------
-# Sudo warm-up + keepalive (ONE TIME)
+# Sudo keepalive (ONE TIME)
 # ------------------------------------------------------------
 log "Requesting administrator access (one-time)"
 sudo -v
@@ -49,27 +48,16 @@ sudo -v
   done
 ) &
 SUDO_KEEPALIVE_PID=$!
-
 trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
 
 # ------------------------------------------------------------
-# STEP 0 — Git identity (ONCE)
+# Git identity (ONCE)
 # ------------------------------------------------------------
 if [[ ! -f "$GIT_STATE_FILE" ]]; then
   [[ -t 0 ]] || exit 2
 
-  while true; do
-    read -rp "👉 Git full name: " GIT_NAME
-    [[ -n "$GIT_NAME" ]] && break
-    echo "❌ Name cannot be empty"
-  done
-
-  while true; do
-    read -rp "👉 Git email: " GIT_EMAIL
-    [[ "$GIT_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
-    echo "❌ Invalid email"
-  done
-
+  read -rp "👉 Git full name: " GIT_NAME
+  read -rp "👉 Git email: " GIT_EMAIL
   read -rp "👉 Git editor [nvim]: " GIT_EDITOR
   GIT_EDITOR="${GIT_EDITOR:-nvim}"
 
@@ -80,15 +68,12 @@ GIT_EDITOR="$GIT_EDITOR"
 GIT_BRANCH="main"
 GIT_REBASE="true"
 EOF
-
-  log "💾 Git identity saved"
 fi
 
 # ------------------------------------------------------------
-# Helpers
+# Helpers (ROBUST)
 # ------------------------------------------------------------
 wait_for_rpm_ostree() {
-  log "Waiting for rpm-ostree to be idle"
   while rpm-ostree status --json | jq -e '.transaction != null' >/dev/null; do
     sleep 2
   done
@@ -98,154 +83,129 @@ reboot_required() {
   rpm-ostree status --json | jq -e '.deployments | length > 1' >/dev/null
 }
 
-have_all_rpms() {
-  local wanted=("$@")
-  local installed
-  installed="$(rpm-ostree status --json | jq -r '.deployments[0].packages[]')"
+pkg_present() {
+  rpm-ostree status --json |
+    jq -e --arg pkg "$1" '.. | strings | select(. == $pkg)' >/dev/null
+}
 
-  for pkg in "${wanted[@]}"; do
-    grep -qx "$pkg" <<<"$installed" || return 1
-  done
-  return 0
+have_rpmfusion() {
+  rpm-ostree status --json |
+    jq -e '.. | strings | select(test("rpmfusion-(free|nonfree)-release"))' >/dev/null
 }
 
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
-# Base RPM packages
+# RPM Fusion
 # ------------------------------------------------------------
-RPM_PACKAGES=(
-  zsh
-  fish
-  git-credential-libsecret
-  gnome-shell-extension-blur-my-shell
-  gnome-shell-extension-gsconnect
-  gnome-shell-extension-appindicator
-
-  # Build tools for Homebrew
-  gcc
-  gcc-c++
-  make
-  pkg-config
-  glibc-devel
-
-  # Common build deps
-  openssl-devel
-  libffi-devel
-  zlib-devel
-)
-
-if have_all_rpms "${RPM_PACKAGES[@]}"; then
-  log "Base RPM packages already installed"
+if have_rpmfusion; then
+  log "RPM Fusion already present (active or pending)"
 else
-  log "Installing base RPM packages"
-  sudo rpm-ostree install --idempotent --allow-inactive "${RPM_PACKAGES[@]}"
+  log "Installing RPM Fusion repositories"
+  sudo rpm-ostree install \
+    https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+    https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
 fi
 
 # ------------------------------------------------------------
-# rpm-ostree automatic updates
+# 1Password
 # ------------------------------------------------------------
-ENABLE_AUTO_UPDATES="${ENABLE_AUTO_UPDATES:-1}"
+if pkg_present 1password; then
+  log "1Password already present"
+else
+  log "Installing 1Password"
+  sudo tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
+[1password]
+name=1Password Stable Channel
+baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://downloads.1password.com/linux/keys/1password.asc
+EOF
+  sudo rpm-ostree install 1password 1password-cli
+fi
 
-if [[ "$ENABLE_AUTO_UPDATES" == "1" ]]; then
-  if ! systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1; then
-    log "Enabling rpm-ostree automatic updates"
-    wait_for_rpm_ostree
-    sudo systemctl enable --now rpm-ostreed-automatic.timer
+# ------------------------------------------------------------
+# Media codecs (FILTERED, SAFE)
+# ------------------------------------------------------------
+if have_rpmfusion; then
+  log "Installing media codecs (RPM Fusion)"
+
+  CODECS=(
+    gstreamer1-plugin-libav
+    gstreamer1-plugins-bad-free-extras
+    gstreamer1-plugins-bad-freeworld
+    gstreamer1-plugins-ugly
+    gstreamer1-vaapi
+  )
+
+  TO_INSTALL=()
+  for pkg in "${CODECS[@]}"; do
+    if ! pkg_present "$pkg"; then
+      TO_INSTALL+=("$pkg")
+    fi
+  done
+
+  if ((${#TO_INSTALL[@]})); then
+    sudo rpm-ostree install --allow-inactive "${TO_INSTALL[@]}"
   else
-    log "rpm-ostree automatic updates already enabled"
+    log "All media codecs already requested"
+  fi
+
+  if pkg_present ffmpeg-free; then
+    log "Replacing ffmpeg-free with full ffmpeg"
+    sudo rpm-ostree override remove \
+      ffmpeg-free \
+      libavcodec-free \
+      libavdevice-free \
+      libavfilter-free \
+      libavformat-free \
+      libavutil-free \
+      libpostproc-free \
+      libswresample-free \
+      libswscale-free \
+      fdk-aac-free \
+      --install ffmpeg
+  else
+    log "Full ffmpeg already present"
   fi
 fi
 
 # ------------------------------------------------------------
-# Homebrew install (USER ONLY)
+# Homebrew
 # ------------------------------------------------------------
 BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
-BREW_BIN="$BREW_PREFIX/bin/brew"
-
-if [[ ! -x "$BREW_BIN" ]]; then
-  log "Installing Homebrew for $REAL_USER"
-
+if [[ ! -x "$BREW_PREFIX/bin/brew" ]]; then
+  log "Installing Homebrew"
   sudo mkdir -p "$BREW_PREFIX"
   sudo chown -R "$REAL_USER:$REAL_USER" /var/home/linuxbrew
-
-  sudo -u "$REAL_USER" env \
-    HOME="$REAL_HOME" \
-    USER="$REAL_USER" \
-    LOGNAME="$REAL_USER" \
-    NONINTERACTIVE=1 \
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  sudo -u "$REAL_USER" NONINTERACTIVE=1 bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
   log "Homebrew already installed"
 fi
 
 # ------------------------------------------------------------
-# STEP — Run ALL modules (NO sudo here)
+# Modules
 # ------------------------------------------------------------
-MANUAL_ACTIONS=0
-
 if [[ -d "$MODULES_DIR" ]]; then
-  log "🔁 Running modules in $MODULES_DIR"
-
-  for module in "$MODULES_DIR"/*.sh; do
-    [[ -f "$module" ]] || continue
-    name="$(basename "$module")"
-
-    log "▶️  Running module: $name"
-
-    set +e
-    bash "$module" all
-    rc=$?
-    set -e
-
-    case "$rc" in
-    0)
-      log "✔ Module $name completed"
-      ;;
-    2)
-      log "⏸️  Module $name requires manual action"
-      MANUAL_ACTIONS=1
-      ;;
-    *)
-      echo "❌ Module $name failed with exit code $rc" >&2
-      exit 1
-      ;;
-    esac
+  log "Running modules"
+  for m in "$MODULES_DIR"/*.sh; do
+    [[ -f "$m" ]] || continue
+    bash "$m" all || true
   done
-else
-  log "ℹ️  No modules directory found at $MODULES_DIR"
 fi
 
 # ------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------
 echo
-echo "✅ Silverblue basics installed:"
-echo "   • Base RPM packages"
-echo "   • Homebrew"
-echo "   • Modules executed"
-
-if ((MANUAL_ACTIONS)); then
-  echo "   • ⚠️  Some modules required manual input"
-fi
-
-echo "   • rpm-ostree automatic updates: $(
-  systemctl is-enabled rpm-ostreed-automatic.timer >/dev/null 2>&1 && echo enabled || echo disabled
-)"
-
+echo "✅ Silverblue system prepared"
 if reboot_required; then
-  echo
-  echo "⚠️  A reboot is required to apply system changes."
-  echo "👉 systemctl reboot"
+  echo "⚠️  Reboot required → systemctl reboot"
 else
-  echo
-  echo "✅ No reboot required."
+  echo "✅ No reboot required"
 fi
-
-echo
-echo "ℹ️  Shell is NOT changed."
-echo "   Choose manually if desired:"
-echo "     chsh -s /usr/bin/zsh"
-echo "     chsh -s /usr/bin/fish"
 
 exit 0
