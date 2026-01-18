@@ -20,7 +20,7 @@ require_user() {
 }
 
 # --------------------------------------------------
-# Flatpak apps to install (USER scope)
+# Flatpak apps to install
 # --------------------------------------------------
 FLATPAK_APPS=(
   "com.spotify.Client"
@@ -40,13 +40,13 @@ deps() {
     exit 1
   }
 
-  # Ensure Flathub exists (USER scope)
-  if ! flatpak --user remotes | awk '{print $1}' | grep -qx flathub; then
-    log "➕ Adding Flathub remote (user)"
-    flatpak --user remote-add --if-not-exists \
+  # Ensure Flathub exists
+  if ! flatpak --system remotes | awk '{print $1}' | grep -qx flathub; then
+    log "➕ Adding Flathub remote"
+    flatpak --system remote-add --if-not-exists \
       flathub https://flathub.org/repo/flathub.flatpakrepo
   else
-    log "✅ Flathub already configured (user)"
+    log "✅ Flathub already configured"
   fi
 }
 
@@ -54,14 +54,14 @@ deps() {
 install() {
   require_user
 
-  log "📦 Installing Flatpak applications (user scope)"
+  log "📦 Installing Flatpak applications"
 
   for app in "${FLATPAK_APPS[@]}"; do
-    if flatpak --user list | awk '{print $1}' | grep -qx "$app"; then
+    if flatpak --system list | awk '{print $1}' | grep -qx "$app"; then
       log "✅ $app already installed"
     else
       log "⬇️  Installing $app"
-      flatpak install --user -y flathub "$app"
+      flatpak install --system -y flathub "$app"
     fi
   done
 }
@@ -76,11 +76,11 @@ config() {
 clean() {
   require_user
 
-  log "🧹 Removing Flatpak applications (user scope)"
+  log "🧹 Removing Flatpak applications"
 
   for app in "${FLATPAK_APPS[@]}"; do
-    if flatpak --user list | awk '{print $1}' | grep -qx "$app"; then
-      flatpak uninstall --user -y "$app"
+    if flatpak --system list | awk '{print $1}' | grep -qx "$app"; then
+      flatpak uninstall --system -y "$app"
       log "❌ Removed $app"
     else
       log "ℹ️  $app not installed"

@@ -141,8 +141,6 @@ ask_add_1password_repo() {
   wait_for_rpm_ostree
 
   log "Adding 1Password rpm-ostree repo"
-  sudo rpm-ostree install --idempotent \
-    https://downloads.1password.com/linux/rpm/stable/x86_64/1password.repo
 }
 
 ask_add_1password_repo
