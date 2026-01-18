@@ -1,0 +1,2 @@
+# === Neovim ===
+export EDITOR="nvim"
