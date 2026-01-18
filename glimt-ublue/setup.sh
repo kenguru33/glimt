@@ -112,6 +112,28 @@ have_all_rpms() {
 wait_for_rpm_ostree
 
 # ------------------------------------------------------------
+# 1Password repo (repo only, no package install)
+# ------------------------------------------------------------
+add_1password_repo() {
+  log "🔐 Ensuring 1Password repo is present"
+
+  if rpm-ostree status --json | jq -e \
+    '.deployments[0].packages[] | select(endswith("1password.repo"))' >/dev/null; then
+    log "1Password repo already present"
+    return 0
+  fi
+
+  wait_for_rpm_ostree
+
+  log "Adding 1Password rpm-ostree repo"
+  sudo rpm-ostree install --idempotent \
+    https://downloads.1password.com/linux/rpm/stable/x86_64/1password.repo
+}
+
+add_1password_repo
+
+
+# ------------------------------------------------------------
 # Base RPM packages
 # ------------------------------------------------------------
 RPM_PACKAGES=()
