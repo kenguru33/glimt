@@ -24,6 +24,27 @@ WALLPAPER_DEST="$HOME_DIR/Pictures/background.jpg"
 log() { echo "[$MODULE_NAME] $*"; }
 
 # --------------------------------------------------
+# GNOME guard
+# --------------------------------------------------
+is_gnome() {
+  [[ "${XDG_CURRENT_DESKTOP:-}" == "GNOME" ]] \
+    || [[ "${DESKTOP_SESSION:-}" == "gnome" ]] \
+    || command -v gnome-shell >/dev/null 2>&1
+}
+
+if ! is_gnome; then
+  log "Not running GNOME desktop – exiting early"
+  exit 0
+fi
+
+# Must be run inside a GNOME session
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+  log "No GNOME session bus detected – exiting early"
+  exit 0
+fi
+
+
+# --------------------------------------------------
 # Wallpaper installer
 # --------------------------------------------------
 install_config() {

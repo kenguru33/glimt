@@ -114,26 +114,7 @@ wait_for_rpm_ostree
 # ------------------------------------------------------------
 # Base RPM packages
 # ------------------------------------------------------------
-RPM_PACKAGES=(
-  zsh
-  fish
-  git-credential-libsecret
-  gnome-shell-extension-blur-my-shell
-  gnome-shell-extension-gsconnect
-  gnome-shell-extension-appindicator
-
-  # Build tools for Homebrew
-  gcc
-  gcc-c++
-  make
-  pkg-config
-  glibc-devel
-
-  # Common build deps
-  openssl-devel
-  libffi-devel
-  zlib-devel
-)
+RPM_PACKAGES=()
 
 if have_all_rpms "${RPM_PACKAGES[@]}"; then
   log "Base RPM packages already installed"
@@ -155,28 +136,6 @@ if [[ "$ENABLE_AUTO_UPDATES" == "1" ]]; then
   else
     log "rpm-ostree automatic updates already enabled"
   fi
-fi
-
-# ------------------------------------------------------------
-# Homebrew install (USER ONLY)
-# ------------------------------------------------------------
-BREW_PREFIX="/var/home/linuxbrew/.linuxbrew"
-BREW_BIN="$BREW_PREFIX/bin/brew"
-
-if [[ ! -x "$BREW_BIN" ]]; then
-  log "Installing Homebrew for $REAL_USER"
-
-  sudo mkdir -p "$BREW_PREFIX"
-  sudo chown -R "$REAL_USER:$REAL_USER" /var/home/linuxbrew
-
-  sudo -u "$REAL_USER" env \
-    HOME="$REAL_HOME" \
-    USER="$REAL_USER" \
-    LOGNAME="$REAL_USER" \
-    NONINTERACTIVE=1 \
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-else
-  log "Homebrew already installed"
 fi
 
 # ------------------------------------------------------------
@@ -220,10 +179,7 @@ fi
 # Summary
 # ------------------------------------------------------------
 echo
-echo "✅ Silverblue basics installed:"
-echo "   • Base RPM packages"
-echo "   • Homebrew"
-echo "   • Modules executed"
+echo "✅ Packages installed:"
 
 if ((MANUAL_ACTIONS)); then
   echo "   • ⚠️  Some modules required manual input"
