@@ -135,6 +135,17 @@ Optional modules are selected through an interactive picker during setup. Add or
 
 </details>
 
+<details>
+<summary>🖥️ <strong>Hardware</strong></summary>
+
+Only shown when the relevant hardware is detected.
+
+| Module | Installs | Shown when |
+|---|---|---|
+| `nvidia` | NVIDIA proprietary driver + Wayland kernel parameters | NVIDIA GPU detected via `lspci` |
+
+</details>
+
 ---
 
 ## 🖥️ Glimt CLI
