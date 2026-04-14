@@ -12,6 +12,12 @@ To install Glimt, simply run the following command in your terminal:
  bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
 ```
 
+To run the development branch:
+
+```bash
+ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh) branch=dev
+```
+
 ### ❗ Important
 
 - Do **not** run this script as the `root` user
