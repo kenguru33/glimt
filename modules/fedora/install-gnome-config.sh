@@ -12,7 +12,7 @@ MODULE_NAME="gnome-config"
 REAL_USER="${SUDO_USER:-$USER}"
 HOME_DIR="$(eval echo "~$REAL_USER")"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WALLPAPER_SOURCE="$REPO_DIR/../debian/wallpapers/background.jpg"
+WALLPAPER_SOURCE="$REPO_DIR/wallpapers/background.jpg"
 WALLPAPER_DEST="$HOME_DIR/Pictures/background.jpg"
 ACTION="${1:-all}"
 
