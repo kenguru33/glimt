@@ -1,10 +1,10 @@
 <div align="center">
 
-# ✨ Glimt
+# ✨ Glimt — Fedora Post-Install Automation
 
-**One command. Fully configured Fedora.**
+**One command. Fully configured Fedora developer workstation.**
 
-Fresh install to dev-ready workstation — shell, desktop, Kubernetes, apps — without lifting a finger.
+Automate your Fedora Workstation setup after a fresh install — shell, GNOME desktop, Kubernetes tools, and developer apps configured and ready in minutes.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Fedora](https://img.shields.io/badge/platform-Fedora-294172)
@@ -18,15 +18,23 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 <br>
 
-<img src="./screenshot.png" alt="Glimt screenshot" width="720">
+<img src="./screenshot.png" alt="Glimt running on Fedora Workstation — post-install automation" width="720">
 
 </div>
 
 ---
 
+## What is Glimt?
+
+Glimt is a **Fedora post-install script** that automates setting up a developer workstation after a fresh Fedora installation. Instead of spending hours reinstalling packages, reconfiguring GNOME, and hunting down binaries every time you reinstall, a single command restores your entire environment.
+
+It covers everything: ZSH with Starship prompt, GNOME desktop configuration, Kubernetes CLI tools, Neovim with LazyVim, Node.js version management, Btrfs snapshots, and optional extras like VS Code, Docker, JetBrains, and 1Password — all installed and configured automatically.
+
+---
+
 ## 🤔 Why Glimt?
 
-Setting up a new Fedora install means hours of repetitive work — installing packages, tweaking GNOME, downloading binaries, wiring up dotfiles. Glimt does all of it in one run and gives you a CLI to manage it afterwards.
+Reinstalling Fedora Workstation means hours of repetitive work — installing packages with `dnf`, tweaking GNOME settings, downloading binaries, wiring up dotfiles. Glimt automates the entire Fedora post-installation process in one run and gives you a CLI to manage it afterwards.
 
 - 🔁 **Idempotent** — run it again any time, it picks up where it left off
 - 🧩 **Modular** — every tool is its own script; install or clean individually
@@ -168,3 +176,11 @@ glimt update                # 🔄 pull latest and re-run
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
 ```
+
+---
+
+## About
+
+Glimt is a Fedora Workstation post-install automation tool written in Bash. It is designed for developers who reinstall Fedora regularly and want a reproducible, automated setup without Ansible or other heavy orchestration tools.
+
+**Keywords:** Fedora post-install script, Fedora workstation setup, automate Fedora, Fedora developer environment, Fedora dotfiles, Fedora fresh install, GNOME setup script, Fedora bash script, Fedora workstation automation
