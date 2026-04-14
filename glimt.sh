@@ -10,26 +10,7 @@ SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
 VALID_ACTIONS=("update" "module-selection" "install" "clean")
 
-# === OS Detection ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  OS_ID="$ID"
-  OS_ID_LIKE="${ID_LIKE:-}"
-else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
-  exit 1
-fi
-
-# Determine modules directory based on OS
-if [[ "$OS_ID" == "fedora" || "$OS_ID_LIKE" == *"fedora"* || "$OS_ID" == "rhel" ]]; then
-  MODULES_DIR="$REPO_DIR/modules/fedora"
-elif [[ "$OS_ID" == "debian" || "$OS_ID_LIKE" == *"debian"* || "$OS_ID" == "ubuntu" ]]; then
-  MODULES_DIR="$REPO_DIR/modules/debian"
-else
-  echo "❌ Unsupported OS: $OS_ID"
-  echo "   Supported: Debian, Ubuntu, Fedora, RHEL"
-  exit 1
-fi
+MODULES_DIR="$REPO_DIR/modules/fedora"
 
 # === Helpers ===
 print_usage() {
@@ -37,9 +18,9 @@ print_usage() {
 Usage: $SCRIPT_NAME <action> [args...]
 
 Actions:
-  update [module]     → git pull and run installers in modules/<os> with 'all', or only <module> if provided
-  install <module>    → run modules/<os>/**/install-<module>.sh with 'all'
-  clean <module>      → run modules/<os>/**/install-<module>.sh with 'clean'
+  update [module]     → git pull and run installers in modules/fedora with 'all', or only <module> if provided
+  install <module>    → run modules/fedora/**/install-<module>.sh with 'all'
+  clean <module>      → run modules/fedora/**/install-<module>.sh with 'clean'
   module-selection    → run setup-extras.sh (optional modules UI)
 
 Note: <module> is the installer basename without "install-" and ".sh".
