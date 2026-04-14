@@ -59,8 +59,8 @@ install() {
   echo "🌐 Fetching latest Zellij release..."
   URL=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest \
     | grep "browser_download_url" \
-    | grep "linux-${ARCH}.tar.gz" \
-    | cut -d '"' -f 4)
+    | grep "${ARCH}-unknown-linux-musl\.tar\.gz" \
+    | cut -d '"' -f 4 || true)
 
   if [[ -z "$URL" ]]; then
     echo "⚠️ GitHub API failed. Falling back to v0.39.2..."
