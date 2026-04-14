@@ -1,103 +1,109 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-
-# === GNOME session check ===
-if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
-  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
-  echo "   Skipping GNOME configuration."
-  exit 0
-fi
-
-MODULE_NAME="gnome-terminal-theme"
 trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+
+MODULE_NAME="ptyxis-theme"
 ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-# === OS Detection ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-else
-  echo "❌ Cannot detect OS."
-  exit 1
+# === GNOME session check ===
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
+  echo "⏭️  GNOME not detected (XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-unset})"
+  echo "   Skipping Ptyxis configuration."
+  exit 0
 fi
 
-if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* ]]; then
-  echo "❌ This script supports Fedora only."
-  exit 1
-fi
-
-# === Dependencies ===
+# === deps ===
 deps() {
-  echo "📦 Checking dependencies..."
+  log "Checking dependencies..."
   if ! command -v gsettings >/dev/null 2>&1; then
-    echo "⚠️  gsettings not available. GNOME may not be installed."
-    return 0
+    warn "gsettings not available. GNOME may not be installed."
   fi
-  echo "✅ Dependencies satisfied."
+  if ! command -v ptyxis >/dev/null 2>&1; then
+    warn "ptyxis not found in PATH — theme will still be applied via gsettings."
+  fi
 }
 
-# === Install theme ===
+# === install ===
 install() {
-  echo "🎨 Configuring GNOME Terminal theme..."
+  log "Applying Catppuccin Mocha theme to Ptyxis..."
 
   if ! command -v gsettings >/dev/null 2>&1; then
-    echo "⚠️  gsettings not available. Skipping terminal theme."
+    warn "gsettings not available. Skipping."
     return 0
   fi
 
-  # Set Catppuccin Mocha theme (dark theme)
-  PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
+  local uuids_raw
+  uuids_raw="$(run_as_user gsettings get org.gnome.Ptyxis profile-uuids 2>/dev/null || true)"
 
-  # Background color (Catppuccin Mocha base)
-  gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" background-color '#1e1e2e' || true
-  gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" foreground-color '#cdd6f4' || true
+  if [[ -z "$uuids_raw" || "$uuids_raw" == "@as []" ]]; then
+    warn "No Ptyxis profiles found. Is Ptyxis installed?"
+    return 0
+  fi
 
-  # Use custom colors
-  gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" use-theme-colors false || true
+  # Parse ['uuid1', 'uuid2'] → one UUID per line
+  local uuid
+  while IFS= read -r uuid; do
+    [[ -z "$uuid" ]] && continue
+    run_as_user gsettings set \
+      "org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/${uuid}/" \
+      palette 'Catppuccin Mocha'
+    log "Set palette for profile ${uuid}"
+  done < <(echo "$uuids_raw" | tr -d "[]' " | tr ',' '\n')
 
-  # Font
-  gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" font 'JetBrains Mono Nerd Font 12' || true
+  run_as_user gsettings set org.gnome.Ptyxis interface-style 'dark'
 
-  echo "✅ GNOME Terminal theme configured."
+  log "✅ Catppuccin Mocha applied to all Ptyxis profiles"
 }
 
-# === Config ===
+# === config ===
 config() {
-  echo "✅ Theme configuration complete."
+  log "No config files to deploy for Ptyxis theme."
 }
 
-# === Clean ===
+# === clean ===
 clean() {
-  echo "🧹 Resetting GNOME Terminal theme..."
+  log "Resetting Ptyxis profiles to default palette..."
 
   if ! command -v gsettings >/dev/null 2>&1; then
-    echo "⚠️  gsettings not available."
+    warn "gsettings not available."
     return 0
   fi
 
-  PROFILE=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")
-  gsettings set "org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROFILE}/" use-theme-colors true || true
+  local uuids_raw
+  uuids_raw="$(run_as_user gsettings get org.gnome.Ptyxis profile-uuids 2>/dev/null || true)"
 
-  echo "✅ Terminal theme reset."
+  if [[ -z "$uuids_raw" || "$uuids_raw" == "@as []" ]]; then
+    return 0
+  fi
+
+  local uuid
+  while IFS= read -r uuid; do
+    [[ -z "$uuid" ]] && continue
+    run_as_user gsettings reset \
+      "org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/${uuid}/" \
+      palette
+    log "Reset palette for profile ${uuid}"
+  done < <(echo "$uuids_raw" | tr -d "[]' " | tr ',' '\n')
+
+  run_as_user gsettings reset org.gnome.Ptyxis interface-style
+
+  log "✅ Ptyxis profiles reset"
 }
 
 # === Entry Point ===
 case "$ACTION" in
-all)
-  deps
-  install
-  config
-  ;;
-deps) deps ;;
-install) install ;;
-config) config ;;
-clean) clean ;;
-*)
-  echo "❌ Unknown action: $ACTION"
-  echo "Usage: $0 [all|deps|install|config|clean]"
-  exit 1
-  ;;
+  all)     deps; install; config ;;
+  deps)    deps ;;
+  install) install ;;
+  config)  config ;;
+  clean)   clean ;;
+  *)
+    echo "❌ Unknown action: $ACTION"
+    echo "Usage: $0 [all|deps|install|config|clean]"
+    exit 1
+    ;;
 esac
