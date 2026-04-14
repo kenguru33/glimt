@@ -91,7 +91,7 @@ Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as y
 Optional modules are selected through an interactive picker during setup. Add or remove them any time with `glimt module-selection`.
 
 <details>
-<summary>📱 <strong>Applications</strong></summary>
+<summary>🚀 <strong>Applications</strong></summary>
 
 | Module | Installs |
 |---|---|
