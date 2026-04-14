@@ -1,133 +1,159 @@
+<div align="center">
+
 # Glimt
 
-> Opinionated post-installation automation for Fedora — from a fresh install to a fully configured development environment in a single command.
+**One command. Fully configured Fedora.**
+
+Fresh install to dev-ready workstation — shell, desktop, Kubernetes, apps — without lifting a finger.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Fedora](https://img.shields.io/badge/platform-Fedora-294172)
 ![Shell: Bash](https://img.shields.io/badge/shell-bash-89e051)
 
-<img src="./screenshot.png" alt="Glimt screenshot" width="720">
-
----
-
-## Quick start
+<br>
 
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
 ```
 
-> **Requirements:** Do not run as `root`. Your user must have `sudo` privileges.
+<br>
 
-To run the development branch:
+<img src="./screenshot.png" alt="Glimt screenshot" width="720">
 
-```bash
-bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh) branch=dev
-```
+</div>
 
 ---
 
-## What gets installed
+## Why Glimt?
+
+Setting up a new Fedora install means hours of repetitive work — installing packages, tweaking GNOME, downloading binaries, wiring up dotfiles. Glimt does all of it in one run and gives you a CLI to manage it afterwards.
+
+- **Idempotent** — run it again any time, it picks up where it left off
+- **Modular** — every tool is its own script; install or clean individually
+- **Pick what you want** — core modules run automatically, extras are opt-in via an interactive picker
+- **No root required** — run as your normal user, glimt uses sudo only when needed
+
+---
+
+## What you get
 
 ### Shell & terminal
 
-| Module | Description |
-|---|---|
-| `zsh-env` | ZSH with config scaffolding (`~/.zsh/config/*.zsh`) |
-| `starship` | Starship prompt |
-| `fzf` | Fuzzy finder |
-| `bat` | `cat` with syntax highlighting |
-| `eza` | Modern `ls` replacement |
-| `btop` | Resource monitor |
-| `wl-copy` | Wayland clipboard helpers (`pbcopy` / `pbpaste`) |
-| `zellij` | Terminal multiplexer *(extras)* |
-| `kitty` | Kitty terminal *(extras)* |
-| `blackbox-terminal` | BlackBox terminal *(extras)* |
+A modern ZSH setup with Starship prompt, Catppuccin Mocha colors, Nerd Fonts, and all the CLI essentials.
+
+| Module | | Module | |
+|---|---|---|---|
+| `zsh-env` | ZSH + config scaffolding | `bat` | `cat` with syntax highlighting |
+| `starship` | Starship prompt | `eza` | Modern `ls` replacement |
+| `fzf` | Fuzzy finder | `btop` | Resource monitor |
+| `wl-copy` | Wayland `pbcopy`/`pbpaste` | | |
 
 ### Development tools
 
-| Module | Description |
-|---|---|
-| `git-config` | Git with GNOME Keyring credential store |
-| `nvim` | Neovim |
-| `lazyvim` | LazyVim config for Neovim |
-| `volta` | Node.js version manager |
-| `dotnet-userspace` | .NET SDK 8 and 10 — userspace install, no sudo *(extras)* |
-| `vscode` | Visual Studio Code *(extras)* |
-| `jetbrains-toolbox` | JetBrains Toolbox *(extras)* |
+Git with GNOME Keyring, Neovim + LazyVim, and Node.js version management out of the box.
+
+| Module | | Module | |
+|---|---|---|---|
+| `git-config` | Git + Keyring credentials | `lazyvim` | LazyVim config |
+| `nvim` | Neovim | `volta` | Node.js version manager |
 
 ### Kubernetes & cloud
 
-| Module | Description |
-|---|---|
-| `kubectl` | kubectl |
-| `kubectx` | `kubens` / `kubectx` |
-| `k9s` | k9s TUI |
-| `helm` | Helm |
-| `azure-cli` | Azure CLI |
-| `lens` | Lens Kubernetes desktop *(extras)* |
-| `lazydocker` | LazyDocker TUI *(extras)* |
-| `docker-rootless` | Docker rootless mode *(extras)* |
+Everything you need to work with clusters from day one.
+
+| Module | | Module | |
+|---|---|---|---|
+| `kubectl` | kubectl | `helm` | Helm |
+| `kubectx` | kubens / kubectx | `k9s` | k9s TUI |
+| `azure-cli` | Azure CLI | | |
 
 ### GNOME desktop
 
-| Module | Description |
-|---|---|
-| `gnome-config` | Wallpaper, UI preferences, keybindings |
-| `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator |
-| `ptyxis-theme` | Catppuccin Mocha palette applied to all Ptyxis profiles |
-| `nerdfonts` | Nerd Fonts |
-| `papirus-icon-theme` | Papirus icon theme |
-| `set-user-avatar` | Gravatar-based GNOME user avatar |
+Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as your user avatar.
+
+| Module | | Module | |
+|---|---|---|---|
+| `gnome-config` | Wallpaper, UI, keybindings | `nerdfonts` | Nerd Fonts |
+| `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator | `papirus-icon-theme` | Papirus icons |
+| `ptyxis-theme` | Catppuccin Mocha for Ptyxis | `set-user-avatar` | Gravatar user avatar |
 
 ### System
 
-| Module | Description |
-|---|---|
-| `flatpak` | Flatpak + Flathub |
-| `chrome` | Google Chrome |
-| `norwegian-mac-keyboard` | Norwegian Mac keyboard layout |
-| `snapper` | Snapper snapshots on Btrfs root (auto-detected), dnf pre/post hooks, COW disabled for VM images |
+| Module | | Module | |
+|---|---|---|---|
+| `flatpak` | Flatpak + Flathub | `snapper` | Btrfs snapshots + dnf hooks |
+| `chrome` | Google Chrome | `norwegian-mac-keyboard` | Norwegian Mac layout |
 
-### Applications *(extras, opt-in)*
+---
+
+## Extras — pick what you need
+
+Optional modules are selected through an interactive picker during setup. Add or remove them any time with `glimt module-selection`.
+
+<details>
+<summary><strong>Applications</strong></summary>
 
 | Module | Installs |
 |---|---|
-| `1password` | 1Password GUI |
+| `1password` | 1Password |
 | `1password-cli` | 1Password CLI (`op`) |
 | `discord` | Discord (Flatpak) |
 | `spotify` | Spotify (Flatpak) |
 | `gitkraken` | GitKraken |
-| `tableplus` | TablePlus database client |
+| `tableplus` | TablePlus |
 | `pika-backup` | Pika Backup |
-| `notion-chrome` | Notion (Chrome PWA) |
-| `outlook-pwa` | Outlook (Chrome PWA) |
-| `teams-pwa` | Microsoft Teams (Chrome PWA) |
-| `chatgpt-pwa` | ChatGPT (Chrome PWA) |
-| `ytmusic-pwa` | YouTube Music (Chrome PWA) |
+
+</details>
+
+<details>
+<summary><strong>Chrome PWAs</strong></summary>
+
+| Module | Installs |
+|---|---|
+| `notion-chrome` | Notion |
+| `outlook-pwa` | Outlook |
+| `teams-pwa` | Microsoft Teams |
+| `chatgpt-pwa` | ChatGPT |
+| `ytmusic-pwa` | YouTube Music |
+
+</details>
+
+<details>
+<summary><strong>Dev & infra</strong></summary>
+
+| Module | Installs |
+|---|---|
+| `vscode` | Visual Studio Code |
+| `jetbrains-toolbox` | JetBrains Toolbox |
+| `dotnet-userspace` | .NET SDK 8 + 10 (userspace, no sudo) |
+| `docker-rootless` | Docker rootless mode |
+| `lazydocker` | LazyDocker TUI |
+| `lens` | Lens Kubernetes desktop |
+| `zellij` | Zellij terminal multiplexer |
+| `kitty` | Kitty terminal |
+| `blackbox-terminal` | BlackBox terminal |
+
+</details>
 
 ---
 
 ## Glimt CLI
 
-After setup, `glimt` is available at `~/.local/bin/glimt`.
+After setup, `glimt` is installed to `~/.local/bin/glimt` with full tab completion.
 
 ```bash
-glimt install <module>      # install a module
-glimt clean <module>        # uninstall a module
+glimt install <module>      # install or reinstall a module
+glimt clean <module>        # remove a module cleanly
 glimt module-selection      # interactive extras picker
 glimt update                # pull latest and re-run
 ```
-
-`glimt install <TAB>` and `glimt clean <TAB>` tab-complete all available module names.
 
 ---
 
 ## Notes
 
-**Git credentials** — Git is configured to use `git-credential-libsecret` (GNOME Keyring). If the keyring socket is not running:
+**Git credentials** — configured to use `git-credential-libsecret` (GNOME Keyring). Enable the socket if needed:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
 ```
-
-**Extras** — Optional modules are selected via an interactive `gum`-based picker during setup. Re-running `glimt module-selection` lets you add or remove extras at any time; deselected modules are automatically cleaned up.
