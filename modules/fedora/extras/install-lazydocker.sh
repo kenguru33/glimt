@@ -8,11 +8,15 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
 # shellcheck source=../lib.sh
 source "$GLIMT_LIB"
 
+GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../versions.env"
+# shellcheck source=../../../versions.env
+source "$GLIMT_VERSIONS"
+
 ACTION="${1:-all}"
 
 # --- Config (override via env) ----------------------------------------------
-# If set, pins to a specific release tag (e.g., v0.23.3). If empty, uses upstream installer to fetch latest.
-LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-}"
+# Pinned in versions.env; override at runtime with LAZYDOCKER_VERSION=vX.Y.Z
+LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-$LAZYDOCKER_VERSION}"
 BIN_DIR="${BIN_DIR:-$HOME_DIR/.local/bin}"
 WRAPPER="${WRAPPER:-$BIN_DIR/lazydocker-rootless}"
 DESKTOP_FILE="${DESKTOP_FILE:-$HOME_DIR/.local/share/applications/lazydocker.desktop}"

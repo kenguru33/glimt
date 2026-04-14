@@ -12,7 +12,6 @@ GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env
 # shellcheck source=../../versions.env
 source "$GLIMT_VERSIONS"
 
-ARCH="$(uname -m)"
 ACTION="${1:-all}"
 CONFIG_TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
 TARGET_CONFIG_DIR="$HOME_DIR/.zsh/config"
@@ -30,18 +29,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   echo "❌ This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
-
-# === Normalize Architecture ===
-normalize_arch() {
-  case "$ARCH" in
-    x86_64) echo "amd64" ;;
-    aarch64 | arm64) echo "arm64" ;;
-    *)
-      echo "❌ Unsupported architecture: $ARCH"
-      exit 1
-      ;;
-  esac
-}
 
 # === Ensure ~/.local/bin is in PATH in .zshrc ===
 ensure_local_bin_path() {

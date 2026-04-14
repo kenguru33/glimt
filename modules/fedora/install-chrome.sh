@@ -24,8 +24,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-
 # === Actions ==============================================================
 
 deps() {

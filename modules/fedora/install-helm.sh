@@ -32,19 +32,6 @@ MODULE_CONF_SRC="$SCRIPT_DIR/config/helm.zsh"           # modules/fedora/config/
 MODULE_CONF_DST="$HOME_DIR/.zsh/config/helm.zsh"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 
-# ----- Normalize Architecture -----
-normalize_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64) echo "amd64" ;;
-    aarch64) echo "arm64" ;;
-    *)
-      die "Unsupported architecture: $arch"
-      ;;
-  esac
-}
-
 install_deps(){
   log "Installing dependencies (sudo): curl tar gzip"
   sudo dnf install -y curl tar gzip

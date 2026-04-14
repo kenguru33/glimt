@@ -8,6 +8,10 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
+GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
+# shellcheck source=../../versions.env
+source "$GLIMT_VERSIONS"
+
 ACTION="${1:-all}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,18 +31,22 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
-# === Normalize Architecture ===
-normalize_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64) echo "x86_64" ;;
+# kubectx/kubens release tarballs use "x86_64" (not "amd64"), so we cannot
+# use the shared normalize_arch() from lib.sh which returns "amd64".
+normalize_arch_kubectx() {
+  case "$(uname -m)" in
+    x86_64)  echo "x86_64" ;;
     aarch64) echo "arm64" ;;
-    *)
-      echo "❌ Unsupported architecture: $arch"
-      exit 1
-      ;;
+    *) die "Unsupported architecture: $(uname -m)" ;;
   esac
+}
+
+# === deps ===
+deps() {
+  log "Checking dependencies..."
+  if ! command -v curl >/dev/null 2>&1; then
+    sudo dnf install -y curl
+  fi
 }
 
 # === install ===
@@ -50,7 +58,6 @@ install() {
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
 
   # kubectx
-  KUBECTX_VERSION="v0.9.5"
   KUBECTX_URL="https://github.com/ahmetb/kubectx/releases/download/${KUBECTX_VERSION}/kubectx_${KUBECTX_VERSION}_linux_${ARCH_NORM}.tar.gz"
   
   TMP_DIR="$(mktemp -d)"
@@ -63,9 +70,8 @@ install() {
   
   rm -f "$TMP_TAR"
   
-  # kubens
-  KUBENS_VERSION="v0.9.5"
-  KUBENS_URL="https://github.com/ahmetb/kubectx/releases/download/${KUBENS_VERSION}/kubens_${KUBENS_VERSION}_linux_${ARCH_NORM}.tar.gz"
+  # kubens (same release tag as kubectx)
+  KUBENS_URL="https://github.com/ahmetb/kubectx/releases/download/${KUBECTX_VERSION}/kubens_${KUBECTX_VERSION}_linux_${ARCH_NORM}.tar.gz"
   
   TMP_TAR="$(mktemp)"
   curl -fsSL "$KUBENS_URL" -o "$TMP_TAR"
@@ -76,7 +82,9 @@ install() {
   rm -f "$TMP_TAR"
   rm -rf "$TMP_DIR"
 
-  echo "✅ Installed kubectx and kubens to $BIN_DIR"
+  verify_binary kubectx
+  verify_binary kubens
+  log "✅ Installed kubectx and kubens to $BIN_DIR"
 }
 
 # === config ===
@@ -96,20 +104,15 @@ clean() {
   echo "✅ Cleaned up"
 }
 
-# === all ===
-all() {
-  install
-  config
-}
-
 # === entry point ===
 case "$ACTION" in
+  deps)    deps ;;
   install) install ;;
-  config) config ;;
-  clean) clean ;;
-  all) all ;;
+  config)  config ;;
+  clean)   clean ;;
+  all)     deps; install; config ;;
   *)
-    echo "Usage: $0 [all|install|config|clean]"
+    echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;
 esac

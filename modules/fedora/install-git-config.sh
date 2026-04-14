@@ -22,12 +22,6 @@ PLUGIN_DIR="$HOME_DIR/.zsh/plugins/git"
 FALLBACK_COMPLETION="$PLUGIN_DIR/git-completion.zsh"
 TEMPLATE_FILE="$SCRIPT_DIR/config/git.zsh"
 
-log() { echo "🔧 [$MODULE_NAME] $*"; }
-die() {
-  echo "❌ [$MODULE_NAME] $*" >&2
-  exit 1
-}
-
 # ---------------------------------------------------------------------
 # OS detection (Fedora only)
 # ---------------------------------------------------------------------

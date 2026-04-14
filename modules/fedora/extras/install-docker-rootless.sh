@@ -40,8 +40,6 @@ GNOME_EXT_INSTALL_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
 export XDG_RUNTIME_DIR="/run/user/$REAL_UID"
 export DOCKER_HOST="unix:///run/user/$REAL_UID/docker.sock"
 
-log() { echo "🐳 $*"; }
-
 # -------------------------------------------------------------------------
 deps() {
   log "Installing prerequisites…"

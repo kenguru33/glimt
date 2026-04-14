@@ -18,11 +18,49 @@ TMP_DIR="/tmp/jetbrains-toolbox"
 DESKTOP_FILE="$HOME_DIR/.local/share/applications/jetbrains-toolbox.desktop"
 SYMLINK="$HOME_DIR/.local/bin/jetbrains-toolbox"
 
-require_user() {
-  if [[ "$EUID" -eq 0 && -z "${SUDO_USER:-}" ]]; then
-    echo "❌ Do not run this module as root directly." >&2
-    exit 1
+# === Resolve icon path and write desktop entry ===
+# Usage: _write_desktop_file <launcher_bin_path>
+_write_desktop_file() {
+  local launcher_bin_path="$1"
+  local icons_dir="$HOME_DIR/.local/share/icons"
+  local icon_path=""
+
+  for candidate in \
+      "$BASE_DIR/.install-icon.svg" \
+      "$BASE_DIR/icon.svg" \
+      "$BASE_DIR/jetbrains-toolbox.svg" \
+      "$icons_dir/jetbrains-toolbox.svg"; do
+    if [[ -f "$candidate" ]]; then
+      icon_path="$candidate"
+      break
+    fi
+  done
+
+  if [[ -n "$icon_path" && "$icon_path" != "$icons_dir/jetbrains-toolbox.svg" ]]; then
+    mkdir -p "$icons_dir"
+    cp -f "$icon_path" "$icons_dir/jetbrains-toolbox.svg" 2>/dev/null || true
+    icon_path="$icons_dir/jetbrains-toolbox.svg"
+    log "✅ Icon copied to: $icon_path"
+  elif [[ -z "$icon_path" ]]; then
+    log "⚠️  Icon not found, using default"
+    icon_path="jetbrains-toolbox"
   fi
+
+  mkdir -p "$(dirname "$DESKTOP_FILE")"
+  cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Name=JetBrains Toolbox
+Comment=Manage your JetBrains IDEs
+Exec=$launcher_bin_path
+Icon=$icon_path
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+StartupNotify=true
+EOF
+  chmod +x "$DESKTOP_FILE"
+  update-desktop-database "$HOME_DIR/.local/share/applications" &>/dev/null || true
+  log "✅ Desktop launcher created"
 }
 
 # === OS Check ===
@@ -91,50 +129,7 @@ install_toolbox() {
   fi
 
   log "🖥️  Creating desktop launcher..."
-  mkdir -p "$(dirname "$DESKTOP_FILE")"
-  
-  # Find the icon - check multiple possible locations
-  local icon_path=""
-  local icon_candidates=(
-    "$BASE_DIR/.install-icon.svg"
-    "$BASE_DIR/icon.svg"
-    "$BASE_DIR/jetbrains-toolbox.svg"
-  )
-  
-  for candidate in "${icon_candidates[@]}"; do
-    if [[ -f "$candidate" ]]; then
-      icon_path="$candidate"
-      break
-    fi
-  done
-  
-  # Copy icon to icons directory for better desktop integration
-  local icons_dir="$HOME_DIR/.local/share/icons"
-  if [[ -n "$icon_path" && -f "$icon_path" ]]; then
-    mkdir -p "$icons_dir"
-    cp -f "$icon_path" "$icons_dir/jetbrains-toolbox.svg" 2>/dev/null || true
-    icon_path="$icons_dir/jetbrains-toolbox.svg"
-    log "✅ Icon copied to: $icon_path"
-  else
-    log "⚠️  Icon not found, desktop launcher will use default icon"
-    icon_path="jetbrains-toolbox"
-  fi
-
-  cat > "$DESKTOP_FILE" <<EOF
-[Desktop Entry]
-Name=JetBrains Toolbox
-Comment=Manage your JetBrains IDEs
-Exec=$launcher_bin_path
-Icon=$icon_path
-Terminal=false
-Type=Application
-Categories=Development;IDE;
-StartupNotify=true
-EOF
-
-  chmod +x "$DESKTOP_FILE"
-  update-desktop-database "$HOME_DIR/.local/share/applications" &>/dev/null || true
-  log "✅ Desktop launcher created with icon"
+  _write_desktop_file "$launcher_bin_path"
 
   log "🔗 Creating symlink in ~/.local/bin..."
   mkdir -p "$HOME_DIR/.local/bin"
@@ -169,53 +164,7 @@ config() {
   # Ensure desktop launcher exists
   if [[ ! -f "$DESKTOP_FILE" ]]; then
     log "🖥️  Creating desktop launcher..."
-    mkdir -p "$(dirname "$DESKTOP_FILE")"
-    
-    # Find the icon - check multiple possible locations
-    local icon_path=""
-    local icon_candidates=(
-      "$BASE_DIR/.install-icon.svg"
-      "$BASE_DIR/icon.svg"
-      "$BASE_DIR/jetbrains-toolbox.svg"
-      "$HOME_DIR/.local/share/icons/jetbrains-toolbox.svg"
-    )
-    
-    for candidate in "${icon_candidates[@]}"; do
-      if [[ -f "$candidate" ]]; then
-        icon_path="$candidate"
-        break
-      fi
-    done
-    
-    # Copy icon to icons directory if found in base dir
-    local icons_dir="$HOME_DIR/.local/share/icons"
-    if [[ -n "$icon_path" && -f "$icon_path" && "$icon_path" != "$icons_dir/jetbrains-toolbox.svg" ]]; then
-      mkdir -p "$icons_dir"
-      cp -f "$icon_path" "$icons_dir/jetbrains-toolbox.svg" 2>/dev/null || true
-      icon_path="$icons_dir/jetbrains-toolbox.svg"
-      log "✅ Icon copied to: $icon_path"
-    fi
-    
-    if [[ -z "$icon_path" || ! -f "$icon_path" ]]; then
-      log "⚠️  Icon not found, desktop launcher will use default icon"
-      icon_path="jetbrains-toolbox"
-    fi
-
-    cat > "$DESKTOP_FILE" <<EOF
-[Desktop Entry]
-Name=JetBrains Toolbox
-Comment=Manage your JetBrains IDEs
-Exec=$launcher_bin_path
-Icon=$icon_path
-Terminal=false
-Type=Application
-Categories=Development;IDE;
-StartupNotify=true
-EOF
-
-    chmod +x "$DESKTOP_FILE"
-    update-desktop-database "$HOME_DIR/.local/share/applications" &>/dev/null || true
-    log "✅ Desktop launcher created with icon"
+    _write_desktop_file "$launcher_bin_path"
   else
     log "✅ Desktop launcher already exists"
   fi

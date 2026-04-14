@@ -15,10 +15,6 @@ source "$GLIMT_LIB"
 ICONS_DIR="$HOME_DIR/.local/share/icons"
 PAPIRUS_DIR="$ICONS_DIR/Papirus"
 
-log() {
-  printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2
-}
-
 require_user() {
   if [[ "$EUID" -eq 0 ]]; then
     echo "❌ Do not run this module as root." >&2

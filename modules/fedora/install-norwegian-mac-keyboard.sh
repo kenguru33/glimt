@@ -17,13 +17,6 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-log() { echo "[$MODULE] $*"; }
-warn() { echo "[$MODULE] WARNING: $*" >&2; }
-die() {
-  echo "[$MODULE] ERROR: $*" >&2
-  exit 1
-}
-
 # --------------------------------------------------
 # Guard: GNOME required
 # --------------------------------------------------

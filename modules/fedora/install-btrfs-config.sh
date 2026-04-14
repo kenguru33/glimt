@@ -13,12 +13,6 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die() {
-  printf "ERROR: %s\n" "$*" >&2
-  exit 1
-}
-
 # ---------------------------------------------------------
 # Guards & helpers
 # ---------------------------------------------------------

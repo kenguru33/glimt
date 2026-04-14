@@ -56,6 +56,18 @@ deploy_config() {
   log "Deployed $(basename "$dest")"
 }
 
+# === Normalize machine architecture to download naming convention ===
+#
+# Returns: amd64 | arm64  (Kubernetes / Go-binary ecosystem standard)
+# Usage:   arch="$(normalize_arch)"
+normalize_arch() {
+  case "$(uname -m)" in
+    x86_64)  echo "amd64" ;;
+    aarch64) echo "arm64" ;;
+    *) die "Unsupported architecture: $(uname -m)" ;;
+  esac
+}
+
 # === Verify a binary is working after install ===
 #
 # Usage: verify_binary <binary> [args...]

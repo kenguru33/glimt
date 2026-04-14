@@ -33,19 +33,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
 fi
 
 # === Normalize Architecture ===
-normalize_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64) echo "amd64" ;;
-    aarch64) echo "arm64" ;;
-    *)
-      echo "❌ Unsupported architecture: $arch"
-      exit 1
-      ;;
-  esac
-}
-
 umask 022
 
 ensure_dirs() {
