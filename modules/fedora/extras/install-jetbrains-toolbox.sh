@@ -83,8 +83,6 @@ deps() {
 }
 
 install_toolbox() {
-  require_user
-
   log "📦 Installing JetBrains Toolbox..."
 
   if [[ -d "$BASE_DIR" && -x "$BASE_DIR/jetbrains-toolbox" ]] || [[ -f "$BASE_DIR/bin/jetbrains-toolbox" ]]; then
@@ -147,8 +145,6 @@ install() {
 }
 
 config() {
-  require_user
-
   log "🔧 Verifying JetBrains Toolbox installation..."
 
   local launcher_bin_path
@@ -181,8 +177,6 @@ config() {
 }
 
 clean() {
-  require_user
-
   log "🧹 Removing JetBrains Toolbox..."
 
   if [[ -d "$BASE_DIR" ]]; then
