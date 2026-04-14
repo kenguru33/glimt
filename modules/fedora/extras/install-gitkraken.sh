@@ -1,8 +1,13 @@
-#!/bin/bash
-set -euo pipefail
-trap 'echo "❌ Error on line $LINENO" >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gitkraken"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # ===== Fedora-only guard =====
@@ -19,8 +24,6 @@ fi
 
 # ===== Config =====
 ARCH="$(uname -m)"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CACHE_DIR="${CACHE_DIR:-$HOME_DIR/.cache/glimt/$MODULE_NAME}"
 RPM_URL="https://release.gitkraken.com/linux/gitkraken-amd64.rpm"
 RPM_FILE="$CACHE_DIR/gitkraken-amd64.rpm"
@@ -31,7 +34,6 @@ DEPS=(curl)
 
 do_deps() {
   echo "→ [$MODULE_NAME] Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 

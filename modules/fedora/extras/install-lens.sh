@@ -1,8 +1,13 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ Lens installation failed. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lens"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # === Detect OS ===
@@ -24,7 +29,6 @@ LENS_REPO="/etc/yum.repos.d/lens.repo"
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y dnf-plugins-core curl
 }
 
@@ -43,9 +47,6 @@ install_lens() {
   fi
   sudo dnf config-manager addrepo --from-repofile=https://downloads.k8slens.dev/rpm/lens.repo
 
-  echo "🔄 Updating package lists..."
-  sudo dnf makecache -y
-
   echo "⬇️ Installing Lens..."
   sudo dnf install -y lens
 
@@ -61,7 +62,6 @@ clean_lens() {
   sudo dnf remove -y lens-desktop lens || true
   if [[ -f "$LENS_REPO" ]]; then
     sudo rm -f "$LENS_REPO"
-    sudo dnf makecache -y
   fi
   echo "✅ Lens Desktop removed."
 }

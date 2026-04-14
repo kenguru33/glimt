@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ dotnet userspace script failed on line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+
+MODULE_NAME="dotnet-userspace"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
 
 # ======================================================
 # Configuration
 # ======================================================
 ACTION="${1:-all}"
 
-DOTNET_ROOT="$HOME/.dotnet"
+DOTNET_ROOT="$HOME_DIR/.dotnet"
 DOTNET_BIN="$DOTNET_ROOT/dotnet"
 INSTALLER="$DOTNET_ROOT/dotnet-install.sh"
 
 SDK_CHANNELS=(8.0 10.0)
 
-ENV_DIR="$HOME/.config/environment.d"
+ENV_DIR="$HOME_DIR/.config/environment.d"
 ENV_FILE="$ENV_DIR/dotnet.conf"
 
-ZSH_DIR="$HOME/.zsh/config"
+ZSH_DIR="$HOME_DIR/.zsh/config"
 ZSH_FILE="$ZSH_DIR/dotnet.zsh"
-
-log() { printf "[dotnet-userspace] %s\n" "$*" >&2; }
 
 # ======================================================
 # Install

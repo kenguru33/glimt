@@ -3,20 +3,20 @@
 # Actions: all | install | clean | config
 # Fedora-only, user-scope, no sudo.
 set -Eeuo pipefail
-trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="notion-chrome"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-log(){ printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die(){ printf "ERROR: %s\n" "$*" >&2; exit 1; }
 
 # Fedora guard
 if [[ -r /etc/os-release ]]; then . /etc/os-release
 else die "Cannot detect OS."; fi
 [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
-
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 
 BIN_DIR="$HOME_DIR/.local/bin"
 CLI_LAUNCHER="$BIN_DIR/notion"
@@ -33,7 +33,6 @@ DESKTOP_FILE="$LAUNCHER_DIR/${WMCLASS}.desktop"
 # --- Deps ---
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y curl wget xdg-utils desktop-file-utils
 }
 

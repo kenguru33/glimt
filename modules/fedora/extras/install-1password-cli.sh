@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] installation failed (line $LINENO)." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="1password-cli"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # === OS Detection ========================================================
@@ -22,12 +27,9 @@ fi
 FEDORA_REPO="/etc/yum.repos.d/1password-cli.repo"
 DEPS=(curl ca-certificates dnf-plugins-core)
 
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-
 # === Dependencies ========================================================
 install_deps() {
   log "Installing dependencies…"
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 
@@ -48,14 +50,11 @@ EOF
   else
     log "Repo already present."
   fi
-
-  sudo dnf makecache -y
 }
 
 remove_repo() {
   log "Removing 1Password CLI repository…"
   sudo rm -f "$FEDORA_REPO"
-  sudo dnf makecache -y
 }
 
 # === Install =============================================================
@@ -75,6 +74,7 @@ config_cli() {
     echo "❌ 1Password CLI not found. Run install first."
     exit 1
   fi
+  verify_binary op --version
 }
 
 # === Clean ===============================================================

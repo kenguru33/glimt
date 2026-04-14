@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Bat install failed. Exiting." >&2' ERR
 
 MODULE_NAME="bat"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 
 BAT_THEME_NAME="Catppuccin Mocha"
 BAT_BIN="bat"  # On Fedora, bat is already called "bat" (not "batcat")
@@ -28,20 +31,20 @@ fi
 # === Step: deps ===
 install_deps() {
   echo "📦 Installing bat and wget..."
-  sudo dnf makecache -y
   sudo dnf install -y bat wget
 }
 
 # === Step: install ===
 install_bat() {
   echo "✅ Bat is installed via DNF (no symlink needed on Fedora)"
-  
+
   if ! command -v bat >/dev/null 2>&1; then
     echo "❌ bat command not found. Installing..."
     install_deps
   fi
-  
+
   echo "✅ Bat is ready: $(command -v bat)"
+  verify_binary bat --version
 }
 
 # === Step: config ===

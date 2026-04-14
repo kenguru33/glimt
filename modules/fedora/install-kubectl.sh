@@ -1,17 +1,14 @@
 #!/bin/bash
-set -euo pipefail
+set -Eeuo pipefail
 trap 'echo "❌ kubectl install failed (line $LINENO)." >&2' ERR
 
 MODULE_NAME="kubectl"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-
-REAL_USER="${SUDO_USER:-$USER}"
-if [[ -z "${REAL_USER}" || "${REAL_USER}" == "root" ]]; then
-  REAL_USER="$(logname 2>/dev/null || echo "$USER")"
-fi
-
-HOME_DIR="$(getent passwd "$REAL_USER" | cut -d: -f6)"
-HOME_DIR="${HOME_DIR:-$HOME}"
 
 LOCAL_BIN="$HOME_DIR/.local/bin"
 PLUGIN_DIR="$HOME_DIR/.zsh/plugins/kubectl"
@@ -36,19 +33,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
 fi
 
 # === Normalize Architecture ===
-normalize_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64) echo "amd64" ;;
-    aarch64) echo "arm64" ;;
-    *)
-      echo "❌ Unsupported architecture: $arch"
-      exit 1
-      ;;
-  esac
-}
-
 umask 022
 
 ensure_dirs() {
@@ -60,7 +44,6 @@ deps() {
   echo "📦 Checking dependencies..."
   if ! command -v curl >/dev/null 2>&1; then
     echo "➡️  Installing curl via dnf..."
-    sudo dnf makecache -y
     sudo dnf install -y curl
   fi
 }
@@ -101,7 +84,7 @@ do_config() {
   echo "📝 Installing kubectl.zsh config"
   ensure_dirs
   if [[ -f "$TEMPLATE_FILE" ]]; then
-    install -o "$REAL_USER" -g "$REAL_USER" -m 0644 "$TEMPLATE_FILE" "$TARGET_FILE"
+    deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
     echo "✅ $TARGET_FILE"
   else
     echo "⚠️  Template not found: $TEMPLATE_FILE (skipping)"

@@ -3,20 +3,19 @@
 # Outlook Web PWA (Chrome/Chromium) — Fedora only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
-trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="outlook-pwa"
-ACTION="${1:-all}"
 
-log(){ printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die(){ printf "ERROR: %s\n" "$*" >&2; exit 1; }
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
+ACTION="${1:-all}"
 
 # --- Fedora-only guard ---
 if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
 [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
-
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 
 # --- App metadata ---
 APP_NAME="Outlook"
@@ -54,7 +53,6 @@ OFFICIAL_SVG_ALT="https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft_
 # -------------------------------
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y curl wget xdg-utils desktop-file-utils librsvg2-tools
 }
 

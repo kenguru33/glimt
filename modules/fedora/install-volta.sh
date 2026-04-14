@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Volta setup failed. Exiting." >&2' ERR
 
 MODULE_NAME="volta"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/config/volta.zsh"
@@ -32,7 +35,6 @@ deps() {
 
   if ! command -v curl >/dev/null; then
     echo "➡️  Installing curl via dnf..."
-    sudo dnf makecache -y
     sudo dnf install -y curl
   fi
 }
@@ -57,9 +59,7 @@ install() {
 config() {
   echo "📝 Installing volta.zsh config from template..."
 
-  sudo -u "$REAL_USER" mkdir -p "$CONFIG_DIR"
-  sudo -u "$REAL_USER" cp "$TEMPLATE_FILE" "$TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
   echo "✅ Installed $TARGET_FILE"
 }
 

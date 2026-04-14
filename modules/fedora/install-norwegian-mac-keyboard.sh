@@ -10,14 +10,12 @@
 
 set -Eeuo pipefail
 
+MODULE_NAME="norwegian-mac-keyboard"
 MODULE="norwegian-mac-keyboard"
 
-log() { echo "[$MODULE] $*"; }
-warn() { echo "[$MODULE] WARNING: $*" >&2; }
-die() {
-  echo "[$MODULE] ERROR: $*" >&2
-  exit 1
-}
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
 
 # --------------------------------------------------
 # Guard: GNOME required
@@ -27,11 +25,10 @@ command -v gsettings >/dev/null || die "GNOME (gsettings) not detected"
 # --------------------------------------------------
 # Resolve real user (important when run via sudo)
 # --------------------------------------------------
-REAL_USER="${SUDO_USER:-$USER}"
 REAL_UID="$(id -u "$REAL_USER")"
 
 # Best-effort home lookup (not strictly required, but useful)
-REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6 || true)"
+REAL_HOME="$HOME_DIR"
 
 run_as_user() {
   sudo -u "$REAL_USER" \

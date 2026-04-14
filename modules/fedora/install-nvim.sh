@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Neovim setup failed. Exiting." >&2' ERR
 
 MODULE_NAME="nvim"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/config/nvim.zsh"
@@ -14,8 +17,8 @@ TARGET_FILE="$CONFIG_DIR/nvim.zsh"
 # === Step: deps ===
 deps() {
   echo "📦 Installing Neovim via dnf..."
-  sudo dnf makecache -y
   sudo dnf install -y neovim
+  verify_binary nvim --version
 }
 
 # === Step: install ===
@@ -27,9 +30,7 @@ install() {
 config() {
   echo "📝 Installing nvim.zsh config from template..."
 
-  mkdir -p "$CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
   echo "✅ Installed $TARGET_FILE"
 }
 

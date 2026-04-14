@@ -1,13 +1,16 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Avatar setup failed. Exiting." >&2' ERR
 
 MODULE_NAME="set-user-avatar"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_DIR="$HOME_DIR/.config/glimt"
 CONFIG_FILE="$CONFIG_DIR/set-user-avatar.config"
 FACE_IMAGE="$HOME_DIR/.face"
@@ -31,7 +34,6 @@ fi
 # === Dependencies ===
 install_dependencies() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y curl
   # Check if gum is available, install if not
   if ! command -v gum &>/dev/null; then

@@ -1,8 +1,13 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ TablePlus installation failed. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="tableplus"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # === OS Detection ===
@@ -25,7 +30,6 @@ TABLEPLUS_REPOFILE_URL="https://yum.tableplus.com/rpm/x86_64/tableplus.repo"
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y dnf-plugins-core
 }
 
@@ -49,9 +53,6 @@ install_tableplus() {
   # Using the same pattern as other Fedora extras (dnf config-manager addrepo --from-repofile=...)
   sudo dnf config-manager addrepo --from-repofile="$TABLEPLUS_REPOFILE_URL"
 
-  echo "🔄 Updating package lists..."
-  sudo dnf makecache -y
-
   echo "⬇️  Installing TablePlus..."
   sudo dnf install -y tableplus
 
@@ -67,7 +68,6 @@ clean_tableplus() {
   sudo dnf remove -y tableplus || true
   if [[ -f "$TABLEPLUS_REPO" ]]; then
     sudo rm -f "$TABLEPLUS_REPO"
-    sudo dnf makecache -y || true
   fi
   echo "✅ TablePlus removed."
 }

@@ -1,18 +1,28 @@
 #!/bin/bash
-set -e
-trap 'echo "❌ Nerd Font install failed. Exiting." >&2' ERR
+set -Eeuo pipefail
+
+MODULE_NAME="nerdfonts"
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
+GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
+# shellcheck source=../../versions.env
+source "$GLIMT_VERSIONS"
 
 ACTION="${1:-all}"
-FONT_DIR="$HOME/.local/share/fonts"
+FONT_DIR="$HOME_DIR/.local/share/fonts"
 TMP_DIR="/tmp/nerdfonts"
 FONT_CACHE_LOG="/tmp/fc-cache.log"
 
 # === Font definitions ===
 declare -A FONTS
 FONTS=(
-  ["Hack"]="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/Hack.zip"
-  ["FiraCode"]="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/FiraCode.zip"
-  ["JetBrainsMono"]="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip"
+  ["Hack"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/Hack.zip"
+  ["FiraCode"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/FiraCode.zip"
+  ["JetBrainsMono"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/JetBrainsMono.zip"
 )
 
 # === OS Detection ===
@@ -33,7 +43,6 @@ DEPS=("wget" "unzip" "fontconfig")
 
 install_deps() {
   echo "📦 Installing required DNF packages..."
-  sudo dnf makecache -y
   for dep in "${DEPS[@]}"; do
     if ! rpm -q "$dep" &>/dev/null; then
       echo "➡️  Installing $dep..."
@@ -46,7 +55,7 @@ install_deps() {
 
 install_fonts() {
   echo "🔤 Installing Nerd Fonts to $FONT_DIR..."
-  mkdir -p "$FONT_DIR" "$TMP_DIR"
+  run_as_user mkdir -p "$FONT_DIR" "$TMP_DIR"
 
   for name in "${!FONTS[@]}"; do
     if fc-list | grep -qi "$name Nerd Font"; then
@@ -59,13 +68,14 @@ install_fonts() {
     wget -q -O "$zip_path" "${FONTS[$name]}"
 
     echo "📦 Extracting $name..."
-    unzip -o "$zip_path" -d "$FONT_DIR" >/dev/null
+    run_as_user unzip -o "$zip_path" -d "$FONT_DIR" >/dev/null
     rm -f "$zip_path"
   done
 
   echo "🔄 Rebuilding font cache..."
-  fc-cache -fv > "$FONT_CACHE_LOG"
+  run_as_user fc-cache -fv > "$FONT_CACHE_LOG"
   echo "✅ Font cache rebuilt."
+  verify_binary fc-list
 }
 
 configure_fonts() {

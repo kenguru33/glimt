@@ -41,8 +41,14 @@ done
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
   OS_ID="$ID"
+  OS_ID_LIKE="${ID_LIKE:-}"
 else
   echo "❌ Could not detect OS."
+  exit 1
+fi
+
+if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]]; then
+  echo "❌ Unsupported OS: $OS_ID. Glimt requires Fedora or RHEL."
   exit 1
 fi
 
@@ -116,19 +122,6 @@ run() {
   fi
 }
 
-# (Optional) apt helper with same behavior
-apt_quiet() {
-  if [[ "$VERBOSE" -eq 1 ]]; then
-    sudo apt "$@"
-  else
-    if ! sudo apt "$@" 1>/dev/null; then
-      echo "❌ apt $* failed" >&2
-      sudo apt "$@"
-      exit 1
-    fi
-  fi
-}
-
 # === Require sudo (install philosophy) ===
 require_sudo() {
   _set_palette
@@ -170,14 +163,7 @@ require_sudo() {
 install_repo() {
   if ! command -v git >/dev/null 2>&1; then
     echo "📦 Installing git..."
-    if command -v apt-get >/dev/null 2>&1; then
-      run sudo apt-get update
-      run sudo apt-get install -y git
-      # or: apt_quiet update -y; apt_quiet install -y git
-    else
-      echo "❌ 'git' is required but not found, and apt-get is unavailable." >&2
-      exit 1
-    fi
+    run sudo dnf install -y git
   fi
 
   echo "📥 Cloning or updating glimt repo (branch: $BRANCH)..."

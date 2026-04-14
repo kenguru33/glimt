@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Starship install failed. Exiting." >&2' ERR
 
 MODULE_NAME="starship"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,15 +35,14 @@ install() {
     echo "⏭️  Starship already installed"
   fi
   chown "$REAL_USER:$REAL_USER" "$LOCAL_BIN/starship"
+  verify_binary starship --version
 }
 
 # === Step: config ===
 config() {
   echo "📝 Installing starship.zsh config from template..."
 
-  mkdir -p "$CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
   echo "✅ Installed $TARGET_FILE"
 }
 

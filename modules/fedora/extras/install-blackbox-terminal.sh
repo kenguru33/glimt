@@ -1,8 +1,13 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ An error occurred. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="blackbox-terminal"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCHEME_DIR="$HOME/.local/share/blackbox/schemes"
 PALETTE_NAME="Catppuccin Mocha"
@@ -31,7 +36,6 @@ DEPS=(blackbox-terminal git gsettings-desktop-schemas)
 
 install_deps() {
   echo "📦 Installing dependencies for Fedora..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 

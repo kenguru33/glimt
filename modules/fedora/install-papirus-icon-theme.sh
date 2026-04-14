@@ -8,13 +8,12 @@ trap 'echo "❌ papirus-icon-theme module failed." >&2' ERR
 MODULE_NAME="papirus-icon-theme"
 ACTION="${1:-all}"
 
-HOME_DIR="$HOME"
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ICONS_DIR="$HOME_DIR/.local/share/icons"
 PAPIRUS_DIR="$ICONS_DIR/Papirus"
-
-log() {
-  printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2
-}
 
 require_user() {
   if [[ "$EUID" -eq 0 ]]; then

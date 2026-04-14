@@ -9,12 +9,9 @@ trap 'echo "❌ gnome-extensions failed at line $LINENO" >&2' ERR
 MODULE_NAME="gnome-extensions"
 ACTION="${1:-all}"
 
-# --------------------------------------------------
-# Logging
-# --------------------------------------------------
-log()  { echo "🔧 [$MODULE_NAME] $*"; }
-warn() { echo "⚠️  [$MODULE_NAME] $*" >&2; }
-die()  { echo "❌ [$MODULE_NAME] $*" >&2; exit 1; }
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
 
 # --------------------------------------------------
 # Guards

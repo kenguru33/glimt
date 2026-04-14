@@ -35,23 +35,12 @@ mkdir -p "$(dirname "$STATE_FILE")"
 . /etc/os-release
 ID_LIKE="${ID_LIKE:-}"
 
-IS_FEDORA=false
-IS_DEBIAN=false
-
-if [[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* || "$ID" == "rhel" ]]; then
-  IS_FEDORA=true
-elif [[ "$ID" == "debian" || "$ID_LIKE" == *debian* || "$ID" == "ubuntu" ]]; then
-  IS_DEBIAN=true
-else
-  echo "❌ Unsupported OS: $ID"
+if [[ "$ID" != "fedora" && "$ID_LIKE" != *fedora* && "$ID" != "rhel" ]]; then
+  echo "❌ Unsupported OS: $ID. Glimt requires Fedora or RHEL."
   exit 1
 fi
 
-if $IS_FEDORA; then
-  MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
-else
-  MODULE_DIR="$GLIMT_ROOT/modules/debian/extras"
-fi
+MODULE_DIR="$GLIMT_ROOT/modules/fedora/extras"
 
 # -----------------------------
 # MODULES
@@ -78,6 +67,8 @@ declare -A MODULES=(
   [outlook]="outlook"
   [teams]="teams"
   [chatgpt]="chatgpt"
+  ["claude-code"]="claude"
+  [nvidia]="nvidia-smi"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
@@ -102,15 +93,9 @@ declare -A MODULE_DESCRIPTIONS=(
   [outlook]="Outlook PWA"
   [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
+  ["claude-code"]="Claude Code CLI"
+  [nvidia]="NVIDIA proprietary driver (Wayland)"
 )
-
-# -----------------------------
-# Debian-only module
-# -----------------------------
-if $IS_DEBIAN; then
-  MODULES["virtualization-suite"]="/usr/bin/gnome-boxes"
-  MODULE_DESCRIPTIONS["virtualization-suite"]="GNOME Boxes + KVM"
-fi
 
 # -----------------------------
 # Detection (UX only)
@@ -199,6 +184,11 @@ main() {
   preselect=()
 
   for m in "${!MODULES[@]}"; do
+    # Skip NVIDIA module if no NVIDIA GPU is present
+    if [[ "$m" == "nvidia" ]] && ! lspci 2>/dev/null | grep -qi nvidia; then
+      continue
+    fi
+
     label="$m – ${MODULE_DESCRIPTIONS[$m]}"
     menu+=("$label")
     map+=("$label:$m")

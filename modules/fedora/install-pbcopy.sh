@@ -1,14 +1,15 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ wl-copy module failed at: $BASH_COMMAND" >&2' ERR
 
 # === Metadata ===
 MODULE_NAME="wl-copy"
-ACTION="${1:-all}"
 
-# Run as real user even if invoked via sudo
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
+ACTION="${1:-all}"
 
 # === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
@@ -28,7 +29,6 @@ DEPS=(wl-clipboard xclip)
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 

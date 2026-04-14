@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Error on line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="discord"
-ACTION="${1:-all}"
 
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die() {
-  printf "ERROR: %s\n" "$*" >&2
-  exit 1
-}
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
+ACTION="${1:-all}"
 
 # ---- Fedora-only guard ----
 fedora_guard() {
@@ -35,7 +34,6 @@ flatpak_app_installed() { # $1 = app id
 
 install_deps() {
   log "Installing Flatpak dependencies (dnf)…"
-  sudo dnf makecache -y
   sudo dnf install -y flatpak
 }
 

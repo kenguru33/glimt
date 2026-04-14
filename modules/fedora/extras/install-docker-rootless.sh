@@ -1,18 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # modules/fedora/extras/install-docker-rootless.sh
 # Glimt module: Install Docker in ROOTLESS mode for Fedora
 # Actions: all | deps | install | config | clean
 # clean = FULL PURGE (Docker + GNOME extension)
 
 set -Eeuo pipefail
-trap 'echo "❌ docker-rootless (fedora): error on line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="docker-rootless"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # === Real user ============================================================
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 REAL_UID="$(id -u "$REAL_USER")"
 
 # === Paths ================================================================
@@ -36,8 +39,6 @@ GNOME_EXT_INSTALL_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
 # === Rootless env =========================================================
 export XDG_RUNTIME_DIR="/run/user/$REAL_UID"
 export DOCKER_HOST="unix:///run/user/$REAL_UID/docker.sock"
-
-log() { echo "🐳 $*"; }
 
 # -------------------------------------------------------------------------
 deps() {
@@ -111,8 +112,7 @@ cleanup_half_installed() {
 # -------------------------------------------------------------------------
 copy_zsh_config() {
   [[ -f "$ZSH_SRC" ]] || return 0
-  sudo -u "$REAL_USER" mkdir -p "$ZSH_DIR"
-  sudo -u "$REAL_USER" cp -f "$ZSH_SRC" "$ZSH_TARGET"
+  deploy_config "$ZSH_SRC" "$ZSH_TARGET"
 }
 
 # -------------------------------------------------------------------------

@@ -5,8 +5,9 @@ trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 MODULE_NAME="chrome"
 ACTION="${1:-all}"
 
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
 
 REPO_FILE="/etc/yum.repos.d/google-chrome.repo"
 
@@ -23,13 +24,10 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-
 # === Actions ==============================================================
 
 deps() {
   log "Installing dependencies…"
-  sudo dnf makecache -y
   sudo dnf install -y ca-certificates curl dnf-plugins-core
 }
 
@@ -43,14 +41,11 @@ install_repo() {
   else
     log "Chrome repo already present."
   fi
-
-  sudo dnf makecache -y
 }
 
 remove_repo() {
   log "Removing Google Chrome repository…"
   sudo rm -f "$REPO_FILE"
-  sudo dnf makecache -y
 }
 
 install_pkg() {

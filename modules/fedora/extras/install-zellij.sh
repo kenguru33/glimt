@@ -1,13 +1,16 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ Something went wrong. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 # === Metadata ===
 MODULE_NAME="zellij"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 SCRIPT_NAME="install-zellij.sh"
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
 ZELLIJ_BIN="$HOME_DIR/.local/bin/zellij"
@@ -33,7 +36,6 @@ DEPS=(curl tar wl-clipboard)
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 
@@ -54,24 +56,17 @@ install() {
     *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
   esac
 
-  echo "🌐 Fetching latest Zellij release..."
-  URL=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest \
-    | grep "browser_download_url" \
-    | grep "linux-${ARCH}.tar.gz" \
-    | cut -d '"' -f 4)
-
-  if [[ -z "$URL" ]]; then
-    echo "⚠️ GitHub API failed. Falling back to v0.39.2..."
-    URL="https://github.com/zellij-org/zellij/releases/download/v0.39.2/zellij-${ARCH}-unknown-linux-musl.tar.gz"
-  fi
+  local URL="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${ARCH}-unknown-linux-musl.tar.gz"
 
   echo "⬇️ Downloading from: $URL"
-  curl -Lo /tmp/zellij.tar.gz "$URL"
+  curl -fsSL "$URL" -o /tmp/zellij.tar.gz
   tar -xzf /tmp/zellij.tar.gz -C /tmp
   mv /tmp/zellij "$ZELLIJ_BIN"
   chmod +x "$ZELLIJ_BIN"
+  rm -f /tmp/zellij.tar.gz
 
   echo "✅ Installed to $ZELLIJ_BIN"
+  PATH="$HOME_DIR/.local/bin:$PATH" verify_binary zellij --version
 }
 
 config() {
@@ -114,9 +109,7 @@ EOF
   echo "✅ Theme written to $ZELLIJ_CONFIG_FILE"
 
   echo "📁 Copying Zsh config template..."
-  mkdir -p "$ZSH_CONFIG_DIR"
-  cp "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
-  echo "✅ Copied: $LOCAL_CONFIG_TEMPLATE → $ZSH_TARGET_CONFIG"
+  deploy_config "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
 }
 
 clean() {

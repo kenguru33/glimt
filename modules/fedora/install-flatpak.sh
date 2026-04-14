@@ -1,7 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
+MODULE_NAME="flatpak"
 ACTION="${1:-all}"
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 MODULE="flatpak"
 REMOTE_NAME="flathub"
 REMOTE_URL="https://flathub.org/repo/flathub.flatpakrepo"
@@ -21,7 +28,6 @@ fi
 
 install_deps() {
 	echo "📦 Installing Flatpak dependencies..."
-	sudo dnf makecache -y
 	sudo dnf install -y flatpak
 }
 
