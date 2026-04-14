@@ -59,7 +59,7 @@ install() {
   echo "🌐 Fetching latest Zellij release..."
   URL=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest \
     | grep "browser_download_url" \
-    | grep "${ARCH}-unknown-linux-musl\.tar\.gz" \
+    | grep "${ARCH}-unknown-linux-musl\.tar\.gz\"" \
     | cut -d '"' -f 4 || true)
 
   if [[ -z "$URL" ]]; then
