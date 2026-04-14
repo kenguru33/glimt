@@ -53,7 +53,7 @@ deps() {
 install() {
   echo "📦 Installing kubectx and kubens from GitHub releases..."
 
-  ARCH_NORM="$(normalize_arch)"
+  ARCH_NORM="$(normalize_arch_kubectx)"
   BIN_DIR="$HOME_DIR/.local/bin"
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
 
