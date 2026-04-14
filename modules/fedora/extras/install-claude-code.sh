@@ -19,7 +19,7 @@ ACTION="${1:-all}"
 if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
 [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
 
-CLAUDE_BIN="$HOME_DIR/.claude/local/claude"
+CLAUDE_BIN="$HOME_DIR/.local/bin/claude"
 
 # ------------------------------------------------------------
 # Dependencies
@@ -61,7 +61,10 @@ config() {
 # ------------------------------------------------------------
 clean() {
   log "Removing Claude Code..."
+  rm -f "$HOME_DIR/.local/bin/claude"
+  rm -rf "$HOME_DIR/.local/share/claude"
   rm -rf "$HOME_DIR/.claude"
+  rm -f "$HOME_DIR/.claude.json"
   log "Claude Code removed."
 }
 
