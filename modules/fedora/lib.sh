@@ -52,7 +52,7 @@ deploy_config() {
     cp "$dest" "$backup"
     log "Backed up $(basename "$dest") → $(basename "$backup")"
   fi
-  install -o "$REAL_USER" -g "$REAL_USER" -m 0644 "$src" "$dest"
+  command install -o "$REAL_USER" -g "$REAL_USER" -m 0644 "$src" "$dest"
   log "Deployed $(basename "$dest")"
 }
 
