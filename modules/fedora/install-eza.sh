@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Eza install failed. Exiting." >&2' ERR
 
 MODULE_NAME="eza"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/config/eza.zsh"
@@ -22,7 +25,6 @@ deps() {
   fi
   
   # Try Fedora repos first
-  sudo dnf makecache -y
   if sudo dnf install -y eza 2>/dev/null; then
     echo "✅ eza installed from Fedora repos."
     return
@@ -65,9 +67,7 @@ install() {
 config() {
   echo "📝 Writing eza.zsh config from template..."
 
-  mkdir -p "$CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
 
   echo "✅ Installed $TARGET_FILE"
 }

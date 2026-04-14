@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-set -euo pipefail
-trap 'echo "❌ Error on line $LINENO" >&2' ERR
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="vscode"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 REPO_FILE="/etc/yum.repos.d/vscode.repo"
 
@@ -47,8 +52,6 @@ EOF
   else
     echo "ℹ️  VS Code repo already present."
   fi
-
-  sudo dnf makecache -y
 }
 
 # ------------------------------------------------------------
@@ -58,6 +61,7 @@ install_pkg() {
   echo "📦 [$MODULE_NAME] Installing VS Code…"
   sudo dnf install -y code
   echo "✅ VS Code installed."
+  verify_binary code --version
 }
 
 # ------------------------------------------------------------

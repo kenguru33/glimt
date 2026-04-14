@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # === GNOME session check ===
 if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
@@ -9,8 +9,12 @@ if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
 fi
 
 MODULE_NAME="gnome-config"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WALLPAPER_SOURCE="$REPO_DIR/wallpapers/background.jpg"
 WALLPAPER_DEST="$HOME_DIR/Pictures/background.jpg"
@@ -29,10 +33,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* ]]; then
   exit 1
 fi
 
-# === DNF helpers ===
-UPDATE_CMD="sudo dnf makecache -y"
-INSTALL_CMD="sudo dnf install -y"
-
 # Packages and commands
 DEPS_PKGS=(glib2)
 DEPS_CMDS=(gsettings)
@@ -40,8 +40,7 @@ DEPS_CMDS=(gsettings)
 # === Dependency Installer ===
 install_dependencies() {
   echo "🔧 Ensuring required dependencies..."
-  $UPDATE_CMD
-  $INSTALL_CMD "${DEPS_PKGS[@]}"
+  sudo dnf install -y "${DEPS_PKGS[@]}"
 
   # Verify commands exist
   for cmd in "${DEPS_CMDS[@]}"; do

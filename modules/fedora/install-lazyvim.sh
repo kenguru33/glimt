@@ -1,12 +1,15 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ An error occurred. Exiting." >&2' ERR
 
 MODULE_NAME="lazyvim"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 NVIM_DIRS=(
   "$HOME_DIR/.config/nvim"
   "$HOME_DIR/.local/share/nvim"
@@ -29,7 +32,6 @@ fi
 # === Step: deps ===
 install_dependencies() {
   echo "📦 Installing Neovim and related tools..."
-  sudo dnf makecache -y
   sudo dnf install -y neovim git curl unzip ripgrep fd fzf gcc gcc-c++ make
   echo "✅ Dependencies installed."
 }

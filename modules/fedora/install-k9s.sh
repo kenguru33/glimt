@@ -1,13 +1,19 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ An error occurred in K9s installer. Exiting." >&2' ERR
 
 MODULE_NAME="k9s"
-K9S_VERSION="v0.32.4"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
+GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
+# shellcheck source=../../versions.env
+source "$GLIMT_VERSIONS"
+
 ARCH="$(uname -m)"
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 CONFIG_TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
 TARGET_CONFIG_DIR="$HOME_DIR/.zsh/config"
 TARGET_CONFIG_FILE="$TARGET_CONFIG_DIR/k9s.zsh"
@@ -48,7 +54,6 @@ ensure_local_bin_path() {
 # === Step: deps ===
 install_dependencies() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y curl tar gzip
 }
 
@@ -74,6 +79,7 @@ install_k9s() {
 
   echo "✅ K9s installed at ~/.local/bin/k9s"
   ensure_local_bin_path
+  verify_binary k9s version
 }
 
 # === Step: config ===
@@ -86,10 +92,8 @@ config_k9s() {
   fi
 
   # Shell completion loader config
-  sudo -u "$REAL_USER" mkdir -p "$TARGET_CONFIG_DIR"
   if [[ -f "$CONFIG_TEMPLATE_DIR/k9s.zsh" ]]; then
-    sudo -u "$REAL_USER" cp "$CONFIG_TEMPLATE_DIR/k9s.zsh" "$TARGET_CONFIG_FILE"
-    chown "$REAL_USER:$REAL_USER" "$TARGET_CONFIG_FILE"
+    deploy_config "$CONFIG_TEMPLATE_DIR/k9s.zsh" "$TARGET_CONFIG_FILE"
     echo "✅ Installed Zsh completion config: $TARGET_CONFIG_FILE"
   fi
 

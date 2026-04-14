@@ -6,12 +6,13 @@ MODULE_NAME="git-config"
 ACTION="${1:-all}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 # ---------------------------------------------------------------------
 # Paths / user context
 # ---------------------------------------------------------------------
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
-
 CONFIG_DIR="$HOME_DIR/.config/glimt"
 CONFIG_FILE="$CONFIG_DIR/user-git-info.config"
 
@@ -51,7 +52,6 @@ DEPS=(
 
 install_dependencies() {
   log "Installing dependencies…"
-  sudo dnf makecache -y
   for pkg in "${DEPS[@]}"; do
     if ! rpm -q "$pkg" &>/dev/null; then
       log "Installing $pkg"
@@ -183,9 +183,7 @@ install_git_completion_zsh() {
 }
 
 config_git_shell() {
-  mkdir -p "$ZSH_CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$ZSH_TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$ZSH_TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$ZSH_TARGET_FILE"
 }
 
 # ---------------------------------------------------------------------

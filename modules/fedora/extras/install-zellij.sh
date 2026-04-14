@@ -1,13 +1,16 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ Something went wrong. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 # === Metadata ===
 MODULE_NAME="zellij"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 SCRIPT_NAME="install-zellij.sh"
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
 ZELLIJ_BIN="$HOME_DIR/.local/bin/zellij"
@@ -33,7 +36,6 @@ DEPS=(curl tar wl-clipboard)
 
 install_deps() {
   echo "📦 Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 
@@ -72,6 +74,7 @@ install() {
   chmod +x "$ZELLIJ_BIN"
 
   echo "✅ Installed to $ZELLIJ_BIN"
+  verify_binary zellij --version
 }
 
 config() {
@@ -114,9 +117,7 @@ EOF
   echo "✅ Theme written to $ZELLIJ_CONFIG_FILE"
 
   echo "📁 Copying Zsh config template..."
-  mkdir -p "$ZSH_CONFIG_DIR"
-  cp "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
-  echo "✅ Copied: $LOCAL_CONFIG_TEMPLATE → $ZSH_TARGET_CONFIG"
+  deploy_config "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
 }
 
 clean() {

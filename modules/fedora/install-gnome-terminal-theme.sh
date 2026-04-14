@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
 # === GNOME session check ===
 if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
@@ -8,10 +8,13 @@ if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
   exit 0
 fi
 
-trap 'echo "❌ GNOME Terminal theme setup failed. Exiting." >&2' ERR
-
 MODULE_NAME="gnome-terminal-theme"
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 ACTION="${1:-all}"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
 
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then

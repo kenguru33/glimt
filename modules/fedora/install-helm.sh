@@ -7,8 +7,13 @@ set -Eeuo pipefail
 MODULE_NAME="helm"
 ACTION="${1:-all}"
 
-log(){ printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die(){ printf "ERROR: %s\n" "$*" >&2; exit 1; }
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
+GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
+# shellcheck source=../../versions.env
+source "$GLIMT_VERSIONS"
 
 # ----- Fedora-only guard -----
 fedora_guard(){
@@ -21,13 +26,11 @@ fedora_guard(){
 }
 
 # ----- Real user context (avoid writing into /root) -----
-REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
-ZSH_COMP_DIR="$REAL_HOME/.zsh/completions"              # your fpath
+ZSH_COMP_DIR="$HOME_DIR/.zsh/completions"              # your fpath
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 MODULE_CONF_SRC="$SCRIPT_DIR/config/helm.zsh"           # modules/fedora/config/helm.zsh
-MODULE_CONF_DST="$REAL_HOME/.zsh/config/helm.zsh"
-LOCAL_BIN="$REAL_HOME/.local/bin"
+MODULE_CONF_DST="$HOME_DIR/.zsh/config/helm.zsh"
+LOCAL_BIN="$HOME_DIR/.local/bin"
 
 # ----- Normalize Architecture -----
 normalize_arch() {
@@ -44,7 +47,6 @@ normalize_arch() {
 
 install_deps(){
   log "Installing dependencies (sudo): curl tar gzip"
-  sudo dnf makecache -y
   sudo dnf install -y curl tar gzip
 }
 
@@ -52,7 +54,6 @@ install_helm(){
   log "Installing helm from GitHub releases"
   
   ARCH_NORM="$(normalize_arch)"
-  HELM_VERSION="v3.15.0"  # You can make this configurable
   HELM_URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH_NORM}.tar.gz"
   
   sudo -u "$REAL_USER" mkdir -p "$LOCAL_BIN"
@@ -82,9 +83,9 @@ configure_helm(){
   sudo -u "$REAL_USER" mkdir -p "$ZSH_COMP_DIR"
   # Generate completion as the real user to avoid root-owned files
   if sudo -u "$REAL_USER" bash -lc "helm completion zsh > '$ZSH_COMP_DIR/_helm'"; then
-    chmod 755 "$REAL_HOME/.zsh" "$ZSH_COMP_DIR" 2>/dev/null || true
+    chmod 755 "$HOME_DIR/.zsh" "$ZSH_COMP_DIR" 2>/dev/null || true
     chmod 644 "$ZSH_COMP_DIR/_helm" || true
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.zsh" 2>/dev/null || true
+    chown -R "$REAL_USER":"$REAL_USER" "$HOME_DIR/.zsh" 2>/dev/null || true
     log "Completions written: $ZSH_COMP_DIR/_helm"
   else
     die "Failed to generate Helm Zsh completion"
@@ -93,8 +94,7 @@ configure_helm(){
   # Optional: copy module config if you keep one under modules/fedora/config/helm.zsh
   if [[ -f "$MODULE_CONF_SRC" ]]; then
     log "Installing Zsh config → $MODULE_CONF_DST"
-    sudo -u "$REAL_USER" mkdir -p "$(dirname "$MODULE_CONF_DST")"
-    install -m 0644 -o "$REAL_USER" -g "$REAL_USER" "$MODULE_CONF_SRC" "$MODULE_CONF_DST"
+    deploy_config "$MODULE_CONF_SRC" "$MODULE_CONF_DST"
   else
     log "No module config found at $MODULE_CONF_SRC (skipping)."
   fi

@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ kubectx module failed. Exiting." >&2' ERR
 
 MODULE_NAME="kubectx"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_SRC="$SCRIPT_DIR/config/kubectx.zsh"
@@ -80,14 +83,7 @@ install() {
 config() {
   echo "⚙️  Copying Zsh config for kubectx..."
 
-  if [[ ! -f "$CONFIG_SRC" ]]; then
-    echo "❌ Config file not found: $CONFIG_SRC"
-    exit 1
-  fi
-
-  sudo -u "$REAL_USER" mkdir -p "$(dirname "$CONFIG_DEST")"
-  sudo -u "$REAL_USER" cp "$CONFIG_SRC" "$CONFIG_DEST"
-  chown "$REAL_USER:$REAL_USER" "$CONFIG_DEST"
+  deploy_config "$CONFIG_SRC" "$CONFIG_DEST"
 
   echo "✅ Config copied to $CONFIG_DEST"
 }

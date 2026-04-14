@@ -1,19 +1,20 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ Btop install failed. Exiting." >&2' ERR
 
 MODULE_NAME="btop"
 ACTION="${1:-all}"
 
-# === Resolve Real User and Home ===
-REAL_USER="${SUDO_USER:-$USER}"
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
 
+# === Resolve Real User and Home ===
 if ! id "$REAL_USER" &>/dev/null; then
   echo "❌ Could not resolve real user: $REAL_USER"
   exit 1
 fi
 
-HOME_DIR="$(eval echo "~$REAL_USER")"
 BTOP_CONFIG_DIR="$HOME_DIR/.config/btop"
 BTOP_THEME_DIR="$BTOP_CONFIG_DIR/themes"
 BTOP_CONFIG_FILE="$BTOP_CONFIG_DIR/btop.conf"
@@ -35,7 +36,6 @@ fi
 # === Step: deps ===
 install_deps() {
   echo "📦 Installing required packages..."
-  sudo dnf makecache -y
   sudo dnf install -y btop wget
 }
 

@@ -3,16 +3,16 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="pika-backup"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 FLATPAK_ID="org.gnome.World.PikaBackup"
 ACTION="${1:-all}"
-
-log() { printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die() {
-  printf "ERROR: %s\n" "$*" >&2
-  exit 1
-}
 
 deps() {
   log "Ensuring Flatpak is available"

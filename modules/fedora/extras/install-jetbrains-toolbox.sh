@@ -1,24 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Glimt module: jetbrains-toolbox
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ jetbrains-toolbox module failed." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="jetbrains-toolbox"
-ACTION="${1:-all}"
 
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
+ACTION="${1:-all}"
 
 BASE_DIR="$HOME_DIR/.local/share/JetBrains/Toolbox"
 TMP_DIR="/tmp/jetbrains-toolbox"
 DESKTOP_FILE="$HOME_DIR/.local/share/applications/jetbrains-toolbox.desktop"
 SYMLINK="$HOME_DIR/.local/bin/jetbrains-toolbox"
-
-log() {
-  printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2
-}
 
 require_user() {
   if [[ "$EUID" -eq 0 && -z "${SUDO_USER:-}" ]]; then

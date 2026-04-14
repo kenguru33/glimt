@@ -58,6 +58,7 @@ ensure_deps() {
   # If sudo token isn't cached yet, ask now (prevents hidden prompts when stdout is /dev/null)
   sudo -n true 2>/dev/null || sudo -v
 
+  # Refresh metadata once here — modules must NOT call makecache individually
   pkg_quiet makecache -y
   pkg_quiet install -y git wget
   if ! command -v gum >/dev/null 2>&1; then

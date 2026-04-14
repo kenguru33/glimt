@@ -29,10 +29,16 @@ EOF
 
 acquire_lock() {
   if [[ -f "$LOCK_FILE" ]]; then
-    echo "🔒 Glimt is already running (lock file exists: $LOCK_FILE)"
-    echo "If this is an error, delete the lock file and retry:"
-    echo "  rm -f $LOCK_FILE"
-    exit 1
+    local pid
+    pid=$(<"$LOCK_FILE")
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "🔒 Glimt is already running (PID $pid)"
+      echo "If this is an error, delete the lock file and retry:"
+      echo "  rm -f $LOCK_FILE"
+      exit 1
+    fi
+    echo "⚠️  Removing stale lock (PID $pid no longer running)"
+    rm -f "$LOCK_FILE"
   fi
   echo "$$" >"$LOCK_FILE"
   trap 'rm -f "$LOCK_FILE"' EXIT

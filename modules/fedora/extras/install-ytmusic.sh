@@ -3,13 +3,15 @@
 # YouTube Music PWA (Chrome/Chromium) — Fedora only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
-trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="ytmusic-pwa"
-ACTION="${1:-all}"
 
-log(){ printf "[%s] %s\n" "$MODULE_NAME" "$*" >&2; }
-die(){ printf "ERROR: %s\n" "$*" >&2; exit 1; }
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
+ACTION="${1:-all}"
 
 # --- Fedora-only guard ---
 if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
@@ -19,9 +21,6 @@ if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS.
 APP_NAME="YouTube Music"
 APP_URL="https://music.youtube.com"
 APP_ID="ytmusic-ssb"
-
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 
 LAUNCHER_DIR="$HOME_DIR/.local/share/applications"
 APP_DIR="$HOME_DIR/.local/share/ytmusic-pwa"
@@ -48,7 +47,6 @@ ICON_SRC_SVG="https://upload.wikimedia.org/wikipedia/commons/6/6a/Youtube_Music_
 # -------------------------------
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y curl wget xdg-utils desktop-file-utils librsvg2-tools
 }
 

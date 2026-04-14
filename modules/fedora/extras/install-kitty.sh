@@ -1,10 +1,15 @@
-#!/bin/bash
-set -e
-trap 'echo "❌ An error occurred. Exiting." >&2' ERR
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="kitty"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_DIR="$HOME/.config/kitty"
+CONFIG_DIR="$HOME_DIR/.config/kitty"
 FONT_NAME="Hack Nerd Font Mono"
 NERDFONT_INSTALLER="$SCRIPT_DIR/../install-nerdfonts.sh"
 ACTION="${1:-all}"
@@ -29,7 +34,6 @@ DEPS=(kitty)
 
 install_deps() {
   echo "📦 Installing dependencies for Fedora..."
-  sudo dnf makecache -y
   sudo dnf install -y "${DEPS[@]}"
 }
 

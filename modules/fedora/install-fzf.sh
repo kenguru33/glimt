@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 trap 'echo "❌ FZF install failed. Exiting." >&2' ERR
 
 MODULE_NAME="fzf"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 PLUGIN_DIR="$HOME_DIR/.zsh/plugins/fzf-tab"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
@@ -16,12 +19,10 @@ TARGET_FILE="$CONFIG_DIR/fzf.zsh"
 # === Step: deps ===
 deps() {
   echo "📦 Installing fzf dependencies..."
-  sudo dnf makecache -y
   sudo dnf install -y fzf bat fd-find curl unzip
 
   echo "🛠 Ensuring $LOCAL_BIN exists..."
-  mkdir -p "$LOCAL_BIN"
-  chown "$REAL_USER:$REAL_USER" "$LOCAL_BIN"
+  run_as_user mkdir -p "$LOCAL_BIN"
 }
 
 # === Step: install ===
@@ -54,9 +55,7 @@ config() {
     exit 1
   fi
 
-  mkdir -p "$CONFIG_DIR"
-  cp "$TEMPLATE_FILE" "$TARGET_FILE"
-  chown "$REAL_USER:$REAL_USER" "$TARGET_FILE"
+  deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
   echo "✅ Replaced $TARGET_FILE"
 }
 

@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-set -euo pipefail
-trap 'echo "❌ lazydocker: error on line $LINENO" >&2' ERR
+set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lazydocker"
+
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
+source "$GLIMT_LIB"
+
 ACTION="${1:-all}"
 
 # --- Config (override via env) ----------------------------------------------
 # If set, pins to a specific release tag (e.g., v0.23.3). If empty, uses upstream installer to fetch latest.
 LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-}"
-REAL_USER="${SUDO_USER:-$USER}"
-HOME_DIR="$(eval echo "~$REAL_USER")"
 BIN_DIR="${BIN_DIR:-$HOME_DIR/.local/bin}"
 WRAPPER="${WRAPPER:-$BIN_DIR/lazydocker-rootless}"
 DESKTOP_FILE="${DESKTOP_FILE:-$HOME_DIR/.local/share/applications/lazydocker.desktop}"
@@ -53,7 +56,6 @@ map_arch() {
 
 deps() {
   echo "==> [$MODULE_NAME] deps"
-  sudo dnf makecache -y
   sudo dnf install -y curl tar xz ca-certificates
 }
 
@@ -104,6 +106,7 @@ install_pkg() {
     _download_latest_via_upstream_script
   fi
   echo "✅ Installed: $(command -v lazydocker || echo "$BIN_DIR/lazydocker")"
+  verify_binary lazydocker --version
 }
 
 write_wrapper() {
