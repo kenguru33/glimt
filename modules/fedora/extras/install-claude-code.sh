@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # modules/fedora/extras/install-claude-code.sh
 # Claude Code CLI — Anthropic's AI coding assistant
-# Requires Node.js 18+ (provided by the volta core module)
+# Uses the official native installer (no Node.js required)
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
@@ -19,47 +19,33 @@ ACTION="${1:-all}"
 if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
 [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
 
-VOLTA_BIN="$HOME_DIR/.volta/bin/volta"
-NPM_BIN="$HOME_DIR/.volta/bin/npm"
-NODE_BIN="$HOME_DIR/.volta/bin/node"
+CLAUDE_BIN="$HOME_DIR/.claude/local/claude"
 
 # ------------------------------------------------------------
 # Dependencies
 # ------------------------------------------------------------
 deps() {
-  log "Checking for Node.js (via Volta)..."
+  log "Checking dependencies..."
 
-  if [[ ! -x "$VOLTA_BIN" ]]; then
-    die "Volta not found. Run the volta module first (bash modules/fedora/install-volta.sh all)."
+  if ! command -v curl >/dev/null 2>&1; then
+    die "curl is required but not found."
   fi
 
-  if [[ ! -x "$NODE_BIN" ]]; then
-    die "Node.js not found. Run: volta install node"
-  fi
-
-  local node_major
-  node_major="$(run_as_user "$NODE_BIN" --version | sed 's/^v//' | cut -d. -f1)"
-  if (( node_major < 18 )); then
-    die "Node.js 18+ required (found v${node_major}). Run: volta install node@latest"
-  fi
-
-  log "Node.js v${node_major} OK"
+  log "Dependencies OK"
 }
 
 # ------------------------------------------------------------
 # Install
 # ------------------------------------------------------------
 install_pkg() {
-  log "Installing Claude Code via npm..."
-  run_as_user "$NPM_BIN" install -g @anthropic-ai/claude-code
+  log "Installing Claude Code via native installer..."
+  run_as_user bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
   log "Claude Code installed."
 
-  # Verify using the Volta-managed path
-  local claude_bin="$HOME_DIR/.volta/bin/claude"
-  if [[ -x "$claude_bin" ]]; then
+  if [[ -x "$CLAUDE_BIN" ]]; then
     log "✅ claude OK"
   else
-    warn "claude not found at $claude_bin after install"
+    warn "claude not found at $CLAUDE_BIN after install"
   fi
 }
 
@@ -75,7 +61,7 @@ config() {
 # ------------------------------------------------------------
 clean() {
   log "Removing Claude Code..."
-  run_as_user "$NPM_BIN" uninstall -g @anthropic-ai/claude-code || true
+  rm -rf "$HOME_DIR/.claude"
   log "Claude Code removed."
 }
 
