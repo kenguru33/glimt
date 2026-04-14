@@ -1,6 +1,6 @@
 <div align="center">
 
-# Glimt
+# ✨ Glimt
 
 **One command. Fully configured Fedora.**
 
@@ -24,20 +24,20 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ---
 
-## Why Glimt?
+## 🤔 Why Glimt?
 
 Setting up a new Fedora install means hours of repetitive work — installing packages, tweaking GNOME, downloading binaries, wiring up dotfiles. Glimt does all of it in one run and gives you a CLI to manage it afterwards.
 
-- **Idempotent** — run it again any time, it picks up where it left off
-- **Modular** — every tool is its own script; install or clean individually
-- **Pick what you want** — core modules run automatically, extras are opt-in via an interactive picker
-- **No root required** — run as your normal user, glimt uses sudo only when needed
+- 🔁 **Idempotent** — run it again any time, it picks up where it left off
+- 🧩 **Modular** — every tool is its own script; install or clean individually
+- 🎛️ **Pick what you want** — core modules run automatically, extras are opt-in via an interactive picker
+- 🔓 **No root required** — run as your normal user, glimt uses sudo only when needed
 
 ---
 
-## What you get
+## 📦 What you get
 
-### Shell & terminal
+### 💻 Shell & terminal
 
 A modern ZSH setup with Starship prompt, Catppuccin Mocha colors, Nerd Fonts, and all the CLI essentials.
 
@@ -48,7 +48,7 @@ A modern ZSH setup with Starship prompt, Catppuccin Mocha colors, Nerd Fonts, an
 | `fzf` | Fuzzy finder | `btop` | Resource monitor |
 | `wl-copy` | Wayland `pbcopy`/`pbpaste` | | |
 
-### Development tools
+### 🛠️ Development tools
 
 Git with GNOME Keyring, Neovim + LazyVim, and Node.js version management out of the box.
 
@@ -57,7 +57,7 @@ Git with GNOME Keyring, Neovim + LazyVim, and Node.js version management out of 
 | `git-config` | Git + Keyring credentials | `lazyvim` | LazyVim config |
 | `nvim` | Neovim | `volta` | Node.js version manager |
 
-### Kubernetes & cloud
+### ☸️ Kubernetes & cloud
 
 Everything you need to work with clusters from day one.
 
@@ -67,7 +67,7 @@ Everything you need to work with clusters from day one.
 | `kubectx` | kubens / kubectx | `k9s` | k9s TUI |
 | `azure-cli` | Azure CLI | | |
 
-### GNOME desktop
+### 🎨 GNOME desktop
 
 Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as your user avatar.
 
@@ -77,7 +77,7 @@ Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as y
 | `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator | `papirus-icon-theme` | Papirus icons |
 | `ptyxis-theme` | Catppuccin Mocha for Ptyxis | `set-user-avatar` | Gravatar user avatar |
 
-### System
+### ⚙️ System
 
 | Module | | Module | |
 |---|---|---|---|
@@ -86,12 +86,12 @@ Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as y
 
 ---
 
-## Extras — pick what you need
+## 🎛️ Extras — pick what you need
 
 Optional modules are selected through an interactive picker during setup. Add or remove them any time with `glimt module-selection`.
 
 <details>
-<summary><strong>Applications</strong></summary>
+<summary>📱 <strong>Applications</strong></summary>
 
 | Module | Installs |
 |---|---|
@@ -106,7 +106,7 @@ Optional modules are selected through an interactive picker during setup. Add or
 </details>
 
 <details>
-<summary><strong>Chrome PWAs</strong></summary>
+<summary>🌐 <strong>Chrome PWAs</strong></summary>
 
 | Module | Installs |
 |---|---|
@@ -119,7 +119,7 @@ Optional modules are selected through an interactive picker during setup. Add or
 </details>
 
 <details>
-<summary><strong>Dev & infra</strong></summary>
+<summary>🧰 <strong>Dev & infra</strong></summary>
 
 | Module | Installs |
 |---|---|
@@ -137,22 +137,22 @@ Optional modules are selected through an interactive picker during setup. Add or
 
 ---
 
-## Glimt CLI
+## 🖥️ Glimt CLI
 
 After setup, `glimt` is installed to `~/.local/bin/glimt` with full tab completion.
 
 ```bash
-glimt install <module>      # install or reinstall a module
-glimt clean <module>        # remove a module cleanly
-glimt module-selection      # interactive extras picker
-glimt update                # pull latest and re-run
+glimt install <module>      # 📥 install or reinstall a module
+glimt clean <module>        # 🧹 remove a module cleanly
+glimt module-selection      # 🎛️ interactive extras picker
+glimt update                # 🔄 pull latest and re-run
 ```
 
 ---
 
-## Notes
+## 📝 Notes
 
-**Git credentials** — configured to use `git-credential-libsecret` (GNOME Keyring). Enable the socket if needed:
+🔐 **Git credentials** — configured to use `git-credential-libsecret` (GNOME Keyring). Enable the socket if needed:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
