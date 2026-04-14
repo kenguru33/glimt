@@ -28,7 +28,7 @@ deps() {
   log "Checking dependencies..."
 
   if ! command -v curl >/dev/null 2>&1; then
-    die "curl is required but not found."
+    die "curl is required but not founsnd."
   fi
 
   log "Dependencies OK"
@@ -82,10 +82,10 @@ all() {
 # Entrypoint
 # ------------------------------------------------------------
 case "$ACTION" in
-  deps)    deps ;;
-  install) install_pkg ;;
-  config)  config ;;
-  clean)   clean ;;
-  all)     all ;;
-  *)       die "Unknown action: $ACTION (use: all|deps|install|config|clean)" ;;
+deps) deps ;;
+install) install_pkg ;;
+config) config ;;
+clean) clean ;;
+all) all ;;
+*) die "Unknown action: $ACTION (use: all|deps|install|config|clean)" ;;
 esac
