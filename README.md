@@ -1,14 +1,22 @@
-# ✨ G L I M T ✨
+# Glimt
 
-**Glimt** is an opinionated post-installation tool for **Fedora**. It takes a fresh install from zero to a fully configured development environment — shell, GNOME desktop, Kubernetes tooling, and selected apps — in a single command.
+> Opinionated post-installation automation for Fedora — from a fresh install to a fully configured development environment in a single command.
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+![Platform: Fedora](https://img.shields.io/badge/platform-Fedora-294172)
+![Shell: Bash](https://img.shields.io/badge/shell-bash-89e051)
+
+<img src="./screenshot.png" alt="Glimt screenshot" width="720">
 
 ---
 
-## Install
+## Quick start
 
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
 ```
+
+> **Requirements:** Do not run as `root`. Your user must have `sudo` privileges.
 
 To run the development branch:
 
@@ -16,15 +24,13 @@ To run the development branch:
 bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh) branch=dev
 ```
 
-> Do **not** run as `root`. Your user must have **sudo** privileges.
-
 ---
 
 ## What gets installed
 
 ### Shell & terminal
 
-| Module | What it does |
+| Module | Description |
 |---|---|
 | `zsh-env` | ZSH with config scaffolding (`~/.zsh/config/*.zsh`) |
 | `starship` | Starship prompt |
@@ -32,26 +38,26 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 | `bat` | `cat` with syntax highlighting |
 | `eza` | Modern `ls` replacement |
 | `btop` | Resource monitor |
-| `wl-copy` | `pbcopy` / `pbpaste` Wayland clipboard helpers |
+| `wl-copy` | Wayland clipboard helpers (`pbcopy` / `pbpaste`) |
 | `zellij` | Terminal multiplexer *(extras)* |
 | `kitty` | Kitty terminal *(extras)* |
 | `blackbox-terminal` | BlackBox terminal *(extras)* |
 
 ### Development tools
 
-| Module | What it does |
+| Module | Description |
 |---|---|
 | `git-config` | Git with GNOME Keyring credential store |
 | `nvim` | Neovim |
 | `lazyvim` | LazyVim config for Neovim |
 | `volta` | Node.js version manager |
-| `dotnet-userspace` | .NET SDK 8 and 10 (userspace install, no sudo) *(extras)* |
+| `dotnet-userspace` | .NET SDK 8 and 10 — userspace install, no sudo *(extras)* |
 | `vscode` | Visual Studio Code *(extras)* |
 | `jetbrains-toolbox` | JetBrains Toolbox *(extras)* |
 
 ### Kubernetes & cloud
 
-| Module | What it does |
+| Module | Description |
 |---|---|
 | `kubectl` | kubectl |
 | `kubectx` | `kubens` / `kubectx` |
@@ -64,7 +70,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ### GNOME desktop
 
-| Module | What it does |
+| Module | Description |
 |---|---|
 | `gnome-config` | Wallpaper, UI preferences, keybindings |
 | `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator |
@@ -75,7 +81,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ### System
 
-| Module | What it does |
+| Module | Description |
 |---|---|
 | `flatpak` | Flatpak + Flathub |
 | `chrome` | Google Chrome |
@@ -84,7 +90,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ### Applications *(extras, opt-in)*
 
-| Module | What it installs |
+| Module | Installs |
 |---|---|
 | `1password` | 1Password GUI |
 | `1password-cli` | 1Password CLI (`op`) |
@@ -109,21 +115,19 @@ After setup, `glimt` is available at `~/.local/bin/glimt`.
 glimt install <module>      # install a module
 glimt clean <module>        # uninstall a module
 glimt module-selection      # interactive extras picker
-glimt update                # pull latest glimt and re-run
+glimt update                # pull latest and re-run
 ```
 
 `glimt install <TAB>` and `glimt clean <TAB>` tab-complete all available module names.
 
 ---
 
-## Git credentials
+## Notes
 
-Git is configured to use `git-credential-libsecret` (GNOME Keyring). If the keyring socket is not running:
+**Git credentials** — Git is configured to use `git-credential-libsecret` (GNOME Keyring). If the keyring socket is not running:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
 ```
 
----
-
-<img src="./screenshot.png" alt="Glimt screenshot" width="400">
+**Extras** — Optional modules are selected via an interactive `gum`-based picker during setup. Re-running `glimt module-selection` lets you add or remove extras at any time; deselected modules are automatically cleaned up.
