@@ -67,6 +67,7 @@ declare -A MODULES=(
   [outlook]="outlook"
   [teams]="teams"
   [chatgpt]="chatgpt"
+  ["claude-code"]="claude"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
@@ -91,6 +92,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [outlook]="Outlook PWA"
   [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
+  ["claude-code"]="Claude Code CLI"
 )
 
 # -----------------------------
