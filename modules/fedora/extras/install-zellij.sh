@@ -56,25 +56,17 @@ install() {
     *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
   esac
 
-  echo "🌐 Fetching latest Zellij release..."
-  URL=$(curl -s https://api.github.com/repos/zellij-org/zellij/releases/latest \
-    | grep "browser_download_url" \
-    | grep "${ARCH}-unknown-linux-musl\.tar\.gz\"" \
-    | cut -d '"' -f 4 || true)
-
-  if [[ -z "$URL" ]]; then
-    echo "⚠️ GitHub API failed. Falling back to v0.39.2..."
-    URL="https://github.com/zellij-org/zellij/releases/download/v0.39.2/zellij-${ARCH}-unknown-linux-musl.tar.gz"
-  fi
+  local URL="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${ARCH}-unknown-linux-musl.tar.gz"
 
   echo "⬇️ Downloading from: $URL"
-  curl -Lo /tmp/zellij.tar.gz "$URL"
+  curl -fsSL "$URL" -o /tmp/zellij.tar.gz
   tar -xzf /tmp/zellij.tar.gz -C /tmp
   mv /tmp/zellij "$ZELLIJ_BIN"
   chmod +x "$ZELLIJ_BIN"
+  rm -f /tmp/zellij.tar.gz
 
   echo "✅ Installed to $ZELLIJ_BIN"
-  verify_binary zellij --version
+  PATH="$HOME_DIR/.local/bin:$PATH" verify_binary zellij --version
 }
 
 config() {
