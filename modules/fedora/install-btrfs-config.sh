@@ -31,7 +31,7 @@ has_config() {
 
 ensure_kv() {
   local file="$1" key="$2" value="$3"
-  if grep -q "^${key}=" "$file"; then
+  if sudo grep -q "^${key}=" "$file"; then
     sudo sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
   else
     echo "${key}=\"${value}\"" | sudo tee -a "$file" >/dev/null
