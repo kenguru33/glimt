@@ -66,7 +66,6 @@ declare -A MODULES=(
   [teams]="teams"
   [chatgpt]="chatgpt"
   ["claude-code"]="claude"
-  [nvidia]="nvidia-smi"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
@@ -90,7 +89,6 @@ declare -A MODULE_DESCRIPTIONS=(
   [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
   ["claude-code"]="Claude Code CLI"
-  [nvidia]="NVIDIA proprietary driver (Wayland)"
 )
 
 # -----------------------------
@@ -180,11 +178,6 @@ main() {
   preselect=()
 
   for m in "${!MODULES[@]}"; do
-    # Skip NVIDIA module if no NVIDIA GPU is present
-    if [[ "$m" == "nvidia" ]] && ! lspci 2>/dev/null | grep -qi nvidia; then
-      continue
-    fi
-
     label="$m – ${MODULE_DESCRIPTIONS[$m]}"
     menu+=("$label")
     map+=("$label:$m")
