@@ -25,6 +25,7 @@ fi
 
 # === Constants ===========================================================
 FEDORA_REPO="/etc/yum.repos.d/1password.repo"
+DESKTOP_OVERRIDE="$HOME_DIR/.local/share/applications/1password.desktop"
 DEPS=(curl ca-certificates dnf-plugins-core)
 
 # === Dependencies ========================================================
@@ -74,6 +75,24 @@ config_1password() {
     exit 1
   fi
   verify_binary 1password --version
+
+  # 1Password (Electron) does not reliably detect the GNOME dark preference on
+  # Wayland. Forcing GTK_THEME=Adwaita:dark makes Electron read a dark GTK theme
+  # at startup, setting nativeTheme.shouldUseDarkColors=true so the app and its
+  # window decorations render in dark mode.
+  local desktop_src="/usr/share/applications/1password.desktop"
+  if [[ -f "$desktop_src" ]]; then
+    run_as_user mkdir -p "$(dirname "$DESKTOP_OVERRIDE")"
+    local tmp
+    tmp=$(mktemp)
+    sed 's|^Exec=\(/[^ ]*\)|Exec=env GTK_THEME=Adwaita:dark \1|g' \
+      "$desktop_src" > "$tmp"
+    install -m 644 -o "$REAL_USER" "$tmp" "$DESKTOP_OVERRIDE"
+    rm -f "$tmp"
+    log "Applied dark-theme fix to 1Password desktop entry."
+  else
+    warn "System desktop file not found — skipping dark theme fix."
+  fi
 }
 
 # === Clean ===============================================================
@@ -81,6 +100,7 @@ clean_1password() {
   log "Removing 1Password…"
   sudo dnf remove -y 1password || true
   remove_repo || true
+  rm -f "$DESKTOP_OVERRIDE" || true
   log "1Password removed."
 }
 
