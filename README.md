@@ -138,8 +138,6 @@ Optional modules are selected through an interactive picker during setup. Add or
 | `lazydocker` | LazyDocker TUI |
 | `lens` | Lens Kubernetes desktop |
 | `zellij` | Zellij terminal multiplexer |
-| `kitty` | Kitty terminal |
-| `blackbox-terminal` | BlackBox terminal |
 
 </details>
 
