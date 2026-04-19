@@ -51,19 +51,20 @@ A modern ZSH setup with Starship prompt, Catppuccin Mocha colors, Nerd Fonts, an
 
 | Module | | Module | |
 |---|---|---|---|
-| `zsh-env` | ZSH + config scaffolding | `bat` | `cat` with syntax highlighting |
+| `zsh` | ZSH + config scaffolding | `bat` | `cat` with syntax highlighting |
 | `starship` | Starship prompt | `eza` | Modern `ls` replacement |
 | `fzf` | Fuzzy finder | `btop` | Resource monitor |
-| `wl-copy` | Wayland `pbcopy`/`pbpaste` | | |
+| `pbcopy` | Wayland `pbcopy`/`pbpaste` | | |
 
 ### 🛠️ Development tools
 
-Git with GNOME Keyring, Neovim + LazyVim, and Node.js version management out of the box.
+Git with GNOME Keyring, Neovim + LazyVim, Node.js version management, and GitHub CLI out of the box.
 
 | Module | | Module | |
 |---|---|---|---|
 | `git-config` | Git + Keyring credentials | `lazyvim` | LazyVim config |
 | `nvim` | Neovim | `volta` | Node.js version manager |
+| `gh` | GitHub CLI + ZSH completion | | |
 
 ### ☸️ Kubernetes & cloud
 
@@ -83,13 +84,14 @@ Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as y
 |---|---|---|---|
 | `gnome-config` | Wallpaper, UI, keybindings | `nerdfonts` | Nerd Fonts |
 | `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator | `papirus-icon-theme` | Papirus icons |
-| `ptyxis-theme` | Catppuccin Mocha for Ptyxis | `set-user-avatar` | Gravatar user avatar |
+| `gnome-terminal-theme` | Catppuccin Mocha terminal theme | `gravatar` | Gravatar user avatar |
+| `just-perfection` | Fine-tune GNOME Shell UI | `gnome-caffeine` | Caffeine — prevent screen lock |
 
 ### ⚙️ System
 
 | Module | | Module | |
 |---|---|---|---|
-| `flatpak` | Flatpak + Flathub | `snapper` | Btrfs snapshots + dnf hooks |
+| `flatpak` | Flatpak + Flathub | `btrfs-config` | Btrfs snapshots + snapper + dnf hooks |
 | `chrome` | Google Chrome | `norwegian-mac-keyboard` | Norwegian Mac layout |
 
 ---
@@ -109,20 +111,20 @@ Optional modules are selected through an interactive picker during setup. Add or
 | `spotify` | Spotify (Flatpak) |
 | `gitkraken` | GitKraken |
 | `tableplus` | TablePlus |
-| `pika-backup` | Pika Backup |
+| `pika` | Pika Backup |
 
 </details>
 
 <details>
-<summary>🌐 <strong>Chrome PWAs</strong></summary>
+<summary>🌐 <strong>Web apps</strong></summary>
 
 | Module | Installs |
 |---|---|
-| `notion-chrome` | Notion |
-| `outlook-pwa` | Outlook |
-| `teams-pwa` | Microsoft Teams |
-| `chatgpt-pwa` | ChatGPT |
-| `ytmusic-pwa` | YouTube Music |
+| `notion` | Notion |
+| `outlook` | Outlook |
+| `teams` | Microsoft Teams |
+| `chatgpt` | ChatGPT |
+| `ytmusic` | YouTube Music |
 
 </details>
 
@@ -133,11 +135,12 @@ Optional modules are selected through an interactive picker during setup. Add or
 |---|---|
 | `vscode` | Visual Studio Code |
 | `jetbrains-toolbox` | JetBrains Toolbox |
-| `dotnet-userspace` | .NET SDK 8 + 10 (userspace, no sudo) |
+| `dotnet` | .NET SDK 8 + 10 (userspace, no sudo) |
 | `docker-rootless` | Docker rootless mode |
 | `lazydocker` | LazyDocker TUI |
 | `lens` | Lens Kubernetes desktop |
 | `zellij` | Zellij terminal multiplexer |
+| `claude-code` | Claude Code CLI (Anthropic AI assistant) |
 
 </details>
 
