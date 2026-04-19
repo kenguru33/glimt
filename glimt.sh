@@ -77,6 +77,13 @@ run_update() {
   git -C "$REPO_DIR" fetch --all --prune
   git -C "$REPO_DIR" pull --rebase --stat
 
+  local bin_target="$HOME/.local/bin/glimt"
+  if [[ -f "$bin_target" ]]; then
+    cp "$REPO_DIR/glimt.sh" "$bin_target"
+    chmod +x "$bin_target"
+    echo "✅ glimt binary updated"
+  fi
+
   local maybe_module="${1:-}"
   [[ "$maybe_module" == "all" ]] && maybe_module=""
   if [[ -n "$maybe_module" ]]; then
