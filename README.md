@@ -36,10 +36,10 @@ No Ansible. No YAML. No dependencies. Just Bash.
 
 Reinstalling Fedora means hours of repetitive work — `dnf install`, GNOME tweaks, binary downloads, dotfiles. Glimt does all of it in one run, and a post-install CLI lets you manage modules individually afterwards.
 
-- ♻️ **Idempotent** — run it as many times as you like, it won't break anything
-- 🧩 **Modular** — every tool is its own script; install, clean, or reconfigure individually
-- 🎛️ **Opt-in extras** — core modules run automatically, optional apps are picked interactively
-- 🔓 **No root required** — runs as your normal user, only calls `sudo` when necessary
+- **Idempotent** — run it as many times as you like, it won't break anything
+- **Modular** — every tool is its own script; install, clean, or reconfigure individually
+- **Opt-in extras** — core modules run automatically, optional apps are picked interactively
+- **No root required** — runs as your normal user, only calls `sudo` when necessary
 
 ---
 
@@ -49,48 +49,48 @@ Reinstalling Fedora means hours of repetitive work — `dnf install`, GNOME twea
 
 A modern ZSH environment configured and ready to go.
 
-- 🐚 **zsh** — ZSH with a clean config scaffold in `~/.zsh/config/`
-- 🚀 **starship** — Starship prompt with Catppuccin Mocha colors
-- 🔤 **nerdfonts** — Nerd Fonts patched for icons and glyphs
-- 🔍 **fzf** — fuzzy finder wired into shell history and file search
-- 🦇 **bat** — `cat` with syntax highlighting
-- 📂 **eza** — modern `ls` replacement with icons and git status
-- 📊 **btop** — resource monitor
-- 📋 **pbcopy** — `pbcopy`/`pbpaste` for Wayland clipboard
+- **zsh** — ZSH with a clean config scaffold in `~/.zsh/config/`
+- **starship** — Starship prompt with Catppuccin Mocha colors
+- **nerdfonts** — Nerd Fonts patched for icons and glyphs
+- **fzf** — fuzzy finder wired into shell history and file search
+- **bat** — `cat` with syntax highlighting
+- **eza** — modern `ls` replacement with icons and git status
+- **btop** — resource monitor
+- **pbcopy** — `pbcopy`/`pbpaste` for Wayland clipboard
 
 ### 🛠️ Development tools
 
-- 🐙 **git-config** — Git configured with GNOME Keyring credential storage
-- 🐱 **gh** — GitHub CLI with ZSH tab completion
-- 📝 **nvim** — Neovim with LazyVim preconfigured
-- ⚡ **volta** — Node.js version manager, no sudo required
+- **git-config** — Git configured with GNOME Keyring credential storage
+- **gh** — GitHub CLI with ZSH tab completion
+- **nvim** — Neovim with LazyVim preconfigured
+- **volta** — Node.js version manager, no sudo required
 
 ### ☸️ Kubernetes & cloud
 
-- 🎮 **kubectl** — Kubernetes CLI
-- ⛵ **helm** — Helm package manager
-- 🔀 **kubectx** — fast cluster and namespace switching (`kubectx`/`kubens`)
-- 🖥️ **k9s** — terminal UI for Kubernetes clusters
-- ☁️ **azure-cli** — Azure CLI
+- **kubectl** — Kubernetes CLI
+- **helm** — Helm package manager
+- **kubectx** — fast cluster and namespace switching (`kubectx`/`kubens`)
+- **k9s** — terminal UI for Kubernetes clusters
+- **azure-cli** — Azure CLI
 
 ### 🎨 GNOME desktop
 
 A polished desktop with tiling, blur, Catppuccin terminal, and Papirus icons.
 
-- ⚙️ **gnome-config** — wallpaper, UI tweaks, and keybindings
-- 🧩 **gnome-extensions** — Tiling Shell, Blur My Shell, GSConnect, AppIndicator
-- 🎨 **gnome-terminal-theme** — Catppuccin Mocha terminal color scheme
-- 🔧 **just-perfection** — fine-tune GNOME Shell UI elements
-- 🖼️ **papirus-icon-theme** — Papirus icon theme
-- ☕ **gnome-caffeine** — prevent screen lock on demand
-- 👤 **gravatar** — sets your Gravatar as the user avatar
+- **gnome-config** — wallpaper, UI tweaks, and keybindings
+- **gnome-extensions** — Tiling Shell, Blur My Shell, GSConnect, AppIndicator
+- **gnome-terminal-theme** — Catppuccin Mocha terminal color scheme
+- **just-perfection** — fine-tune GNOME Shell UI elements
+- **papirus-icon-theme** — Papirus icon theme
+- **gnome-caffeine** — prevent screen lock on demand
+- **gravatar** — sets your Gravatar as the user avatar
 
 ### ⚙️ System
 
-- 📦 **flatpak** — Flatpak with Flathub configured
-- 💾 **btrfs-config** — automatic Btrfs snapshots with snapper and dnf hooks
-- 🌐 **chrome** — Google Chrome
-- ⌨️ **norwegian-mac-keyboard** — Norwegian Mac keyboard layout
+- **flatpak** — Flatpak with Flathub configured
+- **btrfs-config** — automatic Btrfs snapshots with snapper and dnf hooks
+- **chrome** — Google Chrome
+- **norwegian-mac-keyboard** — Norwegian Mac keyboard layout
 
 ---
 
@@ -145,7 +145,7 @@ glimt update                # pull latest and re-run
 
 ## 📝 Notes
 
-🔐 **Git credentials** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
+**Git credentials** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
