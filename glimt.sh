@@ -18,7 +18,7 @@ print_usage() {
 Usage: $SCRIPT_NAME <action> [args...]
 
 Actions:
-  update [module]     → git pull, then run all core modules + selected extras (or only <module> if provided)
+  update [all|module] → git pull, then run all core modules + selected extras (or only <module> if provided)
   install <module>    → run modules/fedora/**/install-<module>.sh with 'all'
   clean <module>      → run modules/fedora/**/install-<module>.sh with 'clean'
   module-selection    → run setup-extras.sh (optional modules UI)
@@ -78,6 +78,7 @@ run_update() {
   git -C "$REPO_DIR" pull --rebase --stat
 
   local maybe_module="${1:-}"
+  [[ "$maybe_module" == "all" ]] && maybe_module=""
   if [[ -n "$maybe_module" ]]; then
     local script
     script="$(find_module_script "$maybe_module")"
