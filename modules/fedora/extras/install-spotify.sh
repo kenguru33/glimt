@@ -63,21 +63,38 @@ install_spotify() {
   fi
 
   log "Installing Spotify via Flatpak"
-  sudo flatpak install -y "$FLATHUB_REMOTE" "$FLATPAK_APP_ID"
+  flatpak install -y "$FLATHUB_REMOTE" "$FLATPAK_APP_ID"
 }
 
 configure_spotify() {
-  true
+  log "Configuring Spotify for X11/XWayland..."
+
+  # Deny Wayland socket so Spotify falls back to XWayland
+  run_as_user flatpak override --user --nosocket=wayland "$FLATPAK_APP_ID"
+
+  # Write Spotify's native flags config (one flag per line)
+  local flags_file="$HOME_DIR/.var/app/$FLATPAK_APP_ID/config/spotify-flags.conf"
+  run_as_user mkdir -p "$(dirname "$flags_file")"
+  run_as_user tee "$flags_file" > /dev/null <<'EOF'
+--ozone-platform=x11
+--disable-features=UseOzonePlatform
+EOF
+
+  log "Wrote X11 flags to $flags_file"
 }
 
 clean_spotify() {
   log "Removing Spotify Flatpak"
   if command -v flatpak &>/dev/null; then
-    sudo flatpak uninstall -y "$FLATPAK_APP_ID" || true
+    flatpak uninstall -y "$FLATPAK_APP_ID" || true
+    run_as_user flatpak override --user --reset "$FLATPAK_APP_ID" || true
 
     log "Removing unused Flatpak runtimes"
-    sudo flatpak uninstall -y --unused || true
+    flatpak uninstall -y --unused || true
   fi
+
+  local flags_file="$HOME_DIR/.var/app/$FLATPAK_APP_ID/config/spotify-flags.conf"
+  [[ -f "$flags_file" ]] && rm -f "$flags_file"
 
   log "Clean complete."
 }
