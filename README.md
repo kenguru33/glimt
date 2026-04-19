@@ -1,10 +1,10 @@
 <div align="center">
 
-# ✨ Glimt — Fedora Post-Install Automation
+# Glimt — Fedora Post-Install Automation
 
 **One command. Fully configured Fedora developer workstation.**
 
-Automate your Fedora Workstation setup after a fresh install — shell, GNOME desktop, Kubernetes tools, and developer apps configured and ready in minutes.
+Stop reinstalling the same tools after every fresh Fedora install. Glimt automates your entire setup — shell, GNOME, Kubernetes tooling, and developer apps — and keeps it reproducible.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Fedora](https://img.shields.io/badge/platform-Fedora-294172)
@@ -26,142 +26,126 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ## What is Glimt?
 
-Glimt is a **Fedora post-install script** that automates setting up a developer workstation after a fresh Fedora installation. Instead of spending hours reinstalling packages, reconfiguring GNOME, and hunting down binaries every time you reinstall, a single command restores your entire environment.
+Glimt is a post-install automation tool for Fedora Workstation. After a fresh install, a single command sets up your entire development environment — ZSH with Starship, a tuned GNOME desktop, Kubernetes CLI tools, Neovim, Node.js, Btrfs snapshots, and more.
 
-It covers everything: ZSH with Starship prompt, GNOME desktop configuration, Kubernetes CLI tools, Neovim with LazyVim, Node.js version management, Btrfs snapshots, and optional extras like VS Code, Docker, JetBrains, and 1Password — all installed and configured automatically.
-
----
-
-## 🤔 Why Glimt?
-
-Reinstalling Fedora Workstation means hours of repetitive work — installing packages with `dnf`, tweaking GNOME settings, downloading binaries, wiring up dotfiles. Glimt automates the entire Fedora post-installation process in one run and gives you a CLI to manage it afterwards.
-
-- 🔁 **Idempotent** — run it again any time, it picks up where it left off
-- 🧩 **Modular** — every tool is its own script; install or clean individually
-- 🎛️ **Pick what you want** — core modules run automatically, extras are opt-in via an interactive picker
-- 🔓 **No root required** — run as your normal user, glimt uses sudo only when needed
+No Ansible. No YAML. No dependencies. Just Bash.
 
 ---
 
-## 📦 What you get
+## Why Glimt?
 
-### 💻 Shell & terminal
+Reinstalling Fedora means hours of repetitive work — `dnf install`, GNOME tweaks, binary downloads, dotfiles. Glimt does all of it in one run, and a post-install CLI lets you manage modules individually afterwards.
 
-A modern ZSH setup with Starship prompt, Catppuccin Mocha colors, Nerd Fonts, and all the CLI essentials.
-
-| Module | | Module | |
-|---|---|---|---|
-| `zsh` | ZSH + config scaffolding | `bat` | `cat` with syntax highlighting |
-| `starship` | Starship prompt | `eza` | Modern `ls` replacement |
-| `fzf` | Fuzzy finder | `btop` | Resource monitor |
-| `pbcopy` | Wayland `pbcopy`/`pbpaste` | | |
-
-### 🛠️ Development tools
-
-Git with GNOME Keyring, Neovim + LazyVim, Node.js version management, and GitHub CLI out of the box.
-
-| Module | | Module | |
-|---|---|---|---|
-| `git-config` | Git + Keyring credentials | `lazyvim` | LazyVim config |
-| `nvim` | Neovim | `volta` | Node.js version manager |
-| `gh` | GitHub CLI + ZSH completion | | |
-
-### ☸️ Kubernetes & cloud
-
-Everything you need to work with clusters from day one.
-
-| Module | | Module | |
-|---|---|---|---|
-| `kubectl` | kubectl | `helm` | Helm |
-| `kubectx` | kubens / kubectx | `k9s` | k9s TUI |
-| `azure-cli` | Azure CLI | | |
-
-### 🎨 GNOME desktop
-
-Tiling, blur effects, Catppuccin terminal, Papirus icons, and your Gravatar as your user avatar.
-
-| Module | | Module | |
-|---|---|---|---|
-| `gnome-config` | Wallpaper, UI, keybindings | `nerdfonts` | Nerd Fonts |
-| `gnome-extensions` | Tiling Shell, Blur My Shell, GSConnect, AppIndicator | `papirus-icon-theme` | Papirus icons |
-| `gnome-terminal-theme` | Catppuccin Mocha terminal theme | `gravatar` | Gravatar user avatar |
-| `just-perfection` | Fine-tune GNOME Shell UI | `gnome-caffeine` | Caffeine — prevent screen lock |
-
-### ⚙️ System
-
-| Module | | Module | |
-|---|---|---|---|
-| `flatpak` | Flatpak + Flathub | `btrfs-config` | Btrfs snapshots + snapper + dnf hooks |
-| `chrome` | Google Chrome | `norwegian-mac-keyboard` | Norwegian Mac layout |
+- **Idempotent** — run it as many times as you like, it won't break anything
+- **Modular** — every tool is its own script; install, clean, or reconfigure individually
+- **Opt-in extras** — core modules run automatically, optional apps are picked interactively
+- **No root required** — runs as your normal user, only calls `sudo` when necessary
 
 ---
 
-## 🎛️ Extras — pick what you need
+## What you get
 
-Optional modules are selected through an interactive picker during setup. Add or remove them any time with `glimt module-selection`.
+### Shell & terminal
 
-<details>
-<summary>🚀 <strong>Applications</strong></summary>
+A modern ZSH environment configured and ready to go.
 
-| Module | Installs |
-|---|---|
-| `1password` | 1Password |
-| `1password-cli` | 1Password CLI (`op`) |
-| `discord` | Discord (Flatpak) |
-| `spotify` | Spotify (Flatpak) |
-| `gitkraken` | GitKraken |
-| `tableplus` | TablePlus |
-| `pika` | Pika Backup |
+- **zsh** — ZSH with a clean config scaffold in `~/.zsh/config/`
+- **starship** — Starship prompt with Catppuccin Mocha colors
+- **nerdfonts** — Nerd Fonts patched for icons and glyphs
+- **fzf** — fuzzy finder wired into shell history and file search
+- **bat** — `cat` with syntax highlighting
+- **eza** — modern `ls` replacement with icons and git status
+- **btop** — resource monitor
+- **pbcopy** — `pbcopy`/`pbpaste` for Wayland clipboard
 
-</details>
+### Development tools
 
-<details>
-<summary>🌐 <strong>Web apps</strong></summary>
+- **git-config** — Git configured with GNOME Keyring credential storage
+- **gh** — GitHub CLI with ZSH tab completion
+- **nvim** — Neovim with LazyVim preconfigured
+- **volta** — Node.js version manager, no sudo required
 
-| Module | Installs |
-|---|---|
-| `notion` | Notion |
-| `outlook` | Outlook |
-| `teams` | Microsoft Teams |
-| `chatgpt` | ChatGPT |
-| `ytmusic` | YouTube Music |
+### Kubernetes & cloud
 
-</details>
+- **kubectl** — Kubernetes CLI
+- **helm** — Helm package manager
+- **kubectx** — fast cluster and namespace switching (`kubectx`/`kubens`)
+- **k9s** — terminal UI for Kubernetes clusters
+- **azure-cli** — Azure CLI
 
-<details>
-<summary>🧰 <strong>Dev & infra</strong></summary>
+### GNOME desktop
 
-| Module | Installs |
-|---|---|
-| `vscode` | Visual Studio Code |
-| `jetbrains-toolbox` | JetBrains Toolbox |
-| `dotnet` | .NET SDK 8 + 10 (userspace, no sudo) |
-| `docker-rootless` | Docker rootless mode |
-| `lazydocker` | LazyDocker TUI |
-| `lens` | Lens Kubernetes desktop |
-| `zellij` | Zellij terminal multiplexer |
-| `claude-code` | Claude Code CLI (Anthropic AI assistant) |
+A polished desktop with tiling, blur, Catppuccin terminal, and Papirus icons.
 
-</details>
+- **gnome-config** — wallpaper, UI tweaks, and keybindings
+- **gnome-extensions** — Tiling Shell, Blur My Shell, GSConnect, AppIndicator
+- **gnome-terminal-theme** — Catppuccin Mocha terminal color scheme
+- **just-perfection** — fine-tune GNOME Shell UI elements
+- **papirus-icon-theme** — Papirus icon theme
+- **gnome-caffeine** — prevent screen lock on demand
+- **gravatar** — sets your Gravatar as the user avatar
+
+### System
+
+- **flatpak** — Flatpak with Flathub configured
+- **btrfs-config** — automatic Btrfs snapshots with snapper and dnf hooks
+- **chrome** — Google Chrome
+- **norwegian-mac-keyboard** — Norwegian Mac keyboard layout
 
 ---
 
-## 🖥️ Glimt CLI
+## Extras — pick what you need
 
-After setup, `glimt` is installed to `~/.local/bin/glimt` with full tab completion.
+Optional modules are presented in an interactive picker during setup. Add or remove them any time.
 
 ```bash
-glimt install <module>      # 📥 install or reinstall a module
-glimt clean <module>        # 🧹 remove a module cleanly
-glimt module-selection      # 🎛️ interactive extras picker
-glimt update                # 🔄 pull latest and re-run
+glimt module-selection
+```
+
+**Applications**
+- `1password` — 1Password desktop + browser extension
+- `1password-cli` — 1Password CLI (`op`)
+- `discord` — Discord (Flatpak)
+- `spotify` — Spotify (Flatpak)
+- `gitkraken` — GitKraken Git client
+- `tableplus` — TablePlus database GUI
+- `pika` — Pika Backup
+
+**Web apps**
+- `notion` — Notion
+- `outlook` — Outlook
+- `teams` — Microsoft Teams
+- `chatgpt` — ChatGPT
+- `ytmusic` — YouTube Music
+
+**Dev & infra**
+- `vscode` — Visual Studio Code
+- `jetbrains-toolbox` — JetBrains Toolbox
+- `dotnet` — .NET SDK 8 + 10 (userspace install, no sudo)
+- `docker-rootless` — Docker in rootless mode
+- `lazydocker` — LazyDocker terminal UI
+- `lens` — Lens Kubernetes desktop
+- `zellij` — Zellij terminal multiplexer
+- `claude-code` — Claude Code CLI
+
+---
+
+## Glimt CLI
+
+After setup, `glimt` is installed to `~/.local/bin/glimt` with tab completion.
+
+```bash
+glimt install <module>      # install or reinstall a module
+glimt clean <module>        # remove a module cleanly
+glimt module-selection      # interactive extras picker
+glimt update                # pull latest and re-run
 ```
 
 ---
 
-## 📝 Notes
+## Notes
 
-🔐 **Git credentials** — configured to use `git-credential-libsecret` (GNOME Keyring). Enable the socket if needed:
+**Git credentials** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
@@ -171,6 +155,6 @@ systemctl --user enable --now gnome-keyring-daemon.socket
 
 ## About
 
-Glimt is a Fedora Workstation post-install automation tool written in Bash. It is designed for developers who reinstall Fedora regularly and want a reproducible, automated setup without Ansible or other heavy orchestration tools.
+Glimt is a Fedora Workstation post-install automation tool written in Bash. Built for developers who reinstall Fedora regularly and want a reproducible environment without heavyweight orchestration tools.
 
 **Keywords:** Fedora post-install script, Fedora workstation setup, automate Fedora, Fedora developer environment, Fedora dotfiles, Fedora fresh install, GNOME setup script, Fedora bash script, Fedora workstation automation
