@@ -18,7 +18,7 @@ print_usage() {
 Usage: $SCRIPT_NAME <action> [args...]
 
 Actions:
-  update [module]     → git pull and run installers in modules/fedora with 'all', or only <module> if provided
+  update [module]     → git pull, then run all core modules + selected extras (or only <module> if provided)
   install <module>    → run modules/fedora/**/install-<module>.sh with 'all'
   clean <module>      → run modules/fedora/**/install-<module>.sh with 'clean'
   module-selection    → run setup-extras.sh (optional modules UI)
@@ -84,15 +84,29 @@ run_update() {
     [[ -n "$script" ]] || { echo "❌ Module not found: $maybe_module"; exit 1; }
     run_installer "$script" "all"
   else
-    echo "🚀 Running all installers in $MODULES_DIR with 'all'..."
-    mapfile -t installers < <(find "$MODULES_DIR" -type f -name 'install-*.sh' -print 2>/dev/null | sort)
+    echo "🚀 Running all core modules..."
+    mapfile -t installers < <(find "$MODULES_DIR" -maxdepth 1 -type f -name 'install-*.sh' -print 2>/dev/null | sort)
     if (( ${#installers[@]} == 0 )); then
-      echo "ℹ️  No installers found under: $MODULES_DIR"
-      return 0
+      echo "ℹ️  No core installers found under: $MODULES_DIR"
+    else
+      for script in "${installers[@]}"; do
+        run_installer "$script" "all"
+      done
     fi
-    for script in "${installers[@]}"; do
-      run_installer "$script" "all"
-    done
+
+    local state_file="$HOME/.config/glimt/optional-extras.selected"
+    if [[ -f "$state_file" ]]; then
+      echo "🚀 Running selected extras..."
+      while IFS= read -r module; do
+        [[ -n "$module" ]] || continue
+        local extra_script="$MODULES_DIR/extras/install-$module.sh"
+        if [[ -f "$extra_script" ]]; then
+          run_installer "$extra_script" "all"
+        else
+          echo "⚠️  Extras module script not found: $module"
+        fi
+      done < "$state_file"
+    fi
   fi
 }
 
