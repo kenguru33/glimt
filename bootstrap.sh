@@ -38,7 +38,10 @@ done
 }
 
 # === Detect OS ===
-if [[ -f /etc/os-release ]]; then
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  OS_ID="macos"
+  OS_ID_LIKE=""
+elif [[ -f /etc/os-release ]]; then
   . /etc/os-release
   OS_ID="$ID"
   OS_ID_LIKE="${ID_LIKE:-}"
@@ -47,13 +50,13 @@ else
   exit 1
 fi
 
-if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]]; then
-  echo "❌ Unsupported OS: $OS_ID. Glimt requires Fedora or RHEL."
+if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" && "$OS_ID" != "macos" ]]; then
+  echo "❌ Unsupported OS: $OS_ID. Glimt requires Fedora, RHEL, or macOS."
   exit 1
 fi
 
 # === Prevent root execution ===
-if [[ "$(id -u)" -eq 0 ]]; then
+if [[ "$(id -u)" -eq 0 ]] && [[ "$OS_ID" != "macos" ]]; then
   echo "❌ Do not run as root. Use a normal user."
   exit 1
 fi
@@ -123,7 +126,11 @@ run() {
 }
 
 # === Require sudo (install philosophy) ===
+# On macOS, sudo is not required for Homebrew installs — skip the prompt.
 require_sudo() {
+  if [[ "$OS_ID" == "macos" ]]; then
+    return 0
+  fi
   _set_palette
   echo -e "    ${CYAN}💡 Install Philosophy${RESET}
     ${WHITE}• Work in \$HOME when possible${RESET}
@@ -163,7 +170,11 @@ require_sudo() {
 install_repo() {
   if ! command -v git >/dev/null 2>&1; then
     echo "📦 Installing git..."
-    run sudo dnf install -y git
+    if [[ "$OS_ID" == "macos" ]]; then
+      run xcode-select --install
+    else
+      run sudo dnf install -y git
+    fi
   fi
 
   echo "📥 Cloning or updating glimt repo (branch: $BRANCH)..."
@@ -179,16 +190,18 @@ install_repo() {
 # === RUN: launch installer ===
 run_installer() {
   cd "$REPO_DIR"
-  if [[ ! -f "setup.sh" ]]; then
-    echo "❌ setup.sh not found in $REPO_DIR" >&2
+  local setup_script="setup.sh"
+  [[ "$OS_ID" == "macos" ]] && setup_script="setup-macos.sh"
+
+  if [[ ! -f "$setup_script" ]]; then
+    echo "❌ $setup_script not found in $REPO_DIR" >&2
     ls -la "$REPO_DIR"
     exit 1
   fi
-  # Pass through verbose if requested
   if [[ "$VERBOSE" -eq 1 ]]; then
-    bash setup.sh --verbose
+    bash "$setup_script" --verbose
   else
-    bash setup.sh
+    bash "$setup_script"
   fi
 }
 
