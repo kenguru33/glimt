@@ -97,7 +97,8 @@ echo ""
 printf '%s\n' \
   "🔐  Administrator access required" \
   "" \
-  "Glimt needs sudo to add the Homebrew zsh to /etc/shells." \
+  "Some steps need sudo — for example, writing to /etc/shells" \
+  "or overwriting system-owned files from previous installs." \
   "" \
   "Your password is passed directly to sudo — Glimt never" \
   "stores or transmits it." \
