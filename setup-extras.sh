@@ -178,7 +178,11 @@ main() {
   preselect=()
 
   for m in "${!MODULES[@]}"; do
-    label="$m – ${MODULE_DESCRIPTIONS[$m]}"
+    if [[ "${PREV[$m]:-}" != "1" ]] && module_installed "$m"; then
+      label="$m – ${MODULE_DESCRIPTIONS[$m]} [not managed by glimt]"
+    else
+      label="$m – ${MODULE_DESCRIPTIONS[$m]}"
+    fi
     menu+=("$label")
     map+=("$label:$m")
 

@@ -19,22 +19,30 @@ declare -A MODULES=(
   [chatgpt]="chatgpt"
   ["claude-code"]="claude"
   ["claude-desktop"]="/Applications/Claude.app"
+  [discord]="/Applications/Discord.app"
   [dotnet]="dotnet"
+  ["jetbrains-toolbox"]="/Applications/JetBrains Toolbox.app"
   [lens]="/Applications/Lens.app"
   [notion]="/Applications/Notion.app"
+  [spotify]="/Applications/Spotify.app"
   [tableplus]="/Applications/TablePlus.app"
+  [ytmusic]="/Applications/YouTube Music.app"
   [vscode]="code"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
   [chatgpt]="ChatGPT desktop app"
+  [discord]="Discord"
   ["claude-code"]="Claude Code CLI"
   ["claude-desktop"]="Claude desktop app"
   [dotnet]=".NET SDK"
+  ["jetbrains-toolbox"]="JetBrains Toolbox (manages Rider and other IDEs)"
   [lens]="Lens Kubernetes IDE"
   [notion]="Notion"
+  [spotify]="Spotify"
   [tableplus]="TablePlus database client"
   [vscode]="Visual Studio Code"
+  [ytmusic]="YouTube Music"
 )
 
 module_installed() {
@@ -95,7 +103,11 @@ main() {
   preselect=()
 
   for m in "${!MODULES[@]}"; do
-    label="$m – ${MODULE_DESCRIPTIONS[$m]}"
+    if [[ "${PREV[$m]:-}" != "1" ]] && module_installed "$m"; then
+      label="$m – ${MODULE_DESCRIPTIONS[$m]} [not managed by glimt]"
+    else
+      label="$m – ${MODULE_DESCRIPTIONS[$m]}"
+    fi
     menu+=("$label")
     map+=("$label:$m")
 
