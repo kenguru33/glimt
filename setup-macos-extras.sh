@@ -194,13 +194,14 @@ main() {
     fi
   done
 
-  # gum choose exits non-zero when the user presses Escape; treat that as
-  # "no change" by letting read consume an empty stream (|| true guards set -e).
+  # Capture gum output and exit code separately so Escape = no-op.
+  gum_output=""
+  gum_output=$(printf "%s\n" "${menu[@]}" | sort | gum choose --no-limit --height=15 "${preselect[@]}") || return 0
+
   selected=()
-  IFS=$'\n' read -r -d '' -a selected < <(
-    printf "%s\n" "${menu[@]}" | sort |
-      gum choose --no-limit --height=15 "${preselect[@]}" && printf '\0'
-  ) || true
+  if [[ -n "$gum_output" ]]; then
+    mapfile -t selected <<< "$gum_output"
+  fi
 
   declare -A WANT=()
   for s in "${selected[@]}"; do

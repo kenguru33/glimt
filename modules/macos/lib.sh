@@ -110,7 +110,7 @@ mas_install() {
 mas_uninstall() {
   local apple_id="$1"
   if command -v mas &>/dev/null; then
-    mas uninstall "$apple_id" 2>/dev/null || true
+    sudo mas uninstall "$apple_id" 2>/dev/null || true
   fi
 }
 
