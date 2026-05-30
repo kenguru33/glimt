@@ -94,14 +94,7 @@ gum confirm "🚀 Ready to run all Glimt modules?" || {
 
 # === Sudo explanation + keepalive (install-zsh.sh writes to /etc/shells) ===
 echo ""
-printf '%s\n' \
-  "🔐  Administrator access required" \
-  "" \
-  "Some steps need sudo — for example, writing to /etc/shells" \
-  "or overwriting system-owned files from previous installs." \
-  "" \
-  "Your password is passed directly to sudo — Glimt never" \
-  "stores or transmits it."
+printf '%s\n' "🔐  Some steps require administrator access. Please enter your password."
 echo ""
 sudo -v
 clear
