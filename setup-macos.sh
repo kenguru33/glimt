@@ -92,6 +92,10 @@ gum confirm "🚀 Ready to run all Glimt modules?" || {
   exit 1
 }
 
+# === Sudo keepalive (install-zsh.sh writes to /etc/shells) ===
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
 # === Priority modules (run first, order matters) ===
 PRIORITY_MODULES=(
   install-nerdfonts.sh
