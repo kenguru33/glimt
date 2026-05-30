@@ -71,6 +71,7 @@ After sourcing, available globals and functions:
 - `run_as_user <cmd>` — runs a command as `$REAL_USER`
 - `deploy_config <src> <dest>` — copies a template to dest, **automatically backs up** any existing file with a timestamp before overwriting
 - `verify_binary <bin> [args]` — warns (does not abort) if a binary isn't functional after install
+- `normalize_arch()` — maps `uname -m` to Go/Kubernetes naming (`x86_64`→`amd64`, `aarch64`→`arm64`); dies on unsupported arch. Use in any module that downloads architecture-specific binaries.
 
 ### Pinned versions — `versions.env`
 
@@ -79,7 +80,8 @@ Modules that download versioned binaries source this file for their version stri
 ```bash
 VERSIONS_ENV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
 source "$VERSIONS_ENV"
-# Provides: $HELM_VERSION, $NERDFONTS_VERSION, $K9S_VERSION, $GUM_VERSION
+# Provides: $HELM_VERSION, $NERDFONTS_VERSION, $K9S_VERSION, $GUM_VERSION,
+#           $KUBECTX_VERSION, $LAZYDOCKER_VERSION
 ```
 
 Extras use `../../../versions.env`.
@@ -116,6 +118,11 @@ Rules enforced across the codebase:
 - `sudo dnf makecache -y` only in `setup.sh`, never in modules
 - Use `run_as_user` / `sudo -u "$REAL_USER"` for any file operations in user home — never write to `$HOME` directly when running under sudo
 - Post-install: call `verify_binary` for any binary the module downloads
+- Extras modules must include a `fedora_guard` call at the top (copy the pattern from `modules/fedora/extras/install-spotify.sh`) to abort gracefully on non-Fedora systems
+
+### Creating new modules
+
+Use the `/new-module` skill. It asks for module name, core vs extras, and install method, then generates the correctly structured script and runs shellcheck on it.
 
 ### Config templates
 
@@ -125,10 +132,22 @@ Templates live in `modules/fedora/config/` and are deployed to `~/.zsh/config/<n
 
 ```
 bootstrap.sh          # curl/wget entry point; clones repo to ~/.glimt
-  └─ setup.sh         # orchestrator; runs modules in order
-       ├─ priority modules (gnome-config, nerdfonts, gnome-terminal-theme)
-       ├─ remaining core modules (alphabetical)
-       └─ setup-extras.sh  # optional extras via gum UI
+  └─ setup.sh         # orchestrator; detects OS and routes accordingly
+       ├─ [macOS]  → exec setup-macos.sh
+       └─ [Fedora] → priority modules (gnome-config, nerdfonts, gnome-terminal-theme)
+                   → remaining core modules (alphabetical)
+                   → setup-extras.sh  (optional extras via gum UI)
 ```
 
-After setup, `glimt.sh` is installed to `~/.local/bin/glimt` for ongoing management.
+After setup, `glimt.sh` is installed to `~/.local/bin/glimt` for ongoing management. The CLI auto-detects OS and sets `MODULES_DIR` to `modules/macos` or `modules/fedora` accordingly.
+
+### macOS support
+
+`setup-macos.sh` is the macOS orchestrator. It installs terminal tooling only (no GNOME/desktop):
+- **Modules live in** `modules/macos/` with a matching `modules/macos/lib.sh`
+- **Key differences from Fedora lib.sh**: uses `dscl` instead of `getent` for `HOME_DIR`; `run_as_user` is a no-op wrapper when not running as root (brew must not run as root); `normalize_arch` handles both `arm64` (Apple Silicon) and `x86_64`
+- **Package manager**: Homebrew — no `sudo` needed for `brew install`
+- **Nerd fonts**: installed via `brew install --cask font-*-nerd-font` (no wget/unzip)
+- **Terminal theme**: `install-iterm2-theme.sh` downloads Catppuccin Mocha `.itermcolors` and imports it into iTerm2 via `open`
+- **Priority modules** (run first): `install-nerdfonts.sh`, `install-zsh.sh`, `install-starship.sh`
+- **Config templates** in `modules/macos/config/` — same zshrc/starship/eza/fzf structure as Fedora

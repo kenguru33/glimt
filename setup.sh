@@ -15,6 +15,11 @@ GIT_CONFIG="$CONFIG_DIR/user-git-info.config"
 AVATAR_CONFIG="$CONFIG_DIR/set-user-avatar.config"
 mkdir -p "$CONFIG_DIR"
 
+# === macOS → delegate to setup-macos.sh ===
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  exec "$SCRIPT_DIR/setup-macos.sh" "$@"
+fi
+
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release

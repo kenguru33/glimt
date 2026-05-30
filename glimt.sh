@@ -5,12 +5,20 @@ trap 'echo "❌ An error occurred at: $BASH_COMMAND" >&2' ERR
 # === Config ===
 SCRIPT_NAME="glimt"
 REPO_DIR="${REPO_DIR:-$HOME/.glimt}"
-EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  EXTRA_SCRIPT="$REPO_DIR/setup-macos-extras.sh"
+else
+  EXTRA_SCRIPT="$REPO_DIR/setup-extras.sh"
+fi
 SETUP_SCRIPT="$REPO_DIR/setup.sh"
 LOCK_FILE="/tmp/.glimt.lock"
 VALID_ACTIONS=("update" "module-selection" "install" "clean")
 
-MODULES_DIR="$REPO_DIR/modules/fedora"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  MODULES_DIR="$REPO_DIR/modules/macos"
+else
+  MODULES_DIR="$REPO_DIR/modules/fedora"
+fi
 
 # === Helpers ===
 print_usage() {
