@@ -167,8 +167,10 @@ run_module() {
 # -----------------------------
 main() {
   # === Sudo explanation page (shown first so the password prompt has context) ===
-  local sudo_msg
-  sudo_msg="$(printf '%s\n' \
+  clear
+  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
+  echo ""
+  printf '%s\n' \
     "🔐  Administrator access required" \
     "" \
     "Some installations need sudo to resolve conflicts with" \
@@ -178,12 +180,8 @@ main() {
     "that may already exist from an earlier installation." \
     "" \
     "Your password is passed directly to sudo — Glimt never" \
-    "stores or transmits it.")"
-
-  clear
-  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
-  echo ""
-  gum style --border rounded --padding "1 3" --foreground 15 "$sudo_msg"
+    "stores or transmits it." \
+    | gum style --border rounded --padding "1 3" --foreground 15
   echo ""
   sudo -v
   while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
