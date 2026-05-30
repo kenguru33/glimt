@@ -206,10 +206,29 @@ main() {
     done
   done
 
-  # Some cask installs (e.g. Docker) may need sudo to overwrite system-owned files.
-  # Authenticate once before the install loop; keepalive exits when this script does.
+  # === Sudo explanation page ===
+  clear
+  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
+  echo ""
+  gum style --border rounded --padding "1 3" --foreground 15 \
+    "🔐  Administrator access required" \
+    "" \
+    "Some installations need sudo to resolve conflicts with" \
+    "files left behind by previous manual installs." \
+    "" \
+    "Example: Docker Desktop places binaries in /usr/local/bin" \
+    "that may already exist from an earlier installation." \
+    "" \
+    "Your password is passed directly to sudo — Glimt never" \
+    "stores or transmits it."
+  echo ""
   sudo -v
   while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+  # === Clear and restore header before installs begin ===
+  clear
+  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
+  echo ""
 
   for m in "${ORDERED_MODULES[@]}"; do
     now="${WANT[$m]:-}"
