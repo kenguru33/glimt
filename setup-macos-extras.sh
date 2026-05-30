@@ -166,30 +166,10 @@ run_module() {
 # Main
 # -----------------------------
 main() {
-  # === Sudo explanation page (shown first so the password prompt has context) ===
-  clear
-  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
-  echo ""
-  printf '%s\n' \
-    "🔐  Administrator access required" \
-    "" \
-    "Some installations need sudo to resolve conflicts with" \
-    "files left behind by previous manual installs." \
-    "" \
-    "Example: Docker Desktop places binaries in /usr/local/bin" \
-    "that may already exist from an earlier installation." \
-    "" \
-    "Your password is passed directly to sudo — Glimt never" \
-    "stores or transmits it." \
-    | gum style --border rounded --padding "1 3" --foreground 15
-  echo ""
   sudo -v
   while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
-  # === Build module menu ===
-  clear
-  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
-  echo ""
+
 
   declare -A PREV=()
   if [[ -f "$STATE_FILE" ]]; then
