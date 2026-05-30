@@ -206,6 +206,11 @@ main() {
     done
   done
 
+  # Some cask installs (e.g. Docker) may need sudo to overwrite system-owned files.
+  # Authenticate once before the install loop; keepalive exits when this script does.
+  sudo -v
+  while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
   for m in "${ORDERED_MODULES[@]}"; do
     now="${WANT[$m]:-}"
     before="${PREV[$m]:-}"
