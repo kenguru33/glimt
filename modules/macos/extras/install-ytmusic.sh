@@ -16,13 +16,49 @@ macos_guard() {
 deps() { log "No additional dependencies."; }
 
 install() {
-  brew_cask_install youtube-music "/Applications/YouTube Music.app"
+  if [[ -e "/Applications/YouTube Music.app" ]]; then
+    log "YouTube Music already installed."
+    return 0
+  fi
+
+  local arch
+  arch="$(uname -m)"
+  local suffix
+  case "$arch" in
+    arm64)  suffix="arm64" ;;
+    x86_64) suffix="x64" ;;
+    *) die "Unsupported architecture: $arch" ;;
+  esac
+
+  log "Fetching latest YouTube Music release..."
+  local version
+  version="$(curl -fsSL https://api.github.com/repos/th-ch/youtube-music/releases/latest \
+    | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')"
+  [[ -n "$version" ]] || die "Could not determine latest YouTube Music version"
+
+  local url="https://github.com/th-ch/youtube-music/releases/download/v${version}/YouTube-Music-${version}-${suffix}.dmg"
+  local tmp_dmg
+  tmp_dmg="$(mktemp /tmp/youtube-music-XXXXXX)"
+
+  log "Downloading YouTube Music ${version}..."
+  curl -fsSL "$url" -o "$tmp_dmg"
+
+  log "Installing YouTube Music..."
+  local mount_dir
+  mount_dir="$(mktemp -d /tmp/ytmusic-mount-XXXXXX)"
+  hdiutil attach "$tmp_dmg" -nobrowse -mountpoint "$mount_dir" -quiet
+  cp -R "$mount_dir/YouTube Music.app" "/Applications/"
+  hdiutil detach "$mount_dir" -quiet
+  rm -rf "$mount_dir" "$tmp_dmg"
+
+  log "YouTube Music ${version} installed."
 }
 
 config() { log "No extra configuration needed."; }
 
 clean() {
-  brew uninstall --cask youtube-music 2>/dev/null || true
+  rm -rf "/Applications/YouTube Music.app"
+  log "YouTube Music removed."
 }
 
 macos_guard
