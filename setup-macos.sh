@@ -105,6 +105,13 @@ printf '%s\n' \
 echo ""
 sudo -v
 clear
+cat <<"EOF"
+
+      🌟   ✨
+   ✨   G L I M T     🌟
+       ✨  The Final Shine for Fresh Installs
+
+EOF
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # === Priority modules (run first, order matters) ===
