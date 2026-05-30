@@ -83,7 +83,7 @@ brew_cask_install() {
   elif [[ -n "$app_path" && -e "$app_path" ]]; then
     log "$cask already installed at $app_path."
   else
-    brew install --cask "$cask"
+    brew install --cask --overwrite "$cask"
   fi
 }
 
