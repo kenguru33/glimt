@@ -101,10 +101,10 @@ printf '%s\n' \
   "or overwriting system-owned files from previous installs." \
   "" \
   "Your password is passed directly to sudo — Glimt never" \
-  "stores or transmits it." \
-  | gum style --border rounded --padding "1 3" --foreground 15
+  "stores or transmits it."
 echo ""
 sudo -v
+clear
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # === Priority modules (run first, order matters) ===
