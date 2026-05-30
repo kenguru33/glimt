@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Optional extras setup failed." >&2' ERR
+trap 'echo "❌ Optional extras setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # -----------------------------
 # Args
@@ -38,35 +38,69 @@ fi
 
 # -----------------------------
 # Module registry
-# value: path starting with / → file/dir existence check
-#        anything else        → command-v check
+# ORDERED_MODULES drives iteration; avoids ${!assoc[@]} nameref regression in bash 5.3.
+# MODULES value: path starting with / → file/dir existence check
+#               anything else        → command-v check
 # -----------------------------
+ORDERED_MODULES=(
+  1password
+  1password-cli
+  amphetamine
+  chatgpt
+  claude-code
+  claude-desktop
+  discord
+  docker
+  dotnet
+  jetbrains-toolbox
+  lens
+  magnet
+  notion
+  spotify
+  tableplus
+  teams
+  vscode
+  ytmusic
+)
+
 declare -A MODULES=(
+  [1password]="/Applications/1Password.app"
+  [1password-cli]="op"
+  [amphetamine]="/Applications/Amphetamine.app"
   [chatgpt]="/Applications/ChatGPT.app"
-  ["claude-code"]="claude"
-  ["claude-desktop"]="/Applications/Claude.app"
+  [claude-code]="claude"
+  [claude-desktop]="/Applications/Claude.app"
   [discord]="/Applications/Discord.app"
+  [docker]="/Applications/Docker.app"
   [dotnet]="$HOME/.dotnet/dotnet"
-  ["jetbrains-toolbox"]="/Applications/JetBrains Toolbox.app"
+  [jetbrains-toolbox]="/Applications/JetBrains Toolbox.app"
   [lens]="/Applications/Lens.app"
+  [magnet]="/Applications/Magnet.app"
   [notion]="/Applications/Notion.app"
   [spotify]="/Applications/Spotify.app"
   [tableplus]="/Applications/TablePlus.app"
+  [teams]="/Applications/Microsoft Teams.app"
   [vscode]="/Applications/Visual Studio Code.app"
   [ytmusic]="/Applications/YouTube Music.app"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
+  [1password]="1Password password manager"
+  [1password-cli]="1Password CLI (op)"
+  [amphetamine]="Amphetamine keep-awake utility"
   [chatgpt]="ChatGPT desktop app"
-  ["claude-code"]="Claude Code CLI"
-  ["claude-desktop"]="Claude desktop app"
+  [claude-code]="Claude Code CLI"
+  [claude-desktop]="Claude desktop app"
   [discord]="Discord"
+  [docker]="Docker Desktop"
   [dotnet]=".NET SDK / Runtime"
-  ["jetbrains-toolbox"]="JetBrains Toolbox"
+  [jetbrains-toolbox]="JetBrains Toolbox"
   [lens]="Lens Kubernetes IDE"
+  [magnet]="Magnet window manager"
   [notion]="Notion"
   [spotify]="Spotify"
   [tableplus]="TablePlus"
+  [teams]="Microsoft Teams"
   [vscode]="Visual Studio Code"
   [ytmusic]="YouTube Music"
 )
@@ -87,13 +121,11 @@ module_installed() {
 # Spinner (install only)
 # -----------------------------
 run_with_spinner() {
-  local title="$1"
-  shift
   if command -v gum &>/dev/null && [[ -t 1 && -t 2 ]]; then
-    gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@" || "$@"
+    gum spin --spinner dot --title "$1" -- bash -c '"$@" >/dev/null 2>&1' _ "${@:2}" || "${@:2}"
   else
-    echo "▶️  $title"
-    "$@"
+    echo "▶️  $1"
+    "${@:2}"
   fi
 }
 
@@ -109,27 +141,24 @@ gum_style_ok() {
 # Run module
 # -----------------------------
 run_module() {
-  local name="$1"
-  local mode="$2"
-  local script="$MODULE_DIR/install-$name.sh"
+  [[ -n "${1:-}" ]] || { echo "⚠️  run_module called without a module name"; return 1; }
+  [[ -f "$MODULE_DIR/install-$1.sh" ]] || { echo "⚠️  Missing $MODULE_DIR/install-$1.sh"; return; }
+  [[ -x "$MODULE_DIR/install-$1.sh" ]] || chmod +x "$MODULE_DIR/install-$1.sh"
 
-  [[ -f "$script" ]] || { echo "⚠️  Missing $script"; return; }
-  [[ -x "$script" ]] || chmod +x "$script"
-
-  if [[ "$mode" == "clean" ]]; then
-    echo "🧹 Cleaning $name…"
-    bash "$script" clean >/dev/null
-    gum_style_ok "✔️  install-$name.sh cleaned"
+  if [[ "${2:-all}" == "clean" ]]; then
+    echo "🧹 Cleaning $1…"
+    bash "$MODULE_DIR/install-$1.sh" clean >/dev/null
+    gum_style_ok "✔️  install-$1.sh cleaned"
     return
   fi
 
-  if $VERBOSE; then
-    echo "▶️  Running install-$name.sh"
-    bash "$script" all
-    echo "✔️  install-$name.sh finished"
+  if [[ "$VERBOSE" == "true" ]]; then
+    echo "▶️  Running install-$1.sh"
+    bash "$MODULE_DIR/install-$1.sh" all
+    echo "✔️  install-$1.sh finished"
   else
-    run_with_spinner "Running $name…" bash "$script" all
-    gum_style_ok "✔️  install-$name.sh finished"
+    run_with_spinner "Running $1…" bash "$MODULE_DIR/install-$1.sh" all
+    gum_style_ok "✔️  install-$1.sh finished"
   fi
 }
 
@@ -140,7 +169,7 @@ main() {
   declare -A PREV=()
   if [[ -f "$STATE_FILE" ]]; then
     while IFS= read -r m; do
-      [[ -n "$m" ]] && PREV["$m"]=1
+      if [[ -n "$m" ]]; then PREV["$m"]=1; fi
     done <"$STATE_FILE"
   fi
 
@@ -148,7 +177,7 @@ main() {
   map=()
   preselect=()
 
-  for m in "${!MODULES[@]}"; do
+  for m in "${ORDERED_MODULES[@]}"; do
     if [[ "${PREV[$m]:-}" != "1" ]] && module_installed "$m"; then
       label="$m – ${MODULE_DESCRIPTIONS[$m]} [not managed by glimt]"
     else
@@ -173,11 +202,11 @@ main() {
   declare -A WANT=()
   for s in "${selected[@]}"; do
     for entry in "${map[@]}"; do
-      [[ "$entry" == "$s:"* ]] && WANT["${entry#*:}"]=1
+      if [[ "$entry" == "$s:"* ]]; then WANT["${entry#*:}"]=1; fi
     done
   done
 
-  for m in "${!MODULES[@]}"; do
+  for m in "${ORDERED_MODULES[@]}"; do
     now="${WANT[$m]:-}"
     before="${PREV[$m]:-}"
 
@@ -188,7 +217,9 @@ main() {
     fi
   done
 
-  printf "%s\n" "${!WANT[@]}" >"$STATE_FILE"
+  for m in "${ORDERED_MODULES[@]}"; do
+    if [[ "${WANT[$m]:-}" == "1" ]]; then printf "%s\n" "$m"; fi
+  done >"$STATE_FILE"
 }
 
 main

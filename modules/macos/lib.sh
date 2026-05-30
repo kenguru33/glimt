@@ -87,6 +87,33 @@ brew_cask_install() {
   fi
 }
 
+# === Install an app from the Mac App Store via mas ===
+#
+# Usage: mas_install <apple_id> <app_name>
+# Installs mas if missing, then installs the app if not already present.
+mas_install() {
+  local apple_id="$1"
+  local app_name="${2:-App $1}"
+  if ! command -v mas &>/dev/null; then
+    brew install mas
+  fi
+  if mas list 2>/dev/null | grep -q "^${apple_id} "; then
+    log "$app_name already installed from App Store."
+  else
+    mas install "$apple_id"
+  fi
+}
+
+# === Uninstall an App Store app via mas ===
+#
+# Usage: mas_uninstall <apple_id>
+mas_uninstall() {
+  local apple_id="$1"
+  if command -v mas &>/dev/null; then
+    mas uninstall "$apple_id" 2>/dev/null || true
+  fi
+}
+
 # === Verify a binary is working after install ===
 #
 # Usage: verify_binary <binary> [args...]
