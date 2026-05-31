@@ -1,2 +1,4 @@
 .claude/*
 !.claude/commands/
+.DS_Store
+**/.DS_Store
