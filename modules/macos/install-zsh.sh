@@ -78,6 +78,8 @@ config() {
   write_zsh_config "syntax-highlighting" \
 '[[ -f ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
 
+  deploy_config "$SCRIPT_DIR/config/greeting.zsh" "$CONFIG_DIR/greeting.zsh"
+
   log "Installing .zshrc template..."
   deploy_config "$ZSHRC_TEMPLATE" "$ZSHRC_FILE"
 }
