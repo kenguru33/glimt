@@ -115,7 +115,8 @@ mas_install() {
   if mas list 2>/dev/null | grep -q "^${apple_id} "; then
     log "$app_name already installed from App Store."
   else
-    mas install "$apple_id"
+    # mas 7+ requires root privileges to install apps.
+    sudo mas install "$apple_id"
   fi
 }
 

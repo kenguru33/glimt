@@ -126,6 +126,43 @@ declare -A MODULE_DESCRIPTIONS=(
 )
 
 # -----------------------------
+# Sudo askpass (App Store apps via mas need root)
+# Capture the password once and feed it to sudo via SUDO_ASKPASS so modules
+# that need root work under the spinner without re-prompting. When invoked
+# from setup-macos.sh, SUDO_ASKPASS is already set and this is skipped.
+# -----------------------------
+GLIMT_PW_FILE=""
+GLIMT_ASKPASS=""
+trap 'rm -f "${GLIMT_PW_FILE:-}" "${GLIMT_ASKPASS:-}" 2>/dev/null' EXIT
+
+glimt_ensure_askpass() {
+  [[ -n "${SUDO_ASKPASS:-}" ]] && return 0
+  GLIMT_PW_FILE="$(mktemp -t glimt-sudo)"
+  GLIMT_ASKPASS="$(mktemp -t glimt-askpass)"
+  chmod 600 "$GLIMT_PW_FILE"
+  chmod 700 "$GLIMT_ASKPASS"
+  printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
+
+  echo ""
+  echo "🔐  Some selected apps (from the App Store) require administrator access."
+  local pw
+  while true; do
+    printf '🔐 sudo password: ' >&2
+    IFS= read -rs pw; echo >&2
+    printf '%s\n' "$pw" > "$GLIMT_PW_FILE"
+    unset pw
+    if sudo -S -p '' -v < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
+    echo "❌ Incorrect password — try again." >&2
+  done
+  export SUDO_ASKPASS="$GLIMT_ASKPASS"
+}
+
+# Does a module's script need root (e.g. mas install/uninstall, or sudo)?
+module_needs_sudo() {
+  grep -qE 'sudo|mas_' "$MODULE_DIR/install-$1.sh" 2>/dev/null
+}
+
+# -----------------------------
 # Detection (UX only)
 # -----------------------------
 module_installed() {
@@ -228,6 +265,17 @@ main() {
     for entry in "${map[@]}"; do
       if [[ "$entry" == "$s:"* ]]; then WANT["${entry#*:}"]=1; fi
     done
+  done
+
+  # If any module about to install or clean needs root, get the password once
+  # up front so sudo works under the spinner instead of prompting (and hanging).
+  for m in "${ORDERED_MODULES[@]}"; do
+    now="${WANT[$m]:-}"
+    before="${PREV[$m]:-}"
+    if [[ "$now" != "$before" ]] && module_needs_sudo "$m"; then
+      glimt_ensure_askpass
+      break
+    fi
   done
 
   # === Clear and restore header before installs begin ===
