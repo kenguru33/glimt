@@ -196,7 +196,7 @@ main() {
 
   # Capture gum output and exit code separately so Escape = no-op.
   gum_output=""
-  gum_output=$(printf "%s\n" "${menu[@]}" | sort | gum choose --no-limit --height=15 "${preselect[@]}") || return 0
+  gum_output=$(printf "%s\n" "${menu[@]}" | sort | gum choose --no-limit --height=$(( ${#menu[@]} + 2 )) "${preselect[@]}") || return 0
 
   selected=()
   if [[ -n "$gum_output" ]]; then
