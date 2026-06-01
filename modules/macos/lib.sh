@@ -29,6 +29,21 @@ log()  { printf "[%s] %s\n"    "${MODULE_NAME:-glimt}" "$*"; }
 warn() { printf "⚠️  [%s] %s\n" "${MODULE_NAME:-glimt}" "$*" >&2; }
 die()  { printf "❌ [%s] %s\n"  "${MODULE_NAME:-glimt}" "$*" >&2; exit 1; }
 
+# === sudo wrapper: use askpass when the orchestrator provides one ===
+# setup-macos.sh captures the password once and exports SUDO_ASKPASS. Modules
+# run under a gum spinner still have a controlling terminal, so plain sudo would
+# prompt there — and that prompt is hidden by the spinner, hanging setup. The -A
+# flag forces sudo to read the password from SUDO_ASKPASS instead of any tty.
+# When SUDO_ASKPASS is unset (e.g. running a module standalone), fall back to
+# normal interactive sudo.
+sudo() {
+  if [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    command sudo -A "$@"
+  else
+    command sudo "$@"
+  fi
+}
+
 # === Run a command as the real (non-root) user ===
 # When already running as that user (typical macOS), executes directly.
 run_as_user() {
