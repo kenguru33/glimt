@@ -58,6 +58,7 @@ ORDERED_MODULES=(
   notion
   spotify
   tableplus
+  things
   teams
   vscode
   ytmusic
@@ -79,6 +80,7 @@ declare -A MODULES=(
   [notion]="/Applications/Notion.app"
   [spotify]="/Applications/Spotify.app"
   [tableplus]="/Applications/TablePlus.app"
+  [things]="/Applications/Things3.app"
   [teams]="/Applications/Microsoft Teams.app"
   [vscode]="/Applications/Visual Studio Code.app"
   [ytmusic]="/Applications/YouTube Music.app"
@@ -100,6 +102,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [notion]="Notion"
   [spotify]="Spotify"
   [tableplus]="TablePlus"
+  [things]="Things 3 task manager"
   [teams]="Microsoft Teams"
   [vscode]="Visual Studio Code"
   [ytmusic]="YouTube Music"
