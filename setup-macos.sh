@@ -38,16 +38,17 @@ if [[ -z "${GLIMT_ASKPASS:-}" || ! -f "${GLIMT_PW_FILE:-/nonexistent}" ]]; then
     IFS= read -rs glimt_pw; echo >&2
     printf '%s\n' "$glimt_pw" > "$GLIMT_PW_FILE"
     unset glimt_pw
-    if sudo -k -S -p '' true < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
+    # -S reads the password from stdin and -v caches it (do NOT use -k here, it
+    # would validate without caching, so Homebrew's installer would re-prompt).
+    if sudo -S -p '' -v < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
     echo "❌ Incorrect password — try again." >&2
   done
   export GLIMT_PW_FILE GLIMT_ASKPASS
 fi
 
-# Make the password available to terminal-less module sudo calls, and cache the
-# credential so Homebrew's own installer below does not prompt again.
+# Make the password available to terminal-less module sudo calls. The credential
+# was cached by the -v above, so Homebrew's own installer below won't re-prompt.
 export SUDO_ASKPASS="$GLIMT_ASKPASS"
-sudo -v 2>/dev/null || true
 
 # === Bootstrap Homebrew before running any modules ===
 if ! command -v brew &>/dev/null; then
