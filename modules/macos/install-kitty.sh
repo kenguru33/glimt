@@ -14,6 +14,25 @@ KITTY_CONFIG_DIR="$HOME_DIR/.config/kitty"
 
 deps() { log "No additional dependencies."; }
 
+# Replacing the .icns inside a bundle is not enough — macOS caches app icons.
+# Re-register the app and flush the icon caches so the new icon shows.
+refresh_icon_cache() {
+  local app="$1"
+  touch "$app" 2>/dev/null || sudo touch "$app" 2>/dev/null || true
+
+  local lsreg="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+  [[ -x "$lsreg" ]] && "$lsreg" -f "$app" 2>/dev/null || true
+
+  # System icon services cache (needs root) + per-user dock cache.
+  sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
+  local user_cache
+  user_cache="$(getconf DARWIN_USER_CACHE_DIR 2>/dev/null || true)"
+  [[ -n "$user_cache" ]] && find "$user_cache" -name 'com.apple.dock.iconcache' -delete 2>/dev/null || true
+
+  killall Dock 2>/dev/null || true
+  killall Finder 2>/dev/null || true
+}
+
 install() {
   if brew list --cask kitty &>/dev/null; then
     log "Kitty already installed."
@@ -39,10 +58,8 @@ config() {
     tmp_icon="$(mktemp)"
     if curl -fsSL https://raw.githubusercontent.com/DinkDonk/kitty-icon/main/kitty-dark.icns -o "$tmp_icon" \
        && { cp -f "$tmp_icon" "$icon_dest" 2>/dev/null || sudo cp -f "$tmp_icon" "$icon_dest"; }; then
-      touch "$app" 2>/dev/null || sudo touch "$app" || true
-      rm -f /var/folders/*/*/*/com.apple.dock.iconcache 2>/dev/null || true
-      killall Dock 2>/dev/null || true
-      log "Icon applied and Dock restarted."
+      refresh_icon_cache "$app"
+      log "Icon applied — icon caches flushed (Dock/Finder restarted)."
     else
       warn "Could not apply kitty icon — skipping (non-fatal)."
     fi
