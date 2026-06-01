@@ -31,12 +31,22 @@ config() {
   local icon_dest="$app/Contents/Resources/kitty.icns"
   if [[ -d "$app" ]]; then
     log "Applying DinkDonk kitty-dark icon..."
-    curl -fsSL https://raw.githubusercontent.com/DinkDonk/kitty-icon/main/kitty-dark.icns \
-      -o "$icon_dest"
-    touch "$app"
-    rm -f /var/folders/*/*/*/com.apple.dock.iconcache
-    killall Dock
-    log "Icon applied and Dock restarted."
+    # Download to a temp file first — curl can't write directly into the app
+    # bundle (not user-writable, which caused "curl: (56) Failure writing
+    # output to destination"). Then copy into place, falling back to sudo. The
+    # icon is cosmetic, so any failure here warns instead of aborting setup.
+    local tmp_icon
+    tmp_icon="$(mktemp)"
+    if curl -fsSL https://raw.githubusercontent.com/DinkDonk/kitty-icon/main/kitty-dark.icns -o "$tmp_icon" \
+       && { cp -f "$tmp_icon" "$icon_dest" 2>/dev/null || sudo cp -f "$tmp_icon" "$icon_dest"; }; then
+      touch "$app" 2>/dev/null || sudo touch "$app" || true
+      rm -f /var/folders/*/*/*/com.apple.dock.iconcache 2>/dev/null || true
+      killall Dock 2>/dev/null || true
+      log "Icon applied and Dock restarted."
+    else
+      warn "Could not apply kitty icon — skipping (non-fatal)."
+    fi
+    rm -f "$tmp_icon"
   else
     warn "kitty.app not found in /Applications — skipping icon."
   fi
