@@ -18,6 +18,37 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+# === Capture the sudo password once, up front ===
+# Asked before anything privileged runs so neither Homebrew's installer nor the
+# modules prompt again. The password is cached for sudo (Homebrew reuses it) and
+# written to an askpass helper for modules, which run under a spinner without a
+# usable terminal. Survives the Bash re-exec below via the exported paths.
+trap 'rm -f "${GLIMT_PW_FILE:-}" "${GLIMT_ASKPASS:-}" 2>/dev/null' EXIT
+
+if [[ -z "${GLIMT_ASKPASS:-}" || ! -f "${GLIMT_PW_FILE:-/nonexistent}" ]]; then
+  GLIMT_PW_FILE="$(mktemp -t glimt-sudo)"
+  GLIMT_ASKPASS="$(mktemp -t glimt-askpass)"
+  chmod 600 "$GLIMT_PW_FILE"
+  chmod 700 "$GLIMT_ASKPASS"
+  printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
+
+  echo "🔐  Some steps require administrator access. Please enter your password."
+  while true; do
+    printf '🔐 sudo password: ' >&2
+    IFS= read -rs glimt_pw; echo >&2
+    printf '%s\n' "$glimt_pw" > "$GLIMT_PW_FILE"
+    unset glimt_pw
+    if sudo -k -S -p '' true < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
+    echo "❌ Incorrect password — try again." >&2
+  done
+  export GLIMT_PW_FILE GLIMT_ASKPASS
+fi
+
+# Make the password available to terminal-less module sudo calls, and cache the
+# credential so Homebrew's own installer below does not prompt again.
+export SUDO_ASKPASS="$GLIMT_ASKPASS"
+sudo -v 2>/dev/null || true
+
 # === Bootstrap Homebrew before running any modules ===
 if ! command -v brew &>/dev/null; then
   echo "🍺 Homebrew not found. Installing..."
@@ -112,38 +143,6 @@ gum confirm "🚀 Ready to run all Glimt modules?" || {
   echo "❌ Setup cancelled."
   exit 1
 }
-
-# === Sudo: prompt once, then answer all child prompts via askpass ===
-# macOS caches sudo credentials per-terminal, but modules run under gum spin in
-# a separate process without that terminal — so the cached credential is not
-# visible there and sudo would prompt again, invisibly, under the spinner.
-# Capture the password once and feed every sudo call through SUDO_ASKPASS so
-# modules stay under the spinner (output hidden) and never re-prompt.
-echo ""
-printf '%s\n' "🔐  Some steps require administrator access. Please enter your password."
-echo ""
-
-GLIMT_PW_FILE="$(mktemp -t glimt-sudo)"
-GLIMT_ASKPASS="$(mktemp -t glimt-askpass)"
-chmod 600 "$GLIMT_PW_FILE"
-chmod 700 "$GLIMT_ASKPASS"
-trap 'rm -f "$GLIMT_PW_FILE" "$GLIMT_ASKPASS"' EXIT
-printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
-
-while true; do
-  pw="$(gum input --password --prompt "🔐 sudo password: ")" || { echo "❌ Setup cancelled."; exit 1; }
-  printf '%s' "$pw" > "$GLIMT_PW_FILE"
-  unset pw
-  if sudo -k -S -p '' true < "$GLIMT_PW_FILE" 2>/dev/null; then
-    break
-  fi
-  gum style --foreground 196 "❌ Incorrect password — try again."
-done
-
-# When a sudo call has no controlling terminal (which is the case for modules
-# run under gum spin), sudo automatically reads the password from SUDO_ASKPASS
-# instead of prompting — so exporting this is all that's needed.
-export SUDO_ASKPASS="$GLIMT_ASKPASS"
 
 clear
 cat <<"EOF"
