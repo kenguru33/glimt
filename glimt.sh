@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Use env bash (not /bin/bash) — macOS ships Bash 3.2, but this script uses
+# mapfile (Bash 4+). Homebrew's bash is first on PATH after setup.
 set -euo pipefail
 trap 'echo "❌ An error occurred at: $BASH_COMMAND" >&2' ERR
 

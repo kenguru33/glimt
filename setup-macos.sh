@@ -31,6 +31,27 @@ elif [[ -f /usr/local/bin/brew ]]; then
   eval "$(/usr/local/bin/brew shellenv)"
 fi
 
+# === Ensure a modern Bash, then re-exec under it ===
+# macOS ships Bash 3.2, but the modules use associative arrays (declare -A)
+# and mapfile, which require Bash 4+. Homebrew prepends its bin to PATH via
+# shellenv above, so once bash is installed every `bash "$script"` call below
+# resolves to it too.
+if (( BASH_VERSINFO[0] < 4 )); then
+  if ! brew list bash &>/dev/null; then
+    echo "🔁 Installing a modern Bash (macOS ships 3.2)..."
+    brew install bash -q
+  fi
+  BREW_BASH="$(brew --prefix)/bin/bash"
+  if [[ -x "$BREW_BASH" && -z "${GLIMT_BASH_REEXEC:-}" ]]; then
+    export GLIMT_BASH_REEXEC=1
+    if [[ "$VERBOSE" == true ]]; then
+      exec "$BREW_BASH" "$0" --verbose
+    else
+      exec "$BREW_BASH" "$0"
+    fi
+  fi
+fi
+
 # === Ensure gum is available ===
 if ! command -v gum &>/dev/null; then
   echo "📦 Installing gum..."
