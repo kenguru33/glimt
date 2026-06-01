@@ -118,7 +118,15 @@ run_module() {
   local name
   name="$(basename "$script")"
 
-  if $VERBOSE; then
+  # Modules that prompt the user (gum input/confirm/choose, or bash read) must
+  # run attached to the terminal. The spinner hides their prompts, so setup
+  # would hang waiting for input that can't be seen — run those with output.
+  local interactive=false
+  if grep -qE 'gum (input|confirm|choose|write|filter|file)|(^|[[:space:]])read[[:space:]]+-' "$script"; then
+    interactive=true
+  fi
+
+  if $VERBOSE || $interactive; then
     echo "▶️  Running: $name"
     bash "$script" all
     echo "✅ Finished: $name"
