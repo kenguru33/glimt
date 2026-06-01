@@ -1,20 +1,31 @@
 <div align="center">
 
-# ✨ Glimt — Fedora Post-Install Automation
+# ✨ Glimt — Fedora & macOS Post-Install Automation
 
-**One command. Fully configured Fedora developer workstation.**
+**One command. A fully configured developer workstation — on Fedora or macOS.**
 
-Stop reinstalling the same tools after every fresh Fedora install. Glimt automates your entire setup — shell, GNOME, Kubernetes tooling, and developer apps — and keeps it reproducible.
+Stop reinstalling the same tools after every fresh install. Glimt automates your entire setup — shell, desktop tweaks, Kubernetes tooling, and developer apps — and keeps it reproducible.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Fedora](https://img.shields.io/badge/platform-Fedora-294172)
+![Platform: macOS](https://img.shields.io/badge/platform-macOS-000000)
 ![Shell: Bash](https://img.shields.io/badge/shell-bash-89e051)
 
 <br>
 
+**Fedora**
+
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
 ```
+
+**macOS** — a clean Mac ships with `curl` but not `wget`:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/kenguru33/glimt/main/bootstrap.sh)
+```
+
+The bootstrap detects your OS, installs Git (via `xcode-select` on macOS), clones the repo to `~/.glimt`, and runs the right setup. On macOS it also installs Homebrew if missing.
 
 <br>
 
@@ -26,7 +37,10 @@ bash <(wget -qO- https://raw.githubusercontent.com/kenguru33/glimt/main/bootstra
 
 ## What is Glimt?
 
-Glimt is a post-install automation tool for Fedora Workstation. After a fresh install, a single command sets up your entire development environment — ZSH with Starship, a tuned GNOME desktop, Kubernetes CLI tools, Neovim, Node.js, Btrfs snapshots, and more.
+Glimt is a post-install automation tool for **Fedora Workstation** and **macOS**. After a fresh install, a single command sets up your development environment.
+
+- **On Fedora** — the full experience: ZSH with Starship, a tuned GNOME desktop, Kubernetes CLI tools, Neovim, Node.js, Btrfs snapshots, and more.
+- **On macOS** — terminal tooling only (no desktop tweaks): the same ZSH/Starship/Neovim/Kubernetes stack, installed via Homebrew, plus optional GUI apps from Homebrew Casks and the Mac App Store.
 
 No Ansible. No YAML. No dependencies. Just Bash.
 
@@ -43,7 +57,7 @@ Reinstalling Fedora means hours of repetitive work — `dnf install`, GNOME twea
 
 ---
 
-## 📦 What you get
+## 📦 What you get on Fedora
 
 ### 💻 Shell & terminal
 
@@ -94,9 +108,9 @@ A polished desktop with tiling, blur, Catppuccin terminal, and Papirus icons.
 
 ---
 
-## 🎛️ Extras — pick what you need
+## 🎛️ Fedora extras — pick what you need
 
-Optional modules are presented in an interactive picker during setup. Add or remove them any time.
+Optional modules are presented in an interactive picker during setup. Add or remove them any time. (For the macOS extras list, see the [macOS](#-macos) section below.)
 
 ```bash
 glimt module-selection
@@ -130,6 +144,32 @@ glimt module-selection
 
 ---
 
+## 🍎 macOS
+
+On macOS, Glimt installs **terminal tooling only** — no desktop or GNOME modules. Everything is installed through **Homebrew** (no `sudo` required for packages), and App Store apps are installed via [`mas`](https://github.com/mas-cli/mas).
+
+**Core (installed automatically)**
+
+- **zsh** + **starship** — ZSH with a Catppuccin Mocha Starship prompt
+- **nerdfonts** — Nerd Fonts via Homebrew Casks
+- **kitty** — GPU-accelerated terminal with a Catppuccin theme
+- **fzf**, **bat**, **eza**, **btop**, **fastfetch**, **pbcopy** — modern shell utilities
+- **git-config**, **gh** — Git + GitHub CLI
+- **nvim** — Neovim with LazyVim
+- **volta** — Node.js version manager
+- **kubectl**, **k9s**, **kubectx**, **zellij** — Kubernetes & terminal tooling
+
+**Extras — pick what you need** (`glimt module-selection`)
+
+- **Apps** — `1password`, `1password-cli`, `tableplus`, `spotify`, `discord`
+- **App Store** (via `mas`) — `amphetamine`, `magnet`, `things` (Things 3)
+- **Web & desktop apps** — `notion`, `teams`, `chatgpt`, `ytmusic`, `claude-desktop`
+- **Dev & infra** — `vscode`, `jetbrains-toolbox`, `dotnet`, `docker`, `lens`, `claude-code`
+
+> macOS support is terminal-focused by design. The desktop, GNOME, and system modules listed above are Fedora-only.
+
+---
+
 ## 🖥️ Glimt CLI
 
 After setup, `glimt` is installed to `~/.local/bin/glimt` with tab completion.
@@ -145,7 +185,7 @@ glimt update                # pull latest and re-run
 
 ## 📝 Notes
 
-**Git credentials** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
+**Git credentials (Fedora)** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
 
 ```bash
 systemctl --user enable --now gnome-keyring-daemon.socket
@@ -155,6 +195,6 @@ systemctl --user enable --now gnome-keyring-daemon.socket
 
 ## About
 
-Glimt is a Fedora Workstation post-install automation tool written in Bash. Built for developers who reinstall Fedora regularly and want a reproducible environment without heavyweight orchestration tools.
+Glimt is a Fedora Workstation and macOS post-install automation tool written in Bash. Built for developers who reinstall regularly and want a reproducible environment without heavyweight orchestration tools.
 
-**Keywords:** Fedora post-install script, Fedora workstation setup, automate Fedora, Fedora developer environment, Fedora dotfiles, Fedora fresh install, GNOME setup script, Fedora bash script, Fedora workstation automation
+**Keywords:** Fedora post-install script, Fedora workstation setup, automate Fedora, Fedora developer environment, Fedora dotfiles, Fedora fresh install, GNOME setup script, Fedora bash script, macOS setup script, macOS developer environment, Homebrew bootstrap, mac post-install automation, macOS dotfiles
