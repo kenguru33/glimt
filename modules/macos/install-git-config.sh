@@ -136,6 +136,7 @@ clean() {
 
 case "$ACTION" in
   all)          deps; install; load_git_config; configure_git; install_git_completion_zsh; config_git_shell ;;
+  prompt)       mkdir -p "$GLIMT_CONFIG_DIR"; [[ -f "$CONFIG_FILE" ]] || prompt_git_config ;;
   deps)         deps ;;
   install)      install ;;
   config)       load_git_config; configure_git; install_git_completion_zsh; config_git_shell ;;
@@ -143,7 +144,7 @@ case "$ACTION" in
   clean)        clean ;;
   *)
     echo "❌ Unknown action: $ACTION"
-    echo "Usage: $0 [all|deps|install|config|reconfigure|clean]"
+    echo "Usage: $0 [all|prompt|deps|install|config|reconfigure|clean]"
     exit 1
     ;;
 esac

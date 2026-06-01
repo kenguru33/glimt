@@ -118,15 +118,7 @@ run_module() {
   local name
   name="$(basename "$script")"
 
-  # Modules that prompt the user (gum input/confirm/choose, or bash read) must
-  # run attached to the terminal. The spinner hides their prompts, so setup
-  # would hang waiting for input that can't be seen — run those with output.
-  local interactive=false
-  if grep -qE 'gum (input|confirm|choose|write|filter|file)|(^|[[:space:]])read[[:space:]]+-' "$script"; then
-    interactive=true
-  fi
-
-  if $VERBOSE || $interactive; then
+  if $VERBOSE; then
     echo "▶️  Running: $name"
     bash "$script" all
     echo "✅ Finished: $name"
@@ -161,6 +153,17 @@ cat <<"EOF"
        ✨  The Final Shine for Fresh Installs
 
 EOF
+
+# === Collect interactive answers up front ===
+# git-config prompts for name/email; gather it here so every module below can
+# run cleanly under the spinner instead of prompting mid-run. The module writes
+# its config file, then skips prompting when it runs under the spinner.
+GIT_CONFIG_MODULE="$MODULES_DIR/install-git-config.sh"
+if [[ -f "$GIT_CONFIG_MODULE" ]]; then
+  echo ""
+  gum style --foreground 220 --bold "📝 Git configuration"
+  bash "$GIT_CONFIG_MODULE" prompt
+fi
 
 # === Priority modules (run first, order matters) ===
 PRIORITY_MODULES=(
