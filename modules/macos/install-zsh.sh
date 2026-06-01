@@ -15,9 +15,11 @@ ZSHRC_FILE="$HOME_DIR/.zshrc"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZSHRC_TEMPLATE="$SCRIPT_DIR/config/zshrc"
 
-declare -A PLUGINS=(
-  ["zsh-autosuggestions"]="https://github.com/zsh-users/zsh-autosuggestions.git"
-  ["zsh-syntax-highlighting"]="https://github.com/zsh-users/zsh-syntax-highlighting.git"
+# "name|repo" pairs — avoids associative arrays so this runs under the
+# stock macOS Bash 3.2 as well as Homebrew's Bash.
+PLUGINS=(
+  "zsh-autosuggestions|https://github.com/zsh-users/zsh-autosuggestions.git"
+  "zsh-syntax-highlighting|https://github.com/zsh-users/zsh-syntax-highlighting.git"
 )
 
 write_zsh_config() {
@@ -38,8 +40,9 @@ install() {
   log "Installing or updating Zsh plugins..."
   mkdir -p "$PLUGIN_DIR"
 
-  for name in "${!PLUGINS[@]}"; do
-    local repo="${PLUGINS[$name]}"
+  for entry in "${PLUGINS[@]}"; do
+    local name="${entry%%|*}"
+    local repo="${entry#*|}"
     local dir="$PLUGIN_DIR/$name"
     if [[ -d "$dir/.git" ]]; then
       log "Updating $name..."
