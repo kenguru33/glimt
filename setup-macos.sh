@@ -86,15 +86,7 @@ run_module() {
   local name
   name="$(basename "$script")"
 
-  # Modules that call sudo can prompt for a password. The gum spinner hides
-  # a command's output while it runs, so that prompt is invisible and setup
-  # appears to hang. Run sudo-using modules with visible output instead.
-  local needs_sudo=false
-  if grep -q 'sudo' "$script"; then
-    needs_sudo=true
-  fi
-
-  if $VERBOSE || $needs_sudo; then
+  if $VERBOSE; then
     echo "▶️  Running: $name"
     bash "$script" all
     echo "✅ Finished: $name"
@@ -121,11 +113,38 @@ gum confirm "🚀 Ready to run all Glimt modules?" || {
   exit 1
 }
 
-# === Sudo explanation + keepalive (install-zsh.sh writes to /etc/shells) ===
+# === Sudo: prompt once, then answer all child prompts via askpass ===
+# macOS caches sudo credentials per-terminal, but modules run under gum spin in
+# a separate process without that terminal — so the cached credential is not
+# visible there and sudo would prompt again, invisibly, under the spinner.
+# Capture the password once and feed every sudo call through SUDO_ASKPASS so
+# modules stay under the spinner (output hidden) and never re-prompt.
 echo ""
 printf '%s\n' "🔐  Some steps require administrator access. Please enter your password."
 echo ""
-sudo -v
+
+GLIMT_PW_FILE="$(mktemp -t glimt-sudo)"
+GLIMT_ASKPASS="$(mktemp -t glimt-askpass)"
+chmod 600 "$GLIMT_PW_FILE"
+chmod 700 "$GLIMT_ASKPASS"
+trap 'rm -f "$GLIMT_PW_FILE" "$GLIMT_ASKPASS"' EXIT
+printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
+
+while true; do
+  pw="$(gum input --password --prompt "🔐 sudo password: ")" || { echo "❌ Setup cancelled."; exit 1; }
+  printf '%s' "$pw" > "$GLIMT_PW_FILE"
+  unset pw
+  if sudo -k -S -p '' true < "$GLIMT_PW_FILE" 2>/dev/null; then
+    break
+  fi
+  gum style --foreground 196 "❌ Incorrect password — try again."
+done
+
+# When a sudo call has no controlling terminal (which is the case for modules
+# run under gum spin), sudo automatically reads the password from SUDO_ASKPASS
+# instead of prompting — so exporting this is all that's needed.
+export SUDO_ASKPASS="$GLIMT_ASKPASS"
+
 clear
 cat <<"EOF"
 
@@ -134,7 +153,6 @@ cat <<"EOF"
        ✨  The Final Shine for Fresh Installs
 
 EOF
-while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # === Priority modules (run first, order matters) ===
 PRIORITY_MODULES=(
