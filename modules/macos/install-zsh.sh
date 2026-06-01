@@ -62,7 +62,9 @@ install() {
 
   if [[ "$SHELL" != "$brew_zsh" ]]; then
     log "Setting default shell to $brew_zsh..."
-    chsh -s "$brew_zsh"
+    # Run via sudo with the username so chsh does not prompt for a password
+    # interactively — that prompt is invisible under the gum spinner and hangs.
+    sudo chsh -s "$brew_zsh" "$REAL_USER"
   else
     log "Zsh already default shell."
   fi
