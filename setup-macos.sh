@@ -138,6 +138,20 @@ cat <<"EOF"
 
 EOF
 
+# === Heads-up: optional macOS permission ===
+echo ""
+gum style --border rounded --padding "0 1" --border-foreground 220 \
+  "🔐  Optional: App Management permission" \
+  "" \
+  "To set kitty's custom icon, Glimt edits /Applications/kitty.app, which" \
+  "macOS protects. If you want the icon, grant your terminal app" \
+  "(Terminal/iTerm/kitty…) permission first:" \
+  "" \
+  "  System Settings → Privacy & Security → App Management → enable your" \
+  "  terminal, then quit and reopen it." \
+  "" \
+  "It's optional — without it the icon step is skipped and setup continues."
+
 # === Confirm Start ===
 echo ""
 gum confirm "🚀 Ready to run all Glimt modules?" || {

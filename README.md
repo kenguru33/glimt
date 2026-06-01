@@ -168,6 +168,16 @@ On macOS, Glimt installs **terminal tooling only** — no desktop or GNOME modul
 
 > macOS support is terminal-focused by design. The desktop, GNOME, and system modules listed above are Fedora-only.
 
+**🔐 One optional permission**
+
+To apply kitty's custom icon, Glimt edits `/Applications/kitty.app`, which macOS protects behind **App Management**. If you want the icon, grant your terminal app the permission *before* running setup:
+
+1. **System Settings → Privacy & Security → App Management**
+2. Enable your terminal app (Terminal, iTerm2, kitty, …)
+3. **Quit and reopen** that terminal so the permission takes effect
+
+This is entirely optional — without it, the icon step is skipped and setup continues normally. Nothing else in the macOS setup modifies protected system locations.
+
 ---
 
 ## 🖥️ Glimt CLI
