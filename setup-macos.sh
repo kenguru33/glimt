@@ -86,7 +86,15 @@ run_module() {
   local name
   name="$(basename "$script")"
 
-  if $VERBOSE; then
+  # Modules that call sudo can prompt for a password. The gum spinner hides
+  # a command's output while it runs, so that prompt is invisible and setup
+  # appears to hang. Run sudo-using modules with visible output instead.
+  local needs_sudo=false
+  if grep -q 'sudo' "$script"; then
+    needs_sudo=true
+  fi
+
+  if $VERBOSE || $needs_sudo; then
     echo "▶️  Running: $name"
     bash "$script" all
     echo "✅ Finished: $name"
