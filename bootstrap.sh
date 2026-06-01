@@ -183,6 +183,16 @@ ensure_git() {
       sleep 5
     done
     echo "✅ Command Line Tools installed."
+
+    # git ships with the CLT — confirm it is actually functional before we rely on it.
+    if ! git --version >/dev/null 2>&1; then
+      echo "❌ git is still not available after installing the Command Line Tools." >&2
+      echo "   Finish the install manually, then re-run bootstrap:" >&2
+      echo "     xcode-select --install" >&2
+      echo "   or install the full tools with:" >&2
+      echo "     sudo xcode-select --reset && xcode-select --install" >&2
+      exit 1
+    fi
   elif ! command -v git >/dev/null 2>&1; then
     echo "📦 Installing git..."
     run sudo dnf install -y git
