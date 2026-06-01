@@ -28,6 +28,10 @@ install() {
 prompt_git_config() {
   mkdir -p "$GLIMT_CONFIG_DIR"
 
+  # Discard any buffered keystrokes (e.g. the Enter left over from a previous
+  # prompt) so the first gum input isn't auto-submitted empty and re-asked.
+  while IFS= read -r -t 0.1 _ < /dev/tty 2>/dev/null; do :; done
+
   while true; do
     name=$(gum input --prompt "📝 Full name: ")
     [[ -n "$name" ]] && break
