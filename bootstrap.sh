@@ -166,16 +166,32 @@ require_sudo() {
   fi
 }
 
+# === Ensure git is available ===
+# On macOS, /usr/bin/git is a stub that exists even without the Command Line
+# Tools, so `command -v git` is not a reliable check — use `xcode-select -p`,
+# which only succeeds once the CLT (or Xcode) is actually installed.
+ensure_git() {
+  if [[ "$OS_ID" == "macos" ]]; then
+    if xcode-select -p >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "📦 Installing the Xcode Command Line Tools (required for git)..."
+    echo "   A macOS dialog will open — click \"Install\" and accept the license."
+    xcode-select --install >/dev/null 2>&1 || true
+    echo "⏳ Waiting for the Command Line Tools to finish installing..."
+    until xcode-select -p >/dev/null 2>&1; do
+      sleep 5
+    done
+    echo "✅ Command Line Tools installed."
+  elif ! command -v git >/dev/null 2>&1; then
+    echo "📦 Installing git..."
+    run sudo dnf install -y git
+  fi
+}
+
 # === INSTALL: clone or update repo ===
 install_repo() {
-  if ! command -v git >/dev/null 2>&1; then
-    echo "📦 Installing git..."
-    if [[ "$OS_ID" == "macos" ]]; then
-      run xcode-select --install
-    else
-      run sudo dnf install -y git
-    fi
-  fi
+  ensure_git
 
   echo "📥 Cloning or updating glimt repo (branch: $BRANCH)..."
   if [[ -d "$REPO_DIR/.git" ]]; then
