@@ -28,39 +28,36 @@ install() {
 prompt_git_config() {
   mkdir -p "$GLIMT_CONFIG_DIR"
 
-  # Discard any buffered keystrokes (e.g. the Enter left over from a previous
-  # prompt) so the first gum input isn't auto-submitted empty and re-asked.
-  while IFS= read -r -t 0.1 _ < /dev/tty 2>/dev/null; do :; done
-
+  # Use plain `read` from /dev/tty rather than `gum input`: gum's text widget
+  # mis-renders here (duplicate prompt) under the setup orchestration. read is
+  # robust regardless of terminal/stdin state and asks exactly once.
   while true; do
-    name=$(gum input --prompt "📝 Full name: ")
+    read -rp "📝 Full name: " name < /dev/tty
     [[ -n "$name" ]] && break
-    gum style --foreground 1 "Name cannot be empty"
+    printf '  Name cannot be empty\n' >&2
   done
 
   while true; do
-    email=$(gum input --prompt "📧 Email: ")
+    read -rp "📧 Email: " email < /dev/tty
     [[ "$email" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
-    gum style --foreground 1 "Invalid email"
+    printf '  Invalid email\n' >&2
   done
 
-  editor=$(gum input --prompt "🖊 Default editor:" --value "nvim")
-  branch=$(gum input --prompt "🌿 Default branch:" --value "main")
+  read -rp "🖊  Default editor [nvim]: " editor < /dev/tty
+  editor="${editor:-nvim}"
+  read -rp "🌿 Default branch [main]: " branch < /dev/tty
+  branch="${branch:-main}"
 
-  rebase=false
-  gum confirm "🔁 Use rebase on pull?" && rebase=true
+  local ans
+  read -rp "🔁 Use rebase on pull? [y/N]: " ans < /dev/tty
+  local rebase=false
+  [[ "$ans" =~ ^[Yy]$ ]] && rebase=true
 
-  gum format <<EOF
-# Review Git config
+  printf '\nReview Git config:\n  Name:   %s\n  Email:  %s\n  Editor: %s\n  Branch: %s\n  Rebase: %s\n\n' \
+    "$name" "$email" "$editor" "$branch" "$rebase"
 
-Name: $name
-Email: $email
-Editor: $editor
-Branch: $branch
-Pull rebase: $rebase
-EOF
-
-  gum confirm "Save configuration?" || die "Aborted"
+  read -rp "Save configuration? [Y/n]: " ans < /dev/tty
+  [[ "$ans" =~ ^[Nn]$ ]] && die "Aborted"
 
   cat >"$CONFIG_FILE" <<EOF
 name="$name"
