@@ -37,6 +37,23 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 # -----------------------------
+# Ensure a modern Bash
+# macOS ships Bash 3.2, but this script uses associative arrays (Bash 4+).
+# It may be launched by /bin/bash (e.g. via `glimt module-selection`), so
+# re-exec under Homebrew's bash when needed.
+# -----------------------------
+if (( BASH_VERSINFO[0] < 4 )); then
+  for _b in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [[ -x "$_b" && -z "${GLIMT_EXTRAS_REEXEC:-}" ]]; then
+      export GLIMT_EXTRAS_REEXEC=1
+      exec "$_b" "$0" "$@"
+    fi
+  done
+  echo "❌ This script needs Bash 4+. Install it with: brew install bash" >&2
+  exit 1
+fi
+
+# -----------------------------
 # Module registry
 # ORDERED_MODULES drives iteration; avoids ${!assoc[@]} nameref regression in bash 5.3.
 # MODULES value: path starting with / → file/dir existence check
