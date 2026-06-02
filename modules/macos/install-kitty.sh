@@ -14,25 +14,6 @@ KITTY_CONFIG_DIR="$HOME_DIR/.config/kitty"
 
 deps() { log "No additional dependencies."; }
 
-# Replacing the .icns inside a bundle is not enough — macOS caches app icons.
-# Re-register the app and flush the icon caches so the new icon shows.
-refresh_icon_cache() {
-  local app="$1"
-  touch "$app" 2>/dev/null || sudo touch "$app" 2>/dev/null || true
-
-  local lsreg="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
-  [[ -x "$lsreg" ]] && "$lsreg" -f "$app" 2>/dev/null || true
-
-  # System icon services cache (needs root) + per-user dock cache.
-  sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
-  local user_cache
-  user_cache="$(getconf DARWIN_USER_CACHE_DIR 2>/dev/null || true)"
-  [[ -n "$user_cache" ]] && find "$user_cache" -name 'com.apple.dock.iconcache' -delete 2>/dev/null || true
-
-  killall Dock 2>/dev/null || true
-  killall Finder 2>/dev/null || true
-}
-
 install() {
   if brew list --cask kitty &>/dev/null; then
     log "Kitty already installed."
@@ -47,29 +28,37 @@ config() {
   deploy_config "$SCRIPT_DIR/config/kitty.conf" "$KITTY_CONFIG_DIR/kitty.conf"
 
   local app="/Applications/kitty.app"
-  local icon_dest="$app/Contents/Resources/kitty.icns"
-  if [[ -d "$app" ]]; then
-    log "Applying DinkDonk kitty-dark icon..."
-    # Download to a temp file first — curl can't write directly into the app
-    # bundle (not user-writable, which caused "curl: (56) Failure writing
-    # output to destination"). Then copy into place, falling back to sudo. The
-    # icon is cosmetic, so any failure here warns instead of aborting setup.
-    local tmp_icon
-    tmp_icon="$(mktemp)"
-    if curl -fsSL https://raw.githubusercontent.com/DinkDonk/kitty-icon/main/kitty-dark.icns -o "$tmp_icon" \
-       && { cp -f "$tmp_icon" "$icon_dest" 2>/dev/null || sudo cp -f "$tmp_icon" "$icon_dest"; }; then
-      refresh_icon_cache "$app"
-      log "Icon applied — icon caches flushed (Dock/Finder restarted)."
-    else
-      warn "Could not apply kitty icon — skipping (non-fatal)."
-    fi
-    rm -f "$tmp_icon"
-  else
+  if [[ ! -d "$app" ]]; then
     warn "kitty.app not found in /Applications — skipping icon."
+    return 0
   fi
+
+  log "Applying DinkDonk kitty-dark icon..."
+  # Set a *custom* icon via fileicon (NSWorkspace) instead of replacing the
+  # bundle's .icns: it overrides the app icon, refreshes immediately, and does
+  # not break the app's code signature or fight the macOS icon cache. Cosmetic,
+  # so any failure here warns instead of aborting. Needs App Management
+  # permission for the terminal (see the notice shown by setup-macos.sh).
+  if ! command -v fileicon &>/dev/null; then
+    brew install fileicon >/dev/null 2>&1 || true
+  fi
+
+  local tmp_icon
+  tmp_icon="$(mktemp)"
+  if command -v fileicon &>/dev/null \
+     && curl -fsSL https://raw.githubusercontent.com/DinkDonk/kitty-icon/main/kitty-dark.icns -o "$tmp_icon" \
+     && fileicon set "$app" "$tmp_icon" >/dev/null 2>&1; then
+    killall Dock 2>/dev/null || true
+    killall Finder 2>/dev/null || true
+    log "Icon applied."
+  else
+    warn "Could not apply kitty icon (needs fileicon + App Management permission) — skipping."
+  fi
+  rm -f "$tmp_icon"
 }
 
 clean() {
+  command -v fileicon &>/dev/null && fileicon rm /Applications/kitty.app 2>/dev/null || true
   brew uninstall --cask kitty 2>/dev/null || true
   rm -f "$KITTY_CONFIG_DIR/kitty.conf"
 }
