@@ -59,16 +59,24 @@ config() {
   # blocked unless the terminal has App Management permission, so confirm rather
   # than trusting fileicon's exit code.
   if fileicon test "$app" >/dev/null 2>&1; then
+    # The custom icon is written; force macOS to actually display it. Re-register
+    # the app, flush the system IconServices store + per-user dock cache, and
+    # restart the icon-serving daemons. The store removal needs root.
     local lsreg="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
     [[ -x "$lsreg" ]] && "$lsreg" -f "$app" 2>/dev/null || true
+    sudo rm -rf /Library/Caches/com.apple.iconservices.store 2>/dev/null || true
+    local user_cache
+    user_cache="$(getconf DARWIN_USER_CACHE_DIR 2>/dev/null || true)"
+    [[ -n "$user_cache" ]] && find "$user_cache" -name 'com.apple.dock.iconcache' -delete 2>/dev/null || true
+    sudo killall -HUP coreservicesd 2>/dev/null || true
     killall Dock 2>/dev/null || true
     killall Finder 2>/dev/null || true
-    log "Icon applied."
+    log "Icon applied (caches flushed). Running in: ${TERM_PROGRAM:-${TERM:-unknown}}."
   else
     warn "Kitty icon not applied — macOS blocked modifying the app."
-    warn "Grant your terminal App Management permission, then re-apply:"
-    warn "  System Settings → Privacy & Security → App Management → enable your terminal"
-    warn "  Quit & reopen the terminal, then run:  glimt install kitty"
+    warn "This terminal (${TERM_PROGRAM:-${TERM:-unknown}}) needs App Management permission:"
+    warn "  System Settings → Privacy & Security → App Management → enable THIS terminal app"
+    warn "  Quit & reopen it, then run:  glimt install kitty"
   fi
 }
 
