@@ -1,4 +1,14 @@
 # === ENVIRONMENT ===
+# Put Homebrew ahead of system tools on PATH (fixes brew doctor's warning that
+# /usr/bin precedes /opt/homebrew/bin). brew shellenv prepends Homebrew's bin
+# and sets MANPATH/INFOPATH. Resolve brew from its known prefixes: /opt/homebrew
+# on Apple Silicon, /usr/local on Intel.
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
+
 export PATH="$HOME/.local/bin:$PATH"
 
 # === Completion ===
