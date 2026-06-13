@@ -87,11 +87,16 @@ config() {
 
   log "Installing .zshrc template..."
   deploy_config "$ZSHRC_TEMPLATE" "$ZSHRC_FILE"
+
+  # Suppress the "Last login: ..." banner so the greeting is the first thing
+  # shown in a new shell. Presence of ~/.hushlogin is all login(1) checks for.
+  log "Silencing the login banner (~/.hushlogin)..."
+  run_as_user touch "$HOME_DIR/.hushlogin"
 }
 
 clean() {
   log "Cleaning Zsh setup..."
-  rm -rf "$PLUGIN_DIR" "$CONFIG_DIR" "$ZSHRC_FILE"
+  rm -rf "$PLUGIN_DIR" "$CONFIG_DIR" "$ZSHRC_FILE" "$HOME_DIR/.hushlogin"
   log "Clean complete."
 }
 
