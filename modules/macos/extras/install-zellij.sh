@@ -5,14 +5,18 @@ trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 MODULE_NAME="zellij"
 ACTION="${1:-all}"
 
-GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-# shellcheck source=lib.sh
+GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
+# shellcheck source=../lib.sh
 source "$GLIMT_LIB"
 
 ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+macos_guard() {
+  [[ "$(uname -s)" == "Darwin" ]] || die "macOS only."
+}
 
 deps() { log "No additional dependencies."; }
 
@@ -58,7 +62,7 @@ EOF
 
   log "Deploying zellij.zsh config..."
   mkdir -p "$ZSH_CONFIG_DIR"
-  deploy_config "$SCRIPT_DIR/config/zellij.zsh" "$ZSH_CONFIG_DIR/zellij.zsh"
+  deploy_config "$SCRIPT_DIR/../config/zellij.zsh" "$ZSH_CONFIG_DIR/zellij.zsh"
 }
 
 clean() {
@@ -66,6 +70,8 @@ clean() {
   rm -rf "$ZELLIJ_CONFIG_DIR"
   rm -f "$ZSH_CONFIG_DIR/zellij.zsh"
 }
+
+macos_guard
 
 case "$ACTION" in
   all)     deps; install; config ;;

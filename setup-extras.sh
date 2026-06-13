@@ -209,7 +209,7 @@ main() {
 
     if [[ "$now" == "1" && "$before" != "1" ]]; then
       run_module "$m" all
-    elif [[ "$now" != "1" && "$before" == "1" ]]; then
+    elif [[ "$now" != "1" ]] && { [[ "$before" == "1" ]] || module_installed "$m"; }; then
       run_module "$m" clean
     fi
   done

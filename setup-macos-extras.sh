@@ -79,6 +79,7 @@ ORDERED_MODULES=(
   teams
   vscode
   ytmusic
+  zellij
 )
 
 declare -A MODULES=(
@@ -101,6 +102,7 @@ declare -A MODULES=(
   [teams]="/Applications/Microsoft Teams.app"
   [vscode]="/Applications/Visual Studio Code.app"
   [ytmusic]="/Applications/YouTube Music.app"
+  [zellij]="zellij"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
@@ -123,6 +125,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [teams]="Microsoft Teams"
   [vscode]="Visual Studio Code"
   [ytmusic]="YouTube Music"
+  [zellij]="Zellij terminal multiplexer"
 )
 
 # -----------------------------
@@ -289,7 +292,7 @@ main() {
 
     if [[ "$now" == "1" && "$before" != "1" ]]; then
       run_module "$m" all
-    elif [[ "$now" != "1" && "$before" == "1" ]]; then
+    elif [[ "$now" != "1" ]] && { [[ "$before" == "1" ]] || module_installed "$m"; }; then
       run_module "$m" clean
     fi
   done
