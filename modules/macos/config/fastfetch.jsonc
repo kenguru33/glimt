@@ -24,6 +24,13 @@
     "memory",
     "uptime",
     "packages",
+    {
+      // Reads the cached Homebrew outdated-count (refreshed in the background by
+      // greeting.zsh). Rendered as a normal info row so it aligns with the logo.
+      "type": "command",
+      "key": "Updates",
+      "text": "c=$(cat \"${XDG_CACHE_HOME:-$HOME/.cache}/glimt/brew-outdated-count\" 2>/dev/null); if [ \"${c:-0}\" -gt 0 ] 2>/dev/null; then echo \"$c brew package(s) — run 'brew upgrade'\"; else echo \"up to date\"; fi"
+    },
     "break"
   ]
 }
