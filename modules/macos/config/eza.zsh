@@ -24,11 +24,13 @@ ga=38;5;246:\
 
 # === eza Aliases with Icons ===
 if command -v eza &>/dev/null; then
-  alias ls='eza --icons'
-  alias ll='eza -al --icons --group-directories-first'
-  alias la='eza -a --icons'
-  alias l='eza -l --icons'
-  alias lt='eza --tree --icons'
+  # --hyperlink emits OSC 8 links so filenames are clickable (shift+click in
+  # kitty opens them in their default app). Needs zellij osc8_hyperlinks true.
+  alias ls='eza --icons --hyperlink'
+  alias ll='eza -al --icons --hyperlink --group-directories-first'
+  alias la='eza -a --icons --hyperlink'
+  alias l='eza -l --icons --hyperlink'
+  alias lt='eza --tree --icons --hyperlink'
 
   if (( $+functions[_ls] )) && [[ ! $+functions[_eza] ]]; then
     compdef _ls eza

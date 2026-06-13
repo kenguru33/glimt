@@ -56,6 +56,11 @@ copy_on_select true
 copy_clipboard "system"
 copy_command "pbcopy"
 mouse_mode true
+
+// Forward OSC8 hyperlinks to the host terminal so shift+click opens file links
+// in kitty (shift bypasses zellij's mouse capture). Without this, zellij strips
+// the link and kitty sees only plain text — nothing happens on shift+click.
+osc8_hyperlinks true
 EOF
 
   log "✅ Theme written to $ZELLIJ_CONFIG_FILE"
