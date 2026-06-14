@@ -13,7 +13,10 @@ FONT_CASKS=(
   font-hack-nerd-font
   font-fira-code-nerd-font
   font-jetbrains-mono-nerd-font
-  font-monaco-nerd-font
+  # Icons-only Nerd Font. There is no Monaco Nerd Font (Monaco is an Apple
+  # system font, already present at /System/Library/Fonts/Monaco.ttf), so
+  # kitty uses system Monaco for text and symbol_maps the icon ranges to this.
+  font-symbols-only-nerd-font
 )
 
 deps() { log "No additional dependencies."; }
