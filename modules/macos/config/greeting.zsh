@@ -1,5 +1,31 @@
 [[ -o interactive ]] || return
 
+# Secondary kitty session panes (e.g. the vsplit in default.session) set
+# GLIMT_NO_GREETING so the fastfetch banner shows in the first pane only. Unset
+# it afterwards so the var doesn't leak into child processes — only this pane's
+# initial shell is silenced.
+if [[ -n "${GLIMT_NO_GREETING:-}" ]]; then
+  unset GLIMT_NO_GREETING
+  return
+fi
+
+# Show the banner only in the first window of each kitty tab. A window is
+# "first" when it holds the lowest window id in its tab (kitty ids grow with
+# creation order), so manually created splits (cmd+d) skip the banner while the
+# first window of every new tab still greets. Needs `allow_remote_control yes`.
+# Wrapped in an anonymous function for `local`; any failure (remote control
+# off, non-kitty terminal, no jq) leaves $first empty and falls through to greet.
+if [[ -n "${KITTY_WINDOW_ID:-}" ]] && command -v kitty >/dev/null && command -v jq >/dev/null; then
+  if () {
+        local first
+        first=$(kitty @ ls 2>/dev/null | jq -r --argjson w "${KITTY_WINDOW_ID}" \
+          '[.[].tabs[] | select(any(.windows[]; .id==$w)) | .windows[].id] | min' 2>/dev/null)
+        [[ -n "$first" && "$first" != "${KITTY_WINDOW_ID}" ]]
+      }; then
+    return
+  fi
+fi
+
 # Refresh the cached Homebrew outdated-count in the background (read and
 # rendered by the fastfetch "Updates" module). The whole block runs detached,
 # so shell startup never blocks. Two cadences keep the count accurate without

@@ -11,6 +11,7 @@ source "$GLIMT_LIB"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KITTY_CONFIG_DIR="$HOME_DIR/.config/kitty"
+ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 
 deps() { log "No additional dependencies."; }
 
@@ -26,6 +27,14 @@ install() {
 config() {
   mkdir -p "$KITTY_CONFIG_DIR"
   deploy_config "$SCRIPT_DIR/config/kitty.conf" "$KITTY_CONFIG_DIR/kitty.conf"
+
+  # Default startup session, restored by the kitty() shell wrapper when kitty
+  # is launched with no arguments and no project-local .kitty.session exists.
+  deploy_config "$SCRIPT_DIR/config/default.session" "$KITTY_CONFIG_DIR/default.session"
+
+  # Shell wrapper that selects a session on argument-less `kitty` launches.
+  mkdir -p "$ZSH_CONFIG_DIR"
+  deploy_config "$SCRIPT_DIR/config/kitty.zsh" "$ZSH_CONFIG_DIR/kitty.zsh"
 
   local app="/Applications/kitty.app"
   if [[ ! -d "$app" ]]; then
@@ -84,6 +93,8 @@ clean() {
   command -v fileicon &>/dev/null && fileicon rm /Applications/kitty.app 2>/dev/null || true
   brew uninstall --cask kitty 2>/dev/null || true
   rm -f "$KITTY_CONFIG_DIR/kitty.conf"
+  rm -f "$KITTY_CONFIG_DIR/default.session"
+  rm -f "$ZSH_CONFIG_DIR/kitty.zsh"
 }
 
 case "$ACTION" in

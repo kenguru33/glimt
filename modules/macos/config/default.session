@@ -1,0 +1,18 @@
+# Glimt default kitty session
+#
+# Loaded by the kitty() shell wrapper (see config/kitty.zsh) when kitty is
+# started with no arguments and no project-local .kitty.session is present.
+# To override per-project, drop a .kitty.session file in a directory before
+# running `kitty` there. See: https://sw.kovidgoyal.net/kitty/overview/#startup-sessions
+#
+# Omitting `cd` lets each window inherit the directory kitty was launched from.
+
+# No tab title: a name here would pin the tab and override kitty's shell
+# integration, which titles each tab dynamically (cwd when idle, program name
+# when running). That keeps tabs informative and naturally distinct.
+new_tab
+layout splits
+launch zsh
+# Secondary split: GLIMT_NO_GREETING tells greeting.zsh to skip the fastfetch
+# banner, so the Apple logo + system info only appears in the first pane.
+launch --location=vsplit --env GLIMT_NO_GREETING=1 zsh
