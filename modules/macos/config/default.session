@@ -17,6 +17,3 @@
 new_tab
 layout splits
 launch
-# Secondary split: GLIMT_NO_GREETING tells greeting.zsh to skip the fastfetch
-# banner, so the Apple logo + system info only appears in the first pane.
-launch --location=vsplit --env GLIMT_NO_GREETING=1
