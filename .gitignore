@@ -2,3 +2,6 @@
 !.claude/commands/
 .DS_Store
 **/.DS_Store
+
+# Per-project kitty sessions saved via ctrl+shift+s (user artifacts)
+.kitty.session

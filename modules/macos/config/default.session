@@ -10,9 +10,13 @@
 # No tab title: a name here would pin the tab and override kitty's shell
 # integration, which titles each tab dynamically (cwd when idle, program name
 # when running). That keeps tabs informative and naturally distinct.
+# Bare `launch` (no explicit "zsh") starts the default shell *with* kitty shell
+# integration. That matters for save_as_session --use-foreground-process: it
+# only captures the running program for windows started with the default shell.
+# An explicit `launch zsh` is saved verbatim as "zsh", losing the running app.
 new_tab
 layout splits
-launch zsh
+launch
 # Secondary split: GLIMT_NO_GREETING tells greeting.zsh to skip the fastfetch
 # banner, so the Apple logo + system info only appears in the first pane.
-launch --location=vsplit --env GLIMT_NO_GREETING=1 zsh
+launch --location=vsplit --env GLIMT_NO_GREETING=1

@@ -32,6 +32,9 @@ config() {
   # is launched with no arguments and no project-local .kitty.session exists.
   deploy_config "$SCRIPT_DIR/config/default.session" "$KITTY_CONFIG_DIR/default.session"
 
+  # Session saver invoked by the ctrl+shift+s mapping in kitty.conf.
+  deploy_config "$SCRIPT_DIR/config/kitty-save-session.sh" "$KITTY_CONFIG_DIR/save-session.sh"
+
   # Shell wrapper that selects a session on argument-less `kitty` launches.
   mkdir -p "$ZSH_CONFIG_DIR"
   deploy_config "$SCRIPT_DIR/config/kitty.zsh" "$ZSH_CONFIG_DIR/kitty.zsh"
@@ -94,6 +97,7 @@ clean() {
   brew uninstall --cask kitty 2>/dev/null || true
   rm -f "$KITTY_CONFIG_DIR/kitty.conf"
   rm -f "$KITTY_CONFIG_DIR/default.session"
+  rm -f "$KITTY_CONFIG_DIR/save-session.sh"
   rm -f "$ZSH_CONFIG_DIR/kitty.zsh"
 }
 
