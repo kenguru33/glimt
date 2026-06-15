@@ -23,7 +23,15 @@ if command -v kitty &>/dev/null; then
         command kitty --session "$PWD/.kitty.session"
       fi
     elif [[ -f ~/.config/kitty/default.session ]]; then
-      command kitty --session ~/.config/kitty/default.session
+      if [[ -n "${KITTY_WINDOW_ID:-}" ]]; then
+        # Already inside kitty: reuse the running instance (see the
+        # .kitty.session branch above). goto_session switches to the default
+        # session's window if it is already open instead of duplicating it.
+        kitty @ action goto_session ~/.config/kitty/default.session 2>/dev/null \
+          || command kitty --session ~/.config/kitty/default.session
+      else
+        command kitty --session ~/.config/kitty/default.session
+      fi
     else
       command kitty
     fi
