@@ -1,7 +1,11 @@
 #!/usr/bin/env zsh
-# Save the current kitty session to ./.kitty.session in the ACTIVE PANE's
-# working directory, then notify. Bound to ctrl+shift+s in kitty.conf via
-# `launch --type=overlay --cwd=current`, so $PWD here is the active pane's dir.
+# Save the current kitty session into the session list under
+# ~/.local/share/kitty/sessions/<name>.kitty-session, then notify. Bound to
+# ctrl+shift+s in kitty.conf via `launch --type=overlay --cwd=current`, so $PWD
+# here is the active pane's directory and the overlay has a TTY to prompt on.
+#
+# The name is prompted, pre-filled with the active pane's folder name. The
+# saved file shows up in kitty's `goto_session <dir>` picker (ctrl+shift+o).
 #
 # Runs in a transient overlay window (which has a TTY), letting `kitty @` reach
 # kitty over that TTY via `allow_remote_control yes` — no control socket needed
@@ -21,17 +25,28 @@ set -euo pipefail
 
 notify() { osascript -e "display notification \"$2\" with title \"kitty\" subtitle \"$1\"" >/dev/null 2>&1 || true; }
 
-target="$PWD/.kitty.session"
+SESSIONS_DIR="$HOME/.local/share/kitty/sessions"
+mkdir -p "$SESSIONS_DIR"
 
-if [[ -z "${KITTY_WINDOW_ID:-}" ]]; then
-  notify "$target" "Save aborted (no window id)"
+# Prompt for a name, defaulting to the active pane's folder name.
+default="${PWD:t}"
+print -n "Session name [${default}]: "
+read -r name || exit 0
+name="${name:-$default}"
+name="${name// /-}"   # spaces -> dashes
+name="${name//\//-}"  # no path separators in the filename
+
+if [[ -z "$name" || -z "${KITTY_WINDOW_ID:-}" ]]; then
+  notify "$SESSIONS_DIR" "Save aborted (no name or window id)"
   exit 1
 fi
+
+target="$SESSIONS_DIR/${name}.kitty-session"
 
 # --save-only: don't open an editor to review. --use-foreground-process: also
 # restore programs running in each shell on reload (WARNING: re-run on load).
 if kitty @ action "save_as_session --save-only --use-foreground-process --match 'not id:${KITTY_WINDOW_ID}' '${target}'"; then
-  notify "$target" "Session saved"
+  notify "$target" "Session '${name}' saved"
 else
   notify "$target" "Failed to save session"
   exit 1

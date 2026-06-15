@@ -12,6 +12,7 @@ source "$GLIMT_LIB"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KITTY_CONFIG_DIR="$HOME_DIR/.config/kitty"
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
+SESSIONS_DIR="$HOME_DIR/.local/share/kitty/sessions"
 
 deps() { log "No additional dependencies."; }
 
@@ -32,8 +33,14 @@ config() {
   # is launched with no arguments and no project-local .kitty.session exists.
   deploy_config "$SCRIPT_DIR/config/default.session" "$KITTY_CONFIG_DIR/default.session"
 
-  # Session saver invoked by the ctrl+shift+s mapping in kitty.conf.
+  # Session list directory (saved sessions live here; browsed via f7>o).
+  mkdir -p "$SESSIONS_DIR"
+
+  # Session saver (ctrl+shift+s), opener (ctrl+shift+o) and deleter
+  # (ctrl+shift+backspace) invoked from kitty.conf.
   deploy_config "$SCRIPT_DIR/config/kitty-save-session.sh" "$KITTY_CONFIG_DIR/save-session.sh"
+  deploy_config "$SCRIPT_DIR/config/kitty-open-session.sh" "$KITTY_CONFIG_DIR/open-session.sh"
+  deploy_config "$SCRIPT_DIR/config/kitty-delete-session.sh" "$KITTY_CONFIG_DIR/delete-session.sh"
 
   # Shell wrapper that selects a session on argument-less `kitty` launches.
   mkdir -p "$ZSH_CONFIG_DIR"
@@ -98,7 +105,11 @@ clean() {
   rm -f "$KITTY_CONFIG_DIR/kitty.conf"
   rm -f "$KITTY_CONFIG_DIR/default.session"
   rm -f "$KITTY_CONFIG_DIR/save-session.sh"
+  rm -f "$KITTY_CONFIG_DIR/open-session.sh"
+  rm -f "$KITTY_CONFIG_DIR/delete-session.sh"
   rm -f "$ZSH_CONFIG_DIR/kitty.zsh"
+  # Leave saved sessions in $SESSIONS_DIR (user data); only remove it if empty.
+  rmdir "$SESSIONS_DIR" 2>/dev/null || true
 }
 
 case "$ACTION" in
