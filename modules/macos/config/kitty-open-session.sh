@@ -32,8 +32,12 @@ if (( ${#files} == 0 )); then
   exit 0
 fi
 
+# Floating, centered picker: a rounded box inset from the overlay edges, with a
+# distinct panel background, themed to match the Catppuccin Mocha kitty colors.
+export FZF_DEFAULT_OPTS="--layout=reverse --info=inline --border=rounded --margin=12%,28% --padding=1 --color=fg:#cdd6f4,bg:#181825,hl:#f38ba8,fg+:#cdd6f4,bg+:#313244,hl+:#f38ba8,info:#cba6f7,prompt:#cba6f7,pointer:#f5e0dc,marker:#b4befe,spinner:#f5e0dc,header:#f38ba8,border:#585b70"
+
 # Show bare names in the picker; reconstruct the full path for the chosen one.
-sel="$(print -l "${files[@]:t}" | fzf --prompt='Open session > ' --height=100%)" || exit 0
+sel="$(print -l "${files[@]:t}" | fzf --prompt='Open session > ')" || exit 0
 [[ -n "$sel" ]] || exit 0
 
 # goto_session loads the session into this running instance (new OS window, or
