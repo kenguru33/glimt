@@ -25,12 +25,19 @@ if ! command -v fzf >/dev/null; then
   exit 1
 fi
 
+DEFAULT_SESSION="$HOME/.config/kitty/default.session"
+DEFAULT_LABEL="default (global)"
+
 # (N) is the zsh null-glob qualifier: expand to nothing (not an error) when the
 # list is empty.
-typeset -a files
+typeset -a files entries
 files=("$SESSIONS_DIR"/*.kitty-session(N))
-if (( ${#files} == 0 )); then
-  notify "$SESSIONS_DIR" "No saved sessions"
+# The global default session (the startup layout) is selectable too, listed
+# first; then the saved sessions by bare name.
+[[ -f "$DEFAULT_SESSION" ]] && entries+=("$DEFAULT_LABEL")
+entries+=("${files[@]:t}")
+if (( ${#entries} == 0 )); then
+  notify "$SESSIONS_DIR" "No sessions"
   exit 0
 fi
 
@@ -50,13 +57,19 @@ for osw in json.load(sys.stdin):
         break
 ' 2>/dev/null || true)"
 
-# Show bare names in the picker; reconstruct the full path for the chosen one.
-sel="$(print -l "${files[@]:t}" | fzf --prompt='Open session > ')" || exit 0
+# Pick from the menu; map the choice back to a session-file path.
+sel="$(print -l "${entries[@]}" | fzf --prompt='Open session > ')" || exit 0
 [[ -n "$sel" ]] || exit 0
+
+if [[ "$sel" == "$DEFAULT_LABEL" ]]; then
+  target="$DEFAULT_SESSION"
+else
+  target="$SESSIONS_DIR/$sel"
+fi
 
 # goto_session loads the session into this running instance as a new OS window
 # (or switches to it if already open).
-kitty @ action "goto_session '${SESSIONS_DIR}/${sel}'"
+kitty @ action "goto_session '${target}'"
 
 # Replace: close the OS window the picker was launched from (this also closes
 # this overlay). One compound match so all its tabs close in a single request.
