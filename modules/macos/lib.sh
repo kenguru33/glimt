@@ -98,13 +98,18 @@ prune_backups() {
 #
 # Usage: deploy_config <src_template> <dest_file>
 #
-# Creates parent directories, backs up any existing dest with a timestamp,
-# then copies src to dest with mode 0644.
+# Creates parent directories, backs up any existing dest with a timestamp
+# (only when its content differs from src), then copies src to dest with
+# mode 0644.
 deploy_config() {
   local src="$1" dest="$2"
   [[ -f "$src" ]] || die "Template not found: $src"
   mkdir -p "$(dirname "$dest")"
-  if [[ -f "$dest" ]]; then
+  # Only back up when the content actually differs. Re-running a module with an
+  # unchanged template would otherwise leave an identical copy behind each time.
+  # The copy below still runs unconditionally, so ownership and mode are always
+  # re-applied even when nothing changed.
+  if [[ -f "$dest" ]] && ! cmp -s "$src" "$dest"; then
     local backup="${dest}.bak.$(date +%Y%m%d%H%M%S)"
     cp "$dest" "$backup"
     log "Backed up $(basename "$dest") → $(basename "$backup")"
