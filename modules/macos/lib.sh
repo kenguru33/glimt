@@ -54,6 +54,46 @@ run_as_user() {
   fi
 }
 
+# === Backup retention ===
+#
+# deploy_config writes a timestamped backup on every deployment, so re-running a
+# module (or `glimt update`) accumulates one copy per run. Keep only the newest
+# few. Override with GLIMT_BACKUP_RETENTION=N in the environment; 0 keeps none.
+GLIMT_BACKUP_RETENTION="${GLIMT_BACKUP_RETENTION:-3}"
+
+# === Prune old timestamped backups of a deployed config ===
+#
+# Usage: prune_backups <dest_file>
+#
+# Removes the oldest "<dest>.bak.<timestamp>" files, keeping the newest
+# $GLIMT_BACKUP_RETENTION. Timestamps are fixed-width YYYYMMDDHHMMSS, so a
+# lexical sort is chronological.
+prune_backups() {
+  local dest="$1"
+  local keep="$GLIMT_BACKUP_RETENTION"
+  if [[ ! "$keep" =~ ^[0-9]+$ ]]; then
+    warn "GLIMT_BACKUP_RETENTION is not a number: '$keep' — keeping 3"
+    keep=3
+  fi
+
+  local backups=()
+  local f
+  while IFS= read -r f; do
+    backups+=("$f")
+  done < <(find "$(dirname "$dest")" -maxdepth 1 -type f \
+    -name "$(basename "$dest").bak.[0-9]*" 2>/dev/null | sort)
+
+  local total=${#backups[@]}
+  (( total > keep )) || return 0
+
+  local remove=$(( total - keep ))
+  local i
+  for (( i = 0; i < remove; i++ )); do
+    rm -f "${backups[i]}"
+  done
+  log "Pruned $remove old backup(s) of $(basename "$dest") (keeping $keep)"
+}
+
 # === Deploy a config template with automatic backup ===
 #
 # Usage: deploy_config <src_template> <dest_file>
@@ -68,6 +108,7 @@ deploy_config() {
     local backup="${dest}.bak.$(date +%Y%m%d%H%M%S)"
     cp "$dest" "$backup"
     log "Backed up $(basename "$dest") → $(basename "$backup")"
+    prune_backups "$dest"
   fi
   cp "$src" "$dest"
   chmod 644 "$dest"

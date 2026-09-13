@@ -69,7 +69,8 @@ After sourcing, available globals and functions:
 - `REAL_USER` / `HOME_DIR` — resolves the invoking user via `getent` (safe under sudo, never `/root`)
 - `log()`, `warn()`, `die()` — structured logging
 - `run_as_user <cmd>` — runs a command as `$REAL_USER`
-- `deploy_config <src> <dest>` — copies a template to dest, **automatically backs up** any existing file with a timestamp before overwriting
+- `deploy_config <src> <dest>` — copies a template to dest, **automatically backs up** any existing file with a timestamp before overwriting, then prunes old backups
+- `prune_backups <dest>` — keeps only the newest `$GLIMT_BACKUP_RETENTION` (default 3) `<dest>.bak.<timestamp>` files. Called by `deploy_config`; set `GLIMT_BACKUP_RETENTION=N` to override, `0` to keep none
 - `verify_binary <bin> [args]` — warns (does not abort) if a binary isn't functional after install
 - `normalize_arch()` — maps `uname -m` to Go/Kubernetes naming (`x86_64`→`amd64`, `aarch64`→`arm64`); dies on unsupported arch. Use in any module that downloads architecture-specific binaries.
 
