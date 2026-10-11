@@ -190,3 +190,15 @@ test_git_config_macos_uses_saved_info() {
   assert_eq "$(git config --global user.email)" "saved@example.com"
   assert_eq "$(git config --global init.defaultBranch)" "trunk"
 }
+
+# glimt update asks the picker which selected extras are really installed
+test_macos_extras_installed_query() {
+  [[ "$OS" == Darwin ]] || skip "needs macOS"
+  local out
+  mkdir -p "$SB/.stubs"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$SB/.stubs/zellij"
+  chmod +x "$SB/.stubs/zellij"
+  out="$(PATH="$SB/.stubs:$PATH" with_timeout 20 "$BASH" "$ROOT/setup-macos-extras.sh" installed zellij nosuch dotnet </dev/null 2>&1)" ||
+    fail "$out"
+  assert_eq "$(echo $out)" "zellij" "installed:"
+}

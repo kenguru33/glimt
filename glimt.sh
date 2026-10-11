@@ -76,6 +76,24 @@ find_module_script() {
   find "$MODULES_DIR" -type f -name "install-$module.sh" -print -quit 2>/dev/null || true
 }
 
+# === Extras state: the optional modules glimt manages ===
+STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
+
+# is_extra <script> — is this an optional (extras) module?
+is_extra() { [[ "$1" == "$MODULES_DIR/extras/"* ]]; }
+
+state_add() {
+  mkdir -p "$(dirname "$STATE_FILE")"
+  grep -qxF "$1" "$STATE_FILE" 2>/dev/null || echo "$1" >>"$STATE_FILE"
+}
+
+state_remove() {
+  [[ -f "$STATE_FILE" ]] || return 0
+  local tmp="$STATE_FILE.tmp"
+  grep -vxF "$1" "$STATE_FILE" >"$tmp" || true
+  mv "$tmp" "$STATE_FILE"
+}
+
 # === Progress bar + sudo (shared with the setup scripts) ===
 load_setup_lib() {
   if [[ -f "$REPO_DIR/setup-lib.sh" ]]; then
@@ -184,17 +202,31 @@ run_update() {
       echo "Warning: no modules found in $MODULES_DIR" >&2
     fi
 
-    local state_file="$HOME/.config/glimt/optional-extras.selected"
-    if [[ -f "$state_file" ]]; then
-      while IFS= read -r module; do
-        [[ -n "$module" ]] || continue
+    # Selected extras — but only those still installed: an extra removed by
+    # hand (or by an older `glimt clean`) is dropped, not reinstalled
+    if [[ -s "$STATE_FILE" ]]; then
+      local selected=() installed=() module
+      mapfile -t selected < <(grep -v '^[[:space:]]*$' "$STATE_FILE")
+      if (( ${#selected[@]} > 0 )); then
+        local found
+        if found="$(bash "$EXTRA_SCRIPT" installed "${selected[@]}" 2>/dev/null)"; then
+          mapfile -t installed <<<"$found"
+        else
+          # Can't tell what is installed: keep the old behaviour, update all
+          installed=("${selected[@]}")
+        fi
+      fi
+      for module in "${selected[@]+"${selected[@]}"}"; do
         local extra_script="$MODULES_DIR/extras/install-$module.sh"
-        if [[ -f "$extra_script" ]]; then
+        if [[ ! -f "$extra_script" ]]; then
+          echo "Warning: extras module not found: $module" >&2
+        elif [[ " ${installed[*]-} " == *" $module "* ]]; then
           installers+=("$extra_script")
         else
-          echo "Warning: extras module not found: $module" >&2
+          echo "Skipping $module: not installed (run 'glimt install $module' to add it back)"
+          state_remove "$module"
         fi
-      done < "$state_file"
+      done
     fi
 
     run_modules update "${installers[@]+"${installers[@]}"}"
@@ -211,6 +243,7 @@ run_install() {
   local script; script="$(find_module_script "$module")"
   [[ -n "$script" ]] || { echo "Error: unknown module: $module" >&2; exit 1; }
   run_modules install "$script"
+  if is_extra "$script"; then state_add "$module"; fi
 }
 
 run_clean() {
@@ -223,6 +256,7 @@ run_clean() {
   local script; script="$(find_module_script "$module")"
   [[ -n "$script" ]] || { echo "Error: unknown module: $module" >&2; exit 1; }
   run_modules clean "$script"
+  if is_extra "$script"; then state_remove "$module"; fi
 }
 
 run_module_selection() {

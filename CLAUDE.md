@@ -104,7 +104,7 @@ Extras use `../../../versions.env`.
 - Then runs all remaining core modules via `find`, sorted alphabetically
 - Calls `setup-extras.sh` at the end for optional modules
 
-`setup-extras.sh` presents a `gum choose` UI and tracks selections in `~/.config/glimt/optional-extras.selected`. On re-run it installs newly selected modules and cleans deselected ones.
+`setup-extras.sh` presents a `gum choose` UI and tracks selections in `~/.config/glimt/optional-extras.selected`. On re-run it installs newly selected modules and cleans deselected ones. `glimt install <extra>` / `glimt clean <extra>` add/remove the module in that file, and `glimt update` only updates selected extras that are still installed (it asks `setup-extras.sh installed <module>...`, which reuses the picker's detection) — a missing one is dropped from the list instead of being reinstalled.
 
 ### Shell scripting conventions
 

@@ -776,6 +776,21 @@ fake_repo() {
   # only Homebrew cask commands — brew runs sudo itself
   printf '#!/usr/bin/env bash\nbrew uninstall --cask epsilon 2>/dev/null || true\necho "%s $1" >>"%s/ran"\n' epsilon "$SB" >"$m/extras/install-epsilon.sh"
   chmod +x "$m"/install-*.sh "$m"/extras/install-*.sh
+  # extras picker: only its `installed` query is used by glimt update. Prints
+  # the args listed in $SB/installed-extras (all args if that file is absent)
+  local f
+  for f in setup-extras.sh setup-macos-extras.sh; do
+    cat >"$SB/repo/$f" <<EOF
+#!/usr/bin/env bash
+[[ "\$1" == installed ]] || exit 2
+[[ -z "\${FAKE_EXTRAS_FAIL:-}" ]] || exit 1
+shift
+for m in "\$@"; do
+  if [[ ! -f "$SB/installed-extras" ]] || grep -qxF "\$m" "$SB/installed-extras"; then echo "\$m"; fi
+done
+EOF
+    chmod +x "$SB/repo/$f"
+  done
 }
 
 glimt_run() {
@@ -841,6 +856,43 @@ test_glimt_update_runs_core_and_selected_extras_in_one_bar() {
   assert_contains "$out" "Updating delta"
   assert_contains "$out" "100% (3/3)"
   assert_eq "$(sort "$SB/ran" | tr '\n' ',')" "alpha all,beta all,delta all," "modules run:"
+}
+
+test_glimt_update_skips_extras_that_are_not_installed() {
+  fake_repo
+  mkdir -p "$SB/.config/glimt"
+  printf 'delta\nepsilon\n' >"$SB/.config/glimt/optional-extras.selected"
+  printf 'delta\n' >"$SB/installed-extras"
+  local out
+  out="$(glimt_run update)" || fail "$out"
+  assert_contains "$out" "Skipping epsilon: not installed"
+  assert_eq "$(sort "$SB/ran" | tr '\n' ',')" "alpha all,beta all,delta all," "modules run:"
+  assert_eq "$(cat "$SB/.config/glimt/optional-extras.selected")" "delta" "state after update:"
+}
+
+test_glimt_update_keeps_all_extras_when_the_check_fails() {
+  fake_repo
+  mkdir -p "$SB/.config/glimt"
+  printf 'delta\nepsilon\n' >"$SB/.config/glimt/optional-extras.selected"
+  printf 'delta\n' >"$SB/installed-extras"
+  local out
+  out="$(FAKE_EXTRAS_FAIL=1 glimt_run update)" || fail "$out"
+  assert_contains "$(cat "$SB/ran")" "epsilon all" "unknown state: keep updating it"
+  assert_eq "$(sort "$SB/.config/glimt/optional-extras.selected" | tr '\n' ',')" "delta,epsilon," "state:"
+}
+
+test_glimt_clean_and_install_update_extras_state() {
+  fake_repo
+  mkdir -p "$SB/.config/glimt"
+  printf 'delta\nepsilon\n' >"$SB/.config/glimt/optional-extras.selected"
+  local out
+  out="$(glimt_run clean delta)" || fail "$out"
+  assert_eq "$(cat "$SB/.config/glimt/optional-extras.selected")" "epsilon" "after clean delta:"
+  out="$(glimt_run install delta)" || fail "$out"
+  out="$(glimt_run install delta)" || fail "$out"
+  assert_eq "$(sort "$SB/.config/glimt/optional-extras.selected" | tr '\n' ',')" "delta,epsilon," "after install delta (twice):"
+  out="$(glimt_run install alpha)" || fail "$out"
+  assert_not_contains "$(cat "$SB/.config/glimt/optional-extras.selected")" "alpha" "core modules are not extras"
 }
 
 test_glimt_update_continues_with_pulled_glimt() {

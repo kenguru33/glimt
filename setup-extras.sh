@@ -10,6 +10,14 @@ export PATH="$HOME/.dotnet:$PATH"
 VERBOSE=false
 ACTION="all"
 
+QUERY=()
+if [[ "${1:-}" == installed ]]; then
+  ACTION=installed
+  shift
+  QUERY=("$@")
+  set --
+fi
+
 for arg in "$@"; do
   case "$arg" in
   -v | --verbose) VERBOSE=true ;;
@@ -106,6 +114,7 @@ flatpak_app_installed() {
 
 module_installed() {
   local name="$1"
+  [[ -n "${MODULES[$name]+x}" ]] || return 1
   case "$name" in
   discord) flatpak_app_installed "com.discordapp.Discord" ;;
   spotify) flatpak_app_installed "com.spotify.Client" ;;
@@ -211,5 +220,14 @@ main() {
 
   printf "%s\n" "${!WANT[@]}" >"$STATE_FILE"
 }
+
+# `installed <module>...` (used by glimt update): print the given modules that
+# are actually installed, one per line; no UI
+if [[ "$ACTION" == installed ]]; then
+  for m in "${QUERY[@]+"${QUERY[@]}"}"; do
+    if module_installed "$m"; then echo "$m"; fi
+  done
+  exit 0
+fi
 
 main
