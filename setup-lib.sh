@@ -6,7 +6,9 @@
 # under macOS's /bin/bash before it delegates to setup-macos.sh.
 #
 # Provides:
+#   glimt_needs_sudo <script>... — may these modules run sudo (incl. via brew)?
 #   glimt_require_sudo     — ask for the sudo password once, keep it alive
+#   glimt_cleanup          — remove temp files; call from the caller's EXIT trap
 #   progress_init <total>  — start a progress bar over <total> steps
 #   progress_run <title> <cmd...>
 #                          — run one step: progress bar by default, full
@@ -35,8 +37,52 @@ glimt_sudo_keepalive() {
   export GLIMT_SUDO_KEEPALIVE_PID
 }
 
+# glimt_needs_sudo <script>... — may any of these modules call sudo? Directly,
+# or indirectly: Homebrew casks and mas run sudo themselves (e.g. a cask with a
+# .pkg or a root-owned app), and that prompt would be hidden by the bar.
+glimt_needs_sudo() {
+  grep -qE 'sudo|mas_|--cask|brew_cask_install' "$@" 2>/dev/null
+}
+
+# Files to delete when the orchestrator exits; callers run glimt_cleanup from
+# their EXIT trap.
+GLIMT_CLEANUP_FILES=()
+glimt_cleanup() {
+  if (( ${#GLIMT_CLEANUP_FILES[@]} > 0 )); then rm -f "${GLIMT_CLEANUP_FILES[@]}" 2>/dev/null; fi
+  return 0
+}
+
+# macOS: Homebrew calls `sudo` itself, from inside the progress bar, and macOS
+# keeps the sudo timestamp per terminal, so a cached credential is not enough.
+# Ask once and hand the password to every later sudo through SUDO_ASKPASS:
+# glimt's macOS lib runs `sudo -A`, and Homebrew uses -A when SUDO_ASKPASS is set.
+_glimt_askpass_setup() {
+  if [[ -n "${SUDO_ASKPASS:-}" && -x "${SUDO_ASKPASS:-}" ]]; then return 0; fi
+  local pw_file askpass pw tries=0
+  pw_file="$(mktemp -t glimt-sudo)"
+  askpass="$(mktemp -t glimt-askpass)"
+  GLIMT_CLEANUP_FILES+=("$pw_file" "$askpass")
+  chmod 600 "$pw_file"
+  chmod 700 "$askpass"
+  printf '#!/bin/sh\ncat %q\n' "$pw_file" >"$askpass"
+  while true; do
+    printf '[glimt] password for %s: ' "$(id -un)" >&2
+    IFS= read -rs pw <"${GLIMT_TTY:-/dev/tty}" || pw=""
+    echo >&2
+    printf '%s\n' "$pw" >"$pw_file"
+    pw=""
+    if sudo -S -p '' -v <"$pw_file" 2>/dev/null; then break; fi
+    tries=$(( tries + 1 ))
+    if (( tries >= 3 )); then echo "glimt: sudo authentication failed" >&2; exit 1; fi
+    echo "Sorry, try again." >&2
+  done
+  export SUDO_ASKPASS="$askpass"
+}
+
 glimt_require_sudo() {
-  if ! sudo -n true 2>/dev/null; then
+  if [[ "${GLIMT_OS:-$(uname -s)}" == "Darwin" ]]; then
+    _glimt_askpass_setup
+  elif ! sudo -n true 2>/dev/null; then
     sudo -v -p "[glimt] password for %u: " || { echo "glimt: sudo authentication failed" >&2; exit 1; }
   fi
   glimt_sudo_keepalive

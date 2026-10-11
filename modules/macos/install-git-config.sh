@@ -69,18 +69,41 @@ EOF
 }
 
 load_git_config() {
-  if [[ "$ACTION" == "reconfigure" || ! -f "$CONFIG_FILE" ]]; then
-    prompt_git_config
+  name="" email="" editor="nvim" branch="main" rebase="false"
+
+  if [[ "$ACTION" != "reconfigure" && -f "$CONFIG_FILE" ]]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+    return 0
   fi
-  # shellcheck source=/dev/null
-  source "$CONFIG_FILE"
+
+  # Under the progress bar stdout goes to a log file: a /dev/tty prompt would
+  # be invisible and hang the run
+  if [[ -t 0 && -t 1 ]]; then
+    prompt_git_config
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+    return 0
+  fi
+
+  [[ "$ACTION" == "reconfigure" ]] && die "reconfigure needs a terminal"
+
+  # No terminal and nothing saved: keep whatever identity git already has
+  warn "No saved git info ($CONFIG_FILE) and no terminal — not prompting."
+  warn "Run '$0 reconfigure' in a terminal to set your git identity."
+  name="$(run_as_user git config --global user.name 2>/dev/null || true)"
+  email="$(run_as_user git config --global user.email 2>/dev/null || true)"
 }
 
 configure_git() {
   log "Applying git configuration..."
 
-  run_as_user git config --global user.name "$name"
-  run_as_user git config --global user.email "$email"
+  if [[ -n "$name" ]]; then
+    run_as_user git config --global user.name "$name"
+  fi
+  if [[ -n "$email" ]]; then
+    run_as_user git config --global user.email "$email"
+  fi
   run_as_user git config --global core.editor "$editor"
   run_as_user git config --global init.defaultBranch "$branch"
   run_as_user git config --global pull.rebase "$rebase"
@@ -99,7 +122,7 @@ configure_git() {
   run_as_user git config --global alias.cm "commit -m"
   run_as_user git config --global alias.hist "log --oneline --graph --decorate"
 
-  log "Git configured for $name <$email>"
+  log "Git configured${name:+ for $name <$email>}"
 }
 
 install_git_completion_zsh() {

@@ -138,33 +138,11 @@ declare -A MODULE_DESCRIPTIONS=(
 # that need root work under the spinner without re-prompting. When invoked
 # from setup-macos.sh, SUDO_ASKPASS is already set and this is skipped.
 # -----------------------------
-GLIMT_PW_FILE=""
-GLIMT_ASKPASS=""
-trap 'rm -f "${GLIMT_PW_FILE:-}" "${GLIMT_ASKPASS:-}" 2>/dev/null' EXIT
+trap 'glimt_cleanup' EXIT
 
-glimt_ensure_askpass() {
-  [[ -n "${SUDO_ASKPASS:-}" ]] && return 0
-  GLIMT_PW_FILE="$(mktemp -t glimt-sudo)"
-  GLIMT_ASKPASS="$(mktemp -t glimt-askpass)"
-  chmod 600 "$GLIMT_PW_FILE"
-  chmod 700 "$GLIMT_ASKPASS"
-  printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
-
-  local pw
-  while true; do
-    printf '[glimt] password for %s: ' "$(id -un)" >&2
-    IFS= read -rs pw; echo >&2
-    printf '%s\n' "$pw" > "$GLIMT_PW_FILE"
-    unset pw
-    if sudo -S -p '' -v < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
-    echo "Sorry, try again." >&2
-  done
-  export SUDO_ASKPASS="$GLIMT_ASKPASS"
-}
-
-# Does a module's script need root (e.g. mas install/uninstall, or sudo)?
+# Does a module need root (sudo, mas, or a Homebrew cask)?
 module_needs_sudo() {
-  grep -qE 'sudo|mas_' "$MODULE_DIR/install-$1.sh" 2>/dev/null
+  glimt_needs_sudo "$MODULE_DIR/install-$1.sh"
 }
 
 # -----------------------------
@@ -248,7 +226,7 @@ main() {
     now="${WANT[$m]:-}"
     before="${PREV[$m]:-}"
     if [[ "$now" != "$before" ]] && module_needs_sudo "$m"; then
-      glimt_ensure_askpass
+      glimt_require_sudo
       break
     fi
   done

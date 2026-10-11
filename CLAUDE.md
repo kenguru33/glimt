@@ -128,7 +128,7 @@ Rules enforced across the codebase:
 - `sudo dnf makecache -y` only in `setup.sh`, never in modules
 - Use `run_as_user` / `sudo -u "$REAL_USER"` for any file operations in user home — never write to `$HOME` directly when running under sudo
 - Post-install: call `verify_binary` for any binary the module downloads
-- Prompts (e.g. "also remove the package?" in `clean`) go through `confirm`, never a bare `read`: modules usually run behind the progress bar with no terminal
+- Prompts (e.g. "also remove the package?" in `clean`) go through `confirm`, never a bare `read`: modules usually run behind the progress bar with no terminal. Any other prompt (e.g. asking for a name) must check `[[ -t 0 && -t 1 ]]` first and fall back to a default — never `read </dev/tty`, which still reaches the terminal behind the bar and hangs invisibly
 - Versions: only the binaries in `versions.env` are pinned. Everything else (kubectl, starship, zellij, Node, papirus, PowerShell, dnf/brew packages) deliberately tracks the latest release so `glimt update` keeps it current
 - Extras modules must include a `fedora_guard` call at the top (copy the pattern from `modules/fedora/extras/install-spotify.sh`) to abort gracefully on non-Fedora systems
 
@@ -158,7 +158,7 @@ After setup, `glimt.sh` is installed to `~/.local/bin/glimt` for ongoing managem
 `setup-macos.sh` is the macOS orchestrator. It installs terminal tooling only (no GNOME/desktop):
 - **Modules live in** `modules/macos/` with a matching `modules/macos/lib.sh`
 - **Key differences from Fedora lib.sh**: uses `dscl` instead of `getent` for `HOME_DIR`; `run_as_user` is a no-op wrapper when not running as root (brew must not run as root); `normalize_arch` handles both `arm64` (Apple Silicon) and `x86_64`
-- **Package manager**: Homebrew — no `sudo` needed for `brew install`
+- **Package manager**: Homebrew — no `sudo` needed for `brew install`. Casks (`brew_cask_install`, `brew uninstall --cask`) and `mas` may run `sudo` themselves, so the orchestrators ask for the password up front for those modules (`glimt_needs_sudo` in `setup-lib.sh`) and hand it to brew via `SUDO_ASKPASS`
 - **Nerd fonts**: installed via `brew install --cask font-*-nerd-font` (no wget/unzip)
 - **Terminal theme**: `install-iterm2-theme.sh` downloads Catppuccin Mocha `.itermcolors` and imports it into iTerm2 via `open`
 - **Priority modules** (run first): `install-nerdfonts.sh`, `install-zsh.sh`, `install-starship.sh`

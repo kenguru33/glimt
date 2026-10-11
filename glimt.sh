@@ -40,13 +40,18 @@ Note: <module> is the installer basename without "install-" and ".sh".
 EOF
 }
 
+# setup-lib.sh may not be loaded yet (or at all) when the trap fires
+glimt_exit_cleanup() {
+  if declare -F glimt_cleanup >/dev/null; then glimt_cleanup; fi
+}
+
 acquire_lock() {
   if [[ -f "$LOCK_FILE" ]]; then
     local pid
     pid=$(<"$LOCK_FILE")
     # Same PID = this process re-exec'd itself after `update` pulled a new glimt
     if [[ "$pid" == "$$" ]]; then
-      trap 'rm -f "$LOCK_FILE"' EXIT
+      trap 'rm -f "$LOCK_FILE"; glimt_exit_cleanup' EXIT
       return 0
     fi
     if kill -0 "$pid" 2>/dev/null; then
@@ -56,7 +61,7 @@ acquire_lock() {
     rm -f "$LOCK_FILE"
   fi
   echo "$$" >"$LOCK_FILE"
-  trap 'rm -f "$LOCK_FILE"' EXIT
+  trap 'rm -f "$LOCK_FILE"; glimt_exit_cleanup' EXIT
 }
 
 ensure_repo() {
@@ -81,6 +86,7 @@ load_setup_lib() {
     VERBOSE=true
     PROGRESS_FAILED=()
     glimt_require_sudo() { :; }
+    glimt_needs_sudo() { return 1; }
     progress_init() { PROGRESS_FAILED=(); }
     progress_run() { local t="$1"; shift; echo "==> $t"; "$@" || PROGRESS_FAILED+=("$t"); }
     progress_finish() { :; }
@@ -108,7 +114,7 @@ run_modules() {
   done
 
   load_setup_lib
-  if grep -qE 'sudo|mas_' "$@" 2>/dev/null; then
+  if glimt_needs_sudo "$@"; then
     glimt_require_sudo
   fi
 

@@ -37,6 +37,9 @@ trap 'rm -rf "$T"' EXIT
 STUBS="$T/stubs"
 mkdir -p "$STUBS"
 OS="$(uname -s)"
+# setup-lib's sudo handling differs per OS; default to the Linux path so the
+# result doesn't depend on the dev machine. macOS tests set GLIMT_OS=Darwin.
+export GLIMT_OS=Linux
 
 # Bash versions the setup-lib tests run under: setup.sh starts under macOS's
 # /bin/bash 3.2, so setup-lib.sh must work there too.
@@ -57,6 +60,7 @@ case "${1:-}" in
       [[ "${1:-}" == true ]] && exit "${SUDO_CACHED_RC:-0}"
       [[ "${1:-}" == -v ]] && exit 0 ;;
   -v) exit "${SUDO_AUTH_RC:-0}" ;;
+  -S) cat >"$GLIMT_TEST_HOME/.sudo-stdin"; exit "${SUDO_AUTH_RC:-0}" ;;
   -u) shift 2 ;;
 esac
 [[ $# -gt 0 ]] || exit 0
@@ -420,6 +424,60 @@ EOF
   assert_not_contains "$out" "SHOULD-NOT-GET-HERE"
 }
 
+
+test_glimt_asks_sudo_up_front_for_brew_casks() {
+  fake_repo
+  local out
+  out="$(SUDO_CACHED_RC=1 SUDO_AUTH_RC=0 glimt_run clean epsilon)" || fail "$out"
+  assert_contains "$(sed -n 2p "$CALLS")" "sudo -v -p" "cask module: password must be asked before the bar"
+}
+
+test_require_sudo_macos_uses_askpass() {
+  local out
+  printf 's3cret\n' >"$SB/tty"
+  out="$(GLIMT_OS=Darwin GLIMT_TTY="$SB/tty" run_lib_script "$BASH" 2>&1 <<'EOF'
+glimt_require_sudo
+kill "$GLIMT_SUDO_KEEPALIVE_PID"
+echo "askpass=$("$SUDO_ASKPASS")"
+files=("${GLIMT_CLEANUP_FILES[@]}")
+glimt_cleanup
+for f in "${files[@]}"; do [[ -e "$f" ]] && echo "LEFT $f"; done
+echo END
+EOF
+)" || fail "$out"
+  assert_contains "$out" "[glimt] password for"
+  assert_contains "$out" "askpass=s3cret" "SUDO_ASKPASS must return the password"
+  assert_eq "$(cat "$SB/.sudo-stdin")" "s3cret" "password validated with sudo -S:"
+  assert_not_contains "$out" "LEFT" "glimt_cleanup must delete the password file"
+  assert_contains "$out" "END"
+}
+
+test_require_sudo_macos_gives_up_after_three_tries() {
+  local out rc=0
+  printf 'wrong\n' >"$SB/tty"
+  out="$(GLIMT_OS=Darwin GLIMT_TTY="$SB/tty" SUDO_AUTH_RC=1 run_lib_script "$BASH" 2>&1 <<'EOF'
+glimt_require_sudo
+echo SHOULD-NOT-GET-HERE
+EOF
+)" || rc=$?
+  assert_eq "$rc" "1" "exit code:"
+  assert_eq "$(grep -c '^sudo -S' "$CALLS")" "3" "attempts:"
+  assert_not_contains "$out" "SHOULD-NOT-GET-HERE"
+}
+
+test_needs_sudo_detects_indirect_sudo() {
+  local out
+  printf 'brew_cask_install foo /Applications/Foo.app\n' >"$SB/a.sh"
+  printf 'brew uninstall --cask foo\n' >"$SB/b.sh"
+  printf 'mas_install 123\n' >"$SB/c.sh"
+  printf 'brew install foo\n' >"$SB/d.sh"
+  out="$(run_lib_script "$BASH" <<EOF
+for f in a b c d; do glimt_needs_sudo "$SB/\$f.sh" && echo "\$f=yes" || echo "\$f=no"; done
+EOF
+)"
+  assert_eq "$(echo $out)" "a=yes b=yes c=yes d=no" "glimt_needs_sudo:"
+}
+
 # =====================================================================
 # Tests: setup.sh / setup-macos.sh argument handling (no sudo before it)
 # =====================================================================
@@ -715,6 +773,8 @@ fake_repo() {
   printf '#!/usr/bin/env bash\nsudo true\necho "%s $1" >>"%s/ran"\n' beta "$SB" >"$m/install-beta.sh"
   printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\necho gamma-boom; exit 5\n' gamma "$SB" >"$m/extras/install-gamma.sh"
   printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\n' delta "$SB" >"$m/extras/install-delta.sh"
+  # only Homebrew cask commands — brew runs sudo itself
+  printf '#!/usr/bin/env bash\nbrew uninstall --cask epsilon 2>/dev/null || true\necho "%s $1" >>"%s/ran"\n' epsilon "$SB" >"$m/extras/install-epsilon.sh"
   chmod +x "$m"/install-*.sh "$m"/extras/install-*.sh
 }
 

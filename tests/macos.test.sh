@@ -162,3 +162,31 @@ test_git_zsh_has_no_gs_alias() {
     if grep -qE "^alias gs=" "$f"; then fail "${f#"$ROOT"/} defines alias gs"; fi
   done
 }
+
+# Under the progress bar there is no terminal: with no saved git info the
+# macOS module used to `read </dev/tty` — an invisible prompt that hangs
+test_git_config_macos_without_saved_info_or_terminal_does_not_prompt() {
+  fs_stubs real-git
+  cp "$ROOT/modules/macos/install-git-config.sh" "$SB/gc.sh"
+  printf '\nt_apply() {\n  load_git_config\n  configure_git\n}\n' >>"$SB/gc.sh"
+  git config --global user.name "Existing Name"
+  local out
+  out="$(run_module_fn_abs macos "$SB/gc.sh" t_apply 2>&1)" || fail "must not fail or hang: $out"
+  assert_contains "$out" "not prompting"
+  assert_not_contains "$out" "Full name:"
+  assert_eq "$(git config --global user.name)" "Existing Name"
+  assert_eq "$(git config --global init.defaultBranch)" "main"
+}
+
+test_git_config_macos_uses_saved_info() {
+  fs_stubs real-git
+  cp "$ROOT/modules/macos/install-git-config.sh" "$SB/gc.sh"
+  printf '\nt_apply() {\n  load_git_config\n  configure_git\n}\n' >>"$SB/gc.sh"
+  mkdir -p "$SB/.config/glimt"
+  printf 'name="Saved Name"\nemail="saved@example.com"\neditor="vim"\nbranch="trunk"\nrebase="true"\n' \
+    >"$SB/.config/glimt/user-git-info.config"
+  local out
+  out="$(run_module_fn_abs macos "$SB/gc.sh" t_apply 2>&1)" || fail "$out"
+  assert_eq "$(git config --global user.email)" "saved@example.com"
+  assert_eq "$(git config --global init.defaultBranch)" "trunk"
+}
