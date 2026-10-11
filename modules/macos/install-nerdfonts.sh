@@ -27,9 +27,11 @@ install() {
     if brew list --cask "$cask" &>/dev/null; then
       log "$cask already installed."
     else
-      brew install --cask "$cask" \
-        || warn "$cask install failed — font files may already exist outside Homebrew, skipping"
-      log "✅ $cask done"
+      if brew install --cask "$cask"; then
+        log "✅ $cask done"
+      else
+        warn "$cask install failed — font files may already exist outside Homebrew, skipping"
+      fi
     fi
   done
 }
