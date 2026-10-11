@@ -14,9 +14,26 @@ source "$GLIMT_LIB"
 FLATPAK_ID="org.gnome.World.PikaBackup"
 ACTION="${1:-all}"
 
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
+
 deps() {
   log "Ensuring Flatpak is available"
-  command -v flatpak >/dev/null || die "Flatpak is not installed"
+  if ! command -v flatpak >/dev/null 2>&1; then
+    sudo dnf install -y flatpak
+  fi
+}
+
+# Exact name match: `grep '^flathub'` would also accept e.g. flathub-beta
+flathub_configured() {
+  flatpak remotes --columns=name 2>/dev/null | grep -qx flathub
 }
 
 install() {
@@ -27,7 +44,7 @@ install() {
     return
   fi
 
-  if ! flatpak remote-list | grep -q '^flathub'; then
+  if ! flathub_configured; then
     log "Adding Flathub remote"
     sudo flatpak remote-add --if-not-exists \
       flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -49,6 +66,8 @@ clean() {
     log "Pika Backup not installed"
   fi
 }
+
+fedora_guard
 
 case "$ACTION" in
 all)

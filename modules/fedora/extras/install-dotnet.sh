@@ -14,9 +14,9 @@ source "$GLIMT_LIB"
 ACTION="${1:-all}"
 
 DOTNET_ROOT="$HOME_DIR/.dotnet"
-DOTNET_BIN="$DOTNET_ROOT/dotnet"
 INSTALLER="$DOTNET_ROOT/dotnet-install.sh"
 
+# Channels track the latest SDK of each line (intentionally not pinned)
 SDK_CHANNELS=(8.0 10.0)
 
 ENV_DIR="$HOME_DIR/.config/environment.d"
@@ -24,56 +24,67 @@ ENV_FILE="$ENV_DIR/dotnet.conf"
 
 ZSH_DIR="$HOME_DIR/.zsh/config"
 ZSH_FILE="$ZSH_DIR/dotnet.zsh"
+ZSH_TEMPLATE="$(dirname "${BASH_SOURCE[0]}")/../config/dotnet.zsh"
+
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
+
+# ======================================================
+# Dependencies
+# ======================================================
+install_deps() {
+  log "Installing dependencies"
+  # curl for dotnet-install.sh; libicu is required by the .NET runtime
+  sudo dnf install -y curl libicu
+}
 
 # ======================================================
 # Install
 # ======================================================
 install_dotnet() {
   log "Preparing userspace directory"
-  mkdir -p "$DOTNET_ROOT"
+  run_as_user mkdir -p "$DOTNET_ROOT"
 
   if [[ ! -x "$INSTALLER" ]]; then
     log "Downloading dotnet-install.sh"
-    curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$INSTALLER"
-    chmod +x "$INSTALLER"
+    run_as_user curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$INSTALLER"
+    run_as_user chmod +x "$INSTALLER"
   fi
 
+  local v
   for v in "${SDK_CHANNELS[@]}"; do
     log "Installing .NET SDK $v into $DOTNET_ROOT"
-    "$INSTALLER" \
+    run_as_user "$INSTALLER" \
       --channel "$v" \
       --install-dir "$DOTNET_ROOT" \
       --no-path
   done
 
+  PATH="$DOTNET_ROOT:$PATH" DOTNET_ROOT="$DOTNET_ROOT" verify_binary dotnet --list-sdks
+}
+
+# ======================================================
+# Config
+# ======================================================
+config_dotnet() {
   log "Writing environment.d config (GUI + Rider)"
-  mkdir -p "$ENV_DIR"
-  cat >"$ENV_FILE" <<EOF
+  run_as_user mkdir -p "$ENV_DIR"
+  run_as_user tee "$ENV_FILE" >/dev/null <<'ENVEOF'
 DOTNET_ROOT=%h/.dotnet
 PATH=%h/.dotnet:%h/.dotnet/tools:%h/.local/bin:/usr/bin
-EOF
+ENVEOF
 
-  log "Writing Zsh config"
-  mkdir -p "$ZSH_DIR"
-  cat >"$ZSH_FILE" <<'EOF'
-# .NET userspace configuration
-export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
-EOF
+  log "Deploying Zsh config"
+  deploy_config "$ZSH_TEMPLATE" "$ZSH_FILE"
 
-  log "Verifying userspace dotnet (forced)"
-  export DOTNET_ROOT="$DOTNET_ROOT"
-  export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:/usr/bin"
-
-  if [[ ! -x "$DOTNET_BIN" ]]; then
-    echo "❌ dotnet binary missing at $DOTNET_BIN"
-    exit 1
-  fi
-
-  "$DOTNET_BIN" --info
-  "$DOTNET_BIN" --list-sdks
-
-  cat <<EOF
+  cat <<MSG
 
 ✅ .NET userspace installation complete.
 
@@ -86,7 +97,7 @@ Verification:
   dotnet --list-sdks
   dotnet --info
 
-EOF
+MSG
 }
 
 # ======================================================
@@ -96,23 +107,23 @@ clean_dotnet() {
   log "Removing userspace .NET installation"
 
   if [[ -d "$DOTNET_ROOT" ]]; then
-    rm -rf "$DOTNET_ROOT"
+    run_as_user rm -rf "$DOTNET_ROOT"
     log "Removed $DOTNET_ROOT"
   else
     log "$DOTNET_ROOT not present"
   fi
 
   if [[ -f "$ENV_FILE" ]]; then
-    rm -f "$ENV_FILE"
+    run_as_user rm -f "$ENV_FILE"
     log "Removed environment.d config"
   fi
 
   if [[ -f "$ZSH_FILE" ]]; then
-    rm -f "$ZSH_FILE"
+    run_as_user rm -f "$ZSH_FILE"
     log "Removed Zsh config"
   fi
 
-  cat <<EOF
+  cat <<MSG
 
 ✅ Userspace .NET fully removed.
 
@@ -120,21 +131,34 @@ IMPORTANT:
 • Log OUT and IN again to purge GUI environment
 • Restart Zsh sessions
 
-EOF
+MSG
 }
 
 # ======================================================
 # Dispatcher
 # ======================================================
+fedora_guard
+
 case "$ACTION" in
-install | all)
+deps)
+  install_deps
+  ;;
+install)
   install_dotnet
+  ;;
+config)
+  config_dotnet
   ;;
 clean)
   clean_dotnet
   ;;
+all)
+  install_deps
+  install_dotnet
+  config_dotnet
+  ;;
 *)
-  echo "Usage: $0 {install|clean|all}"
+  echo "Usage: $0 {all|deps|install|config|clean}"
   exit 1
   ;;
 esac

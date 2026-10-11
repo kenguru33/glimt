@@ -13,9 +13,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# --- Fedora-only guard ---
-if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # --- App metadata ---
 APP_NAME="Microsoft Teams"
@@ -59,10 +65,10 @@ install_deps(){
 download_file(){ # $1=url $2=dest
   local url="$1" dest="$2"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
+    run_as_user curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
+    run_as_user wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
   fi
   return 1
 }
@@ -72,17 +78,14 @@ fetch_official_icon(){
 
   # 1) Try direct PNG (256px) rendered by Commons
   if download_file "$OFFICIAL_PNG256_MAIN" "$ICON_PNG" && [[ -s "$ICON_PNG" ]]; then
-    chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
     log "Official Teams PNG (256px) downloaded."
     return 0
   fi
 
   # 2) Try official SVG and convert to PNG
   if download_file "$OFFICIAL_SVG_MAIN" "$ICON_SVG" && [[ -s "$ICON_SVG" ]]; then
-    chown "$REAL_USER:$REAL_USER" "$ICON_SVG"
     if command -v rsvg-convert >/dev/null 2>&1; then
-      rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG"
-      chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
+      run_as_user rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG"
       [[ -s "$ICON_PNG" ]] || die "Failed to convert Teams SVG to PNG."
       log "Official Teams SVG downloaded and converted to PNG."
       return 0
@@ -93,7 +96,6 @@ fetch_official_icon(){
 
   # 3) Fallback: another official PNG on Commons
   if download_file "$OFFICIAL_PNG_ALT" "$ICON_PNG" && [[ -s "$ICON_PNG" ]]; then
-    chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
     log "Official Teams PNG (alt) downloaded."
     return 0
   fi
@@ -108,13 +110,11 @@ install_theme_icons(){
     # Use SVG if available for better scaling
     local sizes=(16 24 32 48 64 128 256)
     for s in "${sizes[@]}"; do
-      rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
-      chown "$REAL_USER:$REAL_USER" "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" 2>/dev/null || true
+      run_as_user rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
     done
   else
     # Fallback: just copy the PNG to 256x256
-    cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
-    chown "$REAL_USER:$REAL_USER" "$HICOLOR/256x256/apps/${APP_ID}.png" 2>/dev/null || true
+    run_as_user cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
   fi
   command -v gtk-update-icon-cache >/dev/null 2>&1 && sudo -u "$REAL_USER" gtk-update-icon-cache -f -t "$HICOLOR" || true
 }
@@ -124,7 +124,7 @@ install_theme_icons(){
 # -------------------------------
 write_cli_wrapper(){
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR" "$PROFILE_DIR"
-  sudo -u "$REAL_USER" cat >"$CLI_WRAPPER" <<'EOSH'
+  run_as_user tee "$CLI_WRAPPER" >/dev/null <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
@@ -162,8 +162,7 @@ fi
 
 exec "${ENV_PREFIX[@]}" "$BROWSER" "${BFLAGS[@]}" "$@"
 EOSH
-  chmod 0755 "$CLI_WRAPPER"
-  chown "$REAL_USER:$REAL_USER" "$CLI_WRAPPER"
+  run_as_user chmod 0755 "$CLI_WRAPPER"
   sudo -u "$REAL_USER" ln -sf "$CLI_WRAPPER" "$CLI_ALIAS"
   log "CLI installed: $(basename "$CLI_WRAPPER") (alias: $(basename "$CLI_ALIAS"))"
 }
@@ -180,7 +179,7 @@ write_desktop(){
   # Use absolute PNG path (most reliable)
   local icon_field="$ICON_PNG"
 
-  sudo -u "$REAL_USER" cat >"$DESKTOP_FILE" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -197,8 +196,7 @@ StartupWMClass=$APP_ID
 DBusActivatable=false
 X-GNOME-UsesNotifications=true
 EOF
-  chmod 0644 "$DESKTOP_FILE"
-  chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
+  run_as_user chmod 0644 "$DESKTOP_FILE"
   log "Wrote $DESKTOP_FILE (Icon=$icon_field)"
 }
 
@@ -231,6 +229,8 @@ do_install(){
 # -------------------------------
 # Entry
 # -------------------------------
+fedora_guard
+
 case "$ACTION" in
   deps)    install_deps ;;
   install) do_install ;;

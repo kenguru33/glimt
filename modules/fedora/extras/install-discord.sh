@@ -14,7 +14,7 @@ ACTION="${1:-all}"
 fedora_guard() {
   if [[ -r /etc/os-release ]]; then
     . /etc/os-release
-    [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
   else
     die "Cannot detect OS."
   fi

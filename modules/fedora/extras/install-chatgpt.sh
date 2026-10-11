@@ -16,9 +16,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# --- Fedora-only guard ---
-if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # --- App metadata ---
 APP_NAME="ChatGPT"
@@ -153,7 +159,8 @@ fetch_and_soften_icon(){
     # white rounded card with transparent corners
     sudo -u "$REAL_USER" magick -size "${CARD_SIZE}x${CARD_SIZE}" xc:white "$MASK" -compose CopyOpacity -composite "$CARD"
     # composite inner onto card
-    local ts="$(date +%s)"
+    local ts
+    ts="$(date +%s)"
     ICON_OUT="$APP_DIR/chatgpt-rounded-${CARD_SIZE}-p${CARD_PAD}-r${CARD_RADIUS}-${ts}.png"
     sudo -u "$REAL_USER" magick "$CARD" "$INNER" -gravity center -compose over -composite "$ICON_OUT"
   else
@@ -162,7 +169,8 @@ fetch_and_soften_icon(){
       -fill white -draw "roundrectangle 0,0 $((CARD_SIZE-1)),$((CARD_SIZE-1)) ${CARD_RADIUS},${CARD_RADIUS}" \
       "$MASK"
     sudo -u "$REAL_USER" convert -size "${CARD_SIZE}x${CARD_SIZE}" xc:white "$MASK" -compose CopyOpacity -composite "$CARD"
-    local ts="$(date +%s)"
+    local ts
+    ts="$(date +%s)"
     ICON_OUT="$APP_DIR/chatgpt-rounded-${CARD_SIZE}-p${CARD_PAD}-r${CARD_RADIUS}-${ts}.png"
     sudo -u "$REAL_USER" convert "$CARD" "$INNER" -gravity center -compose over -composite "$ICON_OUT"
   fi
@@ -177,7 +185,7 @@ fetch_and_soften_icon(){
 # -------------------------------
 write_cli_wrapper(){
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR" "$PROFILE_DIR"
-  cat >"$CLI_WRAPPER" <<'EOSH'
+  run_as_user tee "$CLI_WRAPPER" >/dev/null <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
@@ -229,7 +237,7 @@ write_desktop(){
   # Use the new (cache-busted) file
   local icon_field="$ICON_OUT"
 
-  cat >"$DESKTOP_FILE" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -274,6 +282,8 @@ do_install(){ write_cli_wrapper; write_desktop; }
 # -------------------------------
 # Entry
 # -------------------------------
+fedora_guard
+
 case "$ACTION" in
   deps)    install_deps ;;
   install) do_install ;;

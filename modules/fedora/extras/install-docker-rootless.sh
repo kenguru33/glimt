@@ -29,16 +29,35 @@ GNOME_EXT_REPO="https://github.com/kenguru33/rootless-docker-gnome-extension.git
 GNOME_EXT_CACHE="$HOME_DIR/.cache/glimt-rootless-ext/repo"
 GNOME_EXT_INSTALL_DIR="$HOME_DIR/.local/share/gnome-shell/extensions"
 
-# === Fedora guard =========================================================
-. /etc/os-release
-[[ "$ID" == "fedora" || "$ID_LIKE" == *fedora* ]] || {
-  echo "❌ Fedora only."
-  exit 1
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
 }
 
 # === Rootless env =========================================================
-export XDG_RUNTIME_DIR="/run/user/$REAL_UID"
-export DOCKER_HOST="unix:///run/user/$REAL_UID/docker.sock"
+USER_RUNTIME_DIR="/run/user/$REAL_UID"
+USER_DOCKER_HOST="unix://$USER_RUNTIME_DIR/docker.sock"
+USER_BUS="unix:path=$USER_RUNTIME_DIR/bus"
+export XDG_RUNTIME_DIR="$USER_RUNTIME_DIR"
+export DOCKER_HOST="$USER_DOCKER_HOST"
+
+# Run a command as $REAL_USER with the session environment that
+# `systemctl --user`, docker and gnome-extensions need. Plain `sudo -u` resets
+# the environment, so XDG_RUNTIME_DIR / DBUS_SESSION_BUS_ADDRESS would be lost.
+as_user_session() {
+  if [[ $EUID -ne 0 && "$(id -un)" == "$REAL_USER" ]]; then
+    env XDG_RUNTIME_DIR="$USER_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$USER_BUS" DOCKER_HOST="$USER_DOCKER_HOST" "$@"
+  else
+    sudo -u "$REAL_USER" env XDG_RUNTIME_DIR="$USER_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$USER_BUS" DOCKER_HOST="$USER_DOCKER_HOST" "$@"
+  fi
+}
+
+user_systemctl() { as_user_session systemctl --user "$@"; }
 
 # -------------------------------------------------------------------------
 deps() {
@@ -67,11 +86,18 @@ ensure_repo() {
 }
 
 # -------------------------------------------------------------------------
+CONFLICTING_PKGS=(docker docker-client docker-common docker-engine moby-engine)
+
 remove_conflicts() {
-  if rpm -q docker docker-client docker-common docker-engine >/dev/null 2>&1; then
-    log "Removing conflicting Fedora docker packages…"
-    sudo dnf remove -y docker docker-client docker-common docker-engine || true
-  fi
+  # `rpm -q a b c` only succeeds when ALL are installed, so check each one and
+  # remove just those present (dnf5 errors on packages that aren't installed).
+  local p installed=()
+  for p in "${CONFLICTING_PKGS[@]}"; do
+    rpm -q "$p" >/dev/null 2>&1 && installed+=("$p")
+  done
+  ((${#installed[@]})) || return 0
+  log "Removing conflicting Fedora docker packages: ${installed[*]}"
+  sudo dnf remove -y "${installed[@]}" || true
 }
 
 # -------------------------------------------------------------------------
@@ -102,11 +128,13 @@ EOF
 }
 
 # -------------------------------------------------------------------------
-cleanup_half_installed() {
-  sudo -u "$REAL_USER" dockerd-rootless-setuptool.sh uninstall -f >/dev/null 2>&1 || true
-  sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.local/share/docker" || true
+# Reset the rootless daemon setup (systemd unit + setuptool state). Never
+# touches ~/.local/share/docker — that holds the user's images, containers
+# and volumes.
+reset_rootless_setup() {
+  as_user_session dockerd-rootless-setuptool.sh uninstall -f >/dev/null 2>&1 || true
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/systemd/user/docker.service" || true
-  sudo -u "$REAL_USER" systemctl --user daemon-reload || true
+  user_systemctl daemon-reload || true
 }
 
 # -------------------------------------------------------------------------
@@ -117,18 +145,18 @@ copy_zsh_config() {
 
 # -------------------------------------------------------------------------
 start_once_then_stop() {
-  sudo -u "$REAL_USER" systemctl --user daemon-reload
-  sudo -u "$REAL_USER" systemctl --user start docker
+  user_systemctl daemon-reload
+  user_systemctl start docker
   sleep 2
-  sudo -u "$REAL_USER" docker info >/dev/null
-  sudo -u "$REAL_USER" systemctl --user stop docker
-  sudo -u "$REAL_USER" systemctl --user disable docker
+  as_user_session docker info >/dev/null
+  user_systemctl stop docker
+  user_systemctl disable docker
 }
 
 # ================= GNOME EXTENSION =======================================
 
 detect_extension_uuid() {
-  local md uuid
+  local md="" uuid=""
   md="$(find "$GNOME_EXT_CACHE" -name metadata.json | head -n1 || true)"
   if [[ -f "$md" ]]; then
     uuid="$(jq -r '.uuid // empty' "$md")"
@@ -146,7 +174,7 @@ install_gnome_extension() {
     sudo -u "$REAL_USER" git clone --depth 1 "$GNOME_EXT_REPO" "$GNOME_EXT_CACHE"
   fi
 
-  (cd "$GNOME_EXT_CACHE" && sudo -u "$REAL_USER" chmod +x manage.sh && sudo -u "$REAL_USER" ./manage.sh install)
+  (cd "$GNOME_EXT_CACHE" && sudo -u "$REAL_USER" chmod +x manage.sh && as_user_session ./manage.sh install)
 }
 
 uninstall_gnome_extension() {
@@ -154,7 +182,7 @@ uninstall_gnome_extension() {
 
   # Proper uninstall via manage.sh
   if [[ -f "$GNOME_EXT_CACHE/manage.sh" ]]; then
-    (cd "$GNOME_EXT_CACHE" && sudo -u "$REAL_USER" ./manage.sh uninstall || true)
+    (cd "$GNOME_EXT_CACHE" && as_user_session ./manage.sh uninstall || true)
   fi
 
   # Remove installed extension directories
@@ -168,8 +196,10 @@ uninstall_gnome_extension() {
 }
 
 # -------------------------------------------------------------------------
+# install: packages + rootless daemon setup. Config-type steps (env file, zsh
+# config, smoke test, GNOME extension) live in config() so `all` runs each
+# step exactly once.
 install() {
-  deps
   ensure_repo
   remove_conflicts
 
@@ -178,19 +208,19 @@ install() {
 
   ensure_rootful_docker_off
   ensure_subids
-  write_user_env
-  cleanup_half_installed
 
-  sudo -u "$REAL_USER" dockerd-rootless-setuptool.sh install
-
-  copy_zsh_config
-  start_once_then_stop
-  install_gnome_extension
+  # Re-runs (glimt update) keep an existing setup; only a missing unit means
+  # the rootless daemon still has to be (re)created.
+  if [[ -f "$HOME_DIR/.config/systemd/user/docker.service" ]]; then
+    log "Rootless Docker already set up — keeping it."
+  else
+    reset_rootless_setup
+    as_user_session dockerd-rootless-setuptool.sh install
+  fi
 }
 
 config() {
   write_user_env
-  ensure_rootful_docker_off
   copy_zsh_config
   start_once_then_stop
   install_gnome_extension
@@ -200,8 +230,13 @@ clean() {
   log "FULL PURGE: removing Docker rootless + GNOME extension…"
 
   # Stop & remove rootless docker
-  sudo -u "$REAL_USER" systemctl --user disable --now docker 2>/dev/null || true
-  cleanup_half_installed
+  user_systemctl disable --now docker 2>/dev/null || true
+  reset_rootless_setup
+  if confirm "Also delete all Docker images, containers and volumes (~/.local/share/docker)?"; then
+    sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.local/share/docker" || true
+  else
+    log "Kept Docker data in ~/.local/share/docker."
+  fi
 
   # Remove env + shell config
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/environment.d/docker-rootless.conf" || true
@@ -212,12 +247,17 @@ clean() {
 
   # Remove Docker packages
   sudo dnf remove -y docker-ce docker-ce-cli docker-ce-rootless-extras || true
-  sudo dnf autoremove -y || true
+  sudo rm -f /etc/yum.repos.d/docker-ce.repo
+
+  # install masked the rootful units; undo that so a later rootful Docker works
+  sudo systemctl unmask docker docker.socket 2>/dev/null || true
 
   log "Docker rootless and GNOME extension fully removed."
 }
 
 # -------------------------------------------------------------------------
+fedora_guard
+
 case "$ACTION" in
 deps) deps ;;
 install) install ;;

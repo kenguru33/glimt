@@ -8,32 +8,32 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib.sh"
 # shellcheck source=../lib.sh
 source "$GLIMT_LIB"
 
+# Pinned in versions.env; override at runtime with LAZYDOCKER_VERSION=vX.Y.Z.
+# Remember the caller's value first: sourcing versions.env overwrites it.
+_LAZYDOCKER_VERSION_OVERRIDE="${LAZYDOCKER_VERSION:-}"
 GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../versions.env"
 # shellcheck source=../../../versions.env
 source "$GLIMT_VERSIONS"
+LAZYDOCKER_VERSION="${_LAZYDOCKER_VERSION_OVERRIDE:-${LAZYDOCKER_VERSION:-}}"
 
 ACTION="${1:-all}"
 
 # --- Config (override via env) ----------------------------------------------
-# Pinned in versions.env; override at runtime with LAZYDOCKER_VERSION=vX.Y.Z
-LAZYDOCKER_VERSION="${LAZYDOCKER_VERSION:-$LAZYDOCKER_VERSION}"
 BIN_DIR="${BIN_DIR:-$HOME_DIR/.local/bin}"
 WRAPPER="${WRAPPER:-$BIN_DIR/lazydocker-rootless}"
 DESKTOP_FILE="${DESKTOP_FILE:-$HOME_DIR/.local/share/applications/lazydocker.desktop}"
 
 export PATH="$HOME_DIR/.local/bin:$PATH"
 
-# --- Fedora-only guard -------------------------------------------------------
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
-    echo "❌ Fedora/RHEL only."
-    exit 1
-  }
-else
-  echo "❌ Cannot detect OS."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # --- Helpers -----------------------------------------------------------------
 as_root() {
@@ -45,6 +45,8 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || {
   exit 1
 }; }
 
+# Not normalize_arch: lazydocker release assets use "x86_64"/"arm64"
+# (lazydocker_X.Y.Z_Linux_x86_64.tar.gz), not the Go-style "amd64".
 map_arch() {
   local arch
   arch="$(uname -m)"
@@ -80,13 +82,14 @@ _download_from_release() {
   fname="lazydocker_${tag#v}_Linux_${arch}.tar.gz"
   url="https://github.com/jesseduffield/lazydocker/releases/download/${tag}/${fname}"
 
-  tmpdir="$(mktemp -d)"
+  # Owned by the user, so the user-side install below can read it under sudo
+  tmpdir="$(run_as_user mktemp -d)"
   echo "==> Downloading $url"
-  curl -fL "$url" -o "$tmpdir/$fname"
+  run_as_user curl -fL "$url" -o "$tmpdir/$fname"
   echo "==> Extracting"
-  tar -xzf "$tmpdir/$fname" -C "$tmpdir"
-  sudo -u "$REAL_USER" install -m 0755 "$tmpdir/lazydocker" "$BIN_DIR/lazydocker"
-  rm -rf "$tmpdir"
+  run_as_user tar -xzf "$tmpdir/$fname" -C "$tmpdir"
+  run_as_user install -m 0755 "$tmpdir/lazydocker" "$BIN_DIR/lazydocker"
+  run_as_user rm -rf "$tmpdir"
 }
 
 _download_latest_via_upstream_script() {
@@ -94,12 +97,12 @@ _download_latest_via_upstream_script() {
   require_cmd curl
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
   local tmp
-  tmp="$(mktemp)"
-  curl -fsSL "https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh" -o "$tmp"
-  chmod +x "$tmp"
+  tmp="$(run_as_user mktemp)"
+  run_as_user curl -fsSL "https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh" -o "$tmp"
+  run_as_user chmod +x "$tmp"
   # The script installs to /usr/local/bin by default; override by setting DIR
   sudo -u "$REAL_USER" env DIR="$BIN_DIR" "$tmp"
-  rm -f "$tmp"
+  run_as_user rm -f "$tmp"
 }
 
 install_pkg() {
@@ -116,7 +119,7 @@ install_pkg() {
 write_wrapper() {
   echo "==> Writing rootless-aware wrapper: $WRAPPER"
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
-  sudo -u "$REAL_USER" cat >"$WRAPPER" <<'SH'
+  run_as_user tee "$WRAPPER" >/dev/null <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 UID_NUM="$(id -u)"
@@ -125,8 +128,7 @@ DEFAULT_SOCK="unix:///run/user/${UID_NUM}/docker.sock"
 export DOCKER_HOST="${DOCKER_HOST:-$DEFAULT_SOCK}"
 exec lazydocker "$@"
 SH
-  chmod +x "$WRAPPER"
-  chown "$REAL_USER:$REAL_USER" "$WRAPPER"
+  run_as_user chmod +x "$WRAPPER"
   echo "   Run: $WRAPPER"
 }
 
@@ -134,7 +136,7 @@ write_desktop_entry() {
   echo "==> Writing desktop entry: $DESKTOP_FILE"
   sudo -u "$REAL_USER" mkdir -p "$(dirname "$DESKTOP_FILE")"
   # Desktop will open in whatever your system's default terminal is (GNOME uses org.gnome.Terminal by default).
-  sudo -u "$REAL_USER" cat >"$DESKTOP_FILE" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Name=LazyDocker (rootless)
 Comment=Terminal UI for managing Docker
@@ -144,10 +146,9 @@ Terminal=true
 Categories=Development;System;
 Icon=utilities-terminal
 EOF
-  chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
   # Update desktop database (Fedora uses update-desktop-database if available)
   if command -v update-desktop-database &>/dev/null; then
-    update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
+    run_as_user update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
   fi
 }
 
@@ -174,6 +175,8 @@ clean() {
   fi
   echo "Done."
 }
+
+fedora_guard
 
 case "$ACTION" in
 deps) deps ;;

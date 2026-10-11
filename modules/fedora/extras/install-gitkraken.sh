@@ -10,20 +10,17 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# ===== Fedora-only guard =====
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
-    echo "❌ Fedora/RHEL only."
-    exit 1
-  }
-else
-  echo "❌ Cannot detect OS."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # ===== Config =====
-ARCH="$(uname -m)"
 CACHE_DIR="${CACHE_DIR:-$HOME_DIR/.cache/glimt/$MODULE_NAME}"
 RPM_URL="https://release.gitkraken.com/linux/gitkraken-amd64.rpm"
 RPM_FILE="$CACHE_DIR/gitkraken-amd64.rpm"
@@ -50,7 +47,7 @@ download_rpm() {
   sudo -u "$REAL_USER" mkdir -p "$CACHE_DIR"
   echo "→ Downloading GitKraken .rpm..."
   local tmp="$RPM_FILE.part"
-  rm -f "$tmp"
+  run_as_user rm -f "$tmp"
   if ! sudo -u "$REAL_USER" curl -fL "$RPM_URL" -o "$tmp"; then
     echo "❌ Failed to download GitKraken RPM"
     exit 1
@@ -60,12 +57,11 @@ download_rpm() {
   if ! file "$tmp" | grep -qE "(RPM|rpm)"; then
     echo "❌ Downloaded file is not a valid RPM file"
     echo "   File type: $(file "$tmp")"
-    rm -f "$tmp"
+    run_as_user rm -f "$tmp"
     exit 1
   fi
   
-  mv "$tmp" "$RPM_FILE"
-  chown "$REAL_USER:$REAL_USER" "$RPM_FILE"
+  run_as_user mv -f "$tmp" "$RPM_FILE"
 }
 
 needs_install_or_upgrade() {
@@ -81,11 +77,19 @@ needs_install_or_upgrade() {
 }
 
 # ===== Install =====
+# GitKraken only publishes an x86_64 RPM
+supported_arch() {
+  local arch
+  arch="$(normalize_arch 2>/dev/null || true)"
+  [[ "$arch" == "amd64" ]]
+}
+
 install_pkg_file() {
-  [[ "$ARCH" == "x86_64" ]] || {
-    echo "❌ GitKraken provides x86_64 only. Detected: $ARCH"
-    exit 1
-  }
+  if ! supported_arch; then
+    # warn + exit 0 so setup-extras / glimt update carry on with other modules
+    warn "GitKraken provides x86_64 builds only (detected: $(uname -m)) — skipping."
+    exit 0
+  fi
 
   download_rpm
   echo "→ Checking versions..."
@@ -122,17 +126,12 @@ do_clean() {
 
 # ===== Verify =====
 do_verify() {
-  if command -v gitkraken >/dev/null 2>&1; then
-    local version
-    version="$(installed_version)"
-    echo "✓ Installed: $version"
-  else
-    echo "❌ gitkraken not on PATH."
-    exit 1
-  fi
+  verify_binary gitkraken
 }
 
 # ===== Entry =====
+fedora_guard
+
 case "$ACTION" in
 deps) do_deps ;;
 install) do_install ;;

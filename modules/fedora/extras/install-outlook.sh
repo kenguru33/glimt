@@ -13,9 +13,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# --- Fedora-only guard ---
-if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # --- App metadata ---
 APP_NAME="Outlook"
@@ -61,12 +67,13 @@ install_deps(){
 # -------------------------------
 download_file(){ # $1=url $2=dest
   local url="$1" dest="$2"
-  # Use curl first (follows redirects), then wget
+  # Use curl first (follows redirects), then wget — as the user, so the
+  # downloaded file is user-owned
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
+    run_as_user curl -fsSL --retry 3 --retry-delay 1 -o "$dest" "$url" && return 0
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
+    run_as_user wget -q -T 30 --tries=3 -O "$dest" "$url" && return 0
   fi
   return 1
 }
@@ -76,7 +83,6 @@ fetch_official_icon(){
 
   # 1) Try direct PNG rasterized by Commons at 256px
   if download_file "$OFFICIAL_PNG256_MAIN" "$ICON_PNG" && [[ -s "$ICON_PNG" ]]; then
-    chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
     log "Official Outlook PNG (256px) downloaded via Special:FilePath."
     return 0
   fi
@@ -88,12 +94,10 @@ fetch_official_icon(){
   )
 
   for u in "${svg_candidates[@]}"; do
-    rm -f "$ICON_SVG"
+    run_as_user rm -f "$ICON_SVG"
     if download_file "$u" "$ICON_SVG" && [[ -s "$ICON_SVG" ]]; then
-      chown "$REAL_USER:$REAL_USER" "$ICON_SVG"
       if command -v rsvg-convert >/dev/null 2>&1; then
-        rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG" || true
-        chown "$REAL_USER:$REAL_USER" "$ICON_PNG"
+        run_as_user rsvg-convert -w 256 -h 256 "$ICON_SVG" -o "$ICON_PNG" || true
         if [[ -s "$ICON_PNG" ]]; then
           log "Official Outlook SVG fetched and converted to PNG."
           return 0
@@ -114,13 +118,11 @@ install_theme_icons(){
     # Use SVG if available for better scaling
     local sizes=(16 24 32 48 64 128 256)
     for s in "${sizes[@]}"; do
-      rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
-      chown "$REAL_USER:$REAL_USER" "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" 2>/dev/null || true
+      run_as_user rsvg-convert -w "$s" -h "$s" "$ICON_SVG" -o "$HICOLOR/${s}x${s}/apps/${APP_ID}.png" || true
     done
   else
     # Fallback: just copy the PNG to 256x256
-    cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
-    chown "$REAL_USER:$REAL_USER" "$HICOLOR/256x256/apps/${APP_ID}.png" 2>/dev/null || true
+    run_as_user cp -f "$ICON_PNG" "$HICOLOR/256x256/apps/${APP_ID}.png" || true
   fi
   command -v gtk-update-icon-cache >/dev/null 2>&1 && sudo -u "$REAL_USER" gtk-update-icon-cache -f -t "$HICOLOR" || true
 }
@@ -130,7 +132,7 @@ install_theme_icons(){
 # -------------------------------
 write_cli_wrapper(){
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR" "$PROFILE_DIR"
-  sudo -u "$REAL_USER" cat >"$CLI_WRAPPER" <<'EOSH'
+  run_as_user tee "$CLI_WRAPPER" >/dev/null <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
@@ -168,8 +170,7 @@ fi
 
 exec "${ENV_PREFIX[@]}" "$BROWSER" "${BFLAGS[@]}" "$@"
 EOSH
-  chmod 0755 "$CLI_WRAPPER"
-  chown "$REAL_USER:$REAL_USER" "$CLI_WRAPPER"
+  run_as_user chmod 0755 "$CLI_WRAPPER"
   sudo -u "$REAL_USER" ln -sf "$CLI_WRAPPER" "$CLI_ALIAS"
   log "CLI installed: $(basename "$CLI_WRAPPER") (alias: $(basename "$CLI_ALIAS"))"
 }
@@ -186,7 +187,7 @@ write_desktop(){
   # Use the absolute PNG path (most reliable)
   local icon_field="$ICON_PNG"
 
-  sudo -u "$REAL_USER" cat >"$DESKTOP_FILE" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -203,8 +204,7 @@ StartupWMClass=$APP_ID
 DBusActivatable=false
 X-GNOME-UsesNotifications=true
 EOF
-  chmod 0644 "$DESKTOP_FILE"
-  chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
+  run_as_user chmod 0644 "$DESKTOP_FILE"
   log "Wrote $DESKTOP_FILE (Icon=$icon_field)"
 }
 
@@ -237,6 +237,8 @@ do_install(){
 # -------------------------------
 # Entry
 # -------------------------------
+fedora_guard
+
 case "$ACTION" in
   deps)    install_deps ;;
   install) do_install ;;

@@ -15,21 +15,20 @@ ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
 ZELLIJ_BIN="$HOME_DIR/.local/bin/zellij"
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
-LOCAL_CONFIG_TEMPLATE="$(dirname "$0")/../config/zellij.zsh"
+CONFIG_TEMPLATE_DIR="$(dirname "${BASH_SOURCE[0]}")/../config"
+LOCAL_CONFIG_TEMPLATE="$CONFIG_TEMPLATE_DIR/zellij.zsh"
+KDL_TEMPLATE="$CONFIG_TEMPLATE_DIR/zellij.kdl"
 ZSH_TARGET_CONFIG="$ZSH_CONFIG_DIR/zellij.zsh"
 
-# === OS Check ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-else
-  echo "❌ Cannot detect OS."
-  exit 1
-fi
-
-if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This script only supports Fedora/RHEL."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # === Dependencies ===
 DEPS=(curl tar wl-clipboard)
@@ -42,28 +41,31 @@ install_deps() {
 install() {
   echo "📦 Installing Zellij..."
 
-  mkdir -p "$HOME_DIR/.local/bin"
+  run_as_user mkdir -p "$HOME_DIR/.local/bin"
 
   if [[ -x "$ZELLIJ_BIN" ]]; then
     echo "✔️ Zellij already installed."
     return
   fi
 
-  ARCH=$(uname -m)
-  case "$ARCH" in
-    x86_64) ARCH="x86_64" ;;
-    aarch64) ARCH="aarch64" ;;
-    *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+  # Not normalize_arch: zellij release assets use the raw `uname -m` names
+  # (zellij-x86_64-… / zellij-aarch64-…), not Go-style amd64/arm64.
+  local arch
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64 | aarch64) ;;
+    *) die "Unsupported architecture: $arch" ;;
   esac
 
-  local URL="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${ARCH}-unknown-linux-musl.tar.gz"
+  local url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${arch}-unknown-linux-musl.tar.gz"
+  local tmp_dir
+  tmp_dir="$(run_as_user mktemp -d "${TMPDIR:-/tmp}/glimt-zellij.XXXXXX")"
 
-  echo "⬇️ Downloading from: $URL"
-  curl -fsSL "$URL" -o /tmp/zellij.tar.gz
-  tar -xzf /tmp/zellij.tar.gz -C /tmp
-  mv /tmp/zellij "$ZELLIJ_BIN"
-  chmod +x "$ZELLIJ_BIN"
-  rm -f /tmp/zellij.tar.gz
+  echo "⬇️ Downloading from: $url"
+  run_as_user curl -fsSL "$url" -o "$tmp_dir/zellij.tar.gz"
+  run_as_user tar -xzf "$tmp_dir/zellij.tar.gz" -C "$tmp_dir"
+  run_as_user install -m 0755 "$tmp_dir/zellij" "$ZELLIJ_BIN"
+  run_as_user rm -rf "$tmp_dir"
 
   echo "✅ Installed to $ZELLIJ_BIN"
   PATH="$HOME_DIR/.local/bin:$PATH" verify_binary zellij --version
@@ -71,42 +73,7 @@ install() {
 
 config() {
   echo "⚙️ Configuring Zellij theme..."
-  mkdir -p "$ZELLIJ_CONFIG_DIR"
-
-  cat > "$ZELLIJ_CONFIG_FILE" <<EOF
-theme "catppuccin-mocha"
-
-themes {
-  catppuccin-mocha {
-    fg "#cdd6f4"
-    bg "#1e1e2e"
-    black "#45475a"
-    red "#f38ba8"
-    green "#a6e3a1"
-    yellow "#f9e2af"
-    blue "#89b4fa"
-    magenta "#f5c2e7"
-    cyan "#94e2d5"
-    white "#bac2de"
-    orange "#fab387"
-  }
-}
-
-default_layout "compact"
-default_mode "normal"
-
-copy_on_select true                 // selecting text copies immediately
-copy_clipboard "system"             // use system clipboard (not PRIMARY)
-copy_command "wl-copy"              // how to copy on Wayland
-paste_command "wl-paste --no-newline"
-mouse_mode true                     // keep mouse features in panes
-
-
-
-
-EOF
-
-  echo "✅ Theme written to $ZELLIJ_CONFIG_FILE"
+  deploy_config "$KDL_TEMPLATE" "$ZELLIJ_CONFIG_FILE"
 
   echo "📁 Copying Zsh config template..."
   deploy_config "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
@@ -118,20 +85,31 @@ clean() {
   # Use if-blocks, not `[[ ]] && rm`: a false test as the last statement would
   # return 1 and abort the caller under set -e when the file is already gone.
   if [[ -f "$ZELLIJ_BIN" ]]; then
-    rm -f "$ZELLIJ_BIN"
+    run_as_user rm -f "$ZELLIJ_BIN"
     echo "🗑️ Removed binary: $ZELLIJ_BIN"
   fi
+  # Only remove the config glimt deployed (unless the user edited it), and
+  # keep any layouts/themes the user added
+  if [[ -f "$ZELLIJ_CONFIG_FILE" ]]; then
+    if cmp -s "$ZELLIJ_CONFIG_FILE" "$KDL_TEMPLATE"; then
+      run_as_user rm -f "$ZELLIJ_CONFIG_FILE"
+      echo "🗑️ Removed config: $ZELLIJ_CONFIG_FILE"
+    else
+      echo "ℹ️  Kept edited config: $ZELLIJ_CONFIG_FILE"
+    fi
+  fi
   if [[ -d "$ZELLIJ_CONFIG_DIR" ]]; then
-    rm -rf "$ZELLIJ_CONFIG_DIR"
-    echo "🗑️ Removed config: $ZELLIJ_CONFIG_DIR"
+    run_as_user rmdir "$ZELLIJ_CONFIG_DIR" 2>/dev/null || true
   fi
   if [[ -f "$ZSH_TARGET_CONFIG" ]]; then
-    rm -f "$ZSH_TARGET_CONFIG"
+    run_as_user rm -f "$ZSH_TARGET_CONFIG"
     echo "🗑️ Removed Zsh config: $ZSH_TARGET_CONFIG"
   fi
 }
 
 # === Entrypoint ===
+fedora_guard
+
 case "$ACTION" in
   deps) install_deps ;;
   install) install ;;

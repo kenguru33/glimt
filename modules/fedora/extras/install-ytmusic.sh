@@ -13,9 +13,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# --- Fedora-only guard ---
-if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # --- App metadata ---
 APP_NAME="YouTube Music"
@@ -104,7 +110,7 @@ install_theme_icons(){
 # -------------------------------
 write_cli_wrapper(){
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR" "$PROFILE_DIR"
-  cat >"$CLI_WRAPPER" <<'EOSH'
+  run_as_user tee "$CLI_WRAPPER" >/dev/null <<'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
@@ -159,7 +165,7 @@ write_desktop(){
   # Use the absolute PNG path (most reliable)
   local icon_field="$ICON_PNG"
 
-  cat >"$DESKTOP_FILE" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -209,6 +215,8 @@ do_install(){
 # -------------------------------
 # Entry
 # -------------------------------
+fedora_guard
+
 case "$ACTION" in
   deps)    install_deps ;;
   install) do_install ;;

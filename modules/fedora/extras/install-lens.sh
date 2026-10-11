@@ -10,19 +10,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# === Detect OS ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  OS_ID="$ID"
-else
-  echo "❌ Could not detect operating system."
-  exit 1
-fi
-
-if [[ "$OS_ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]]; then
-  echo "❌ This script supports Fedora/RHEL-based systems only."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # Lens repository configuration
 LENS_REPO="/etc/yum.repos.d/lens.repo"
@@ -59,12 +55,21 @@ config_lens() {
 
 clean_lens() {
   echo "🧹 Removing Lens Desktop..."
-  sudo dnf remove -y lens-desktop lens || true
+  # Remove only what is actually installed: dnf errors on unknown packages,
+  # which would make `|| true` hide a real removal failure too.
+  local p
+  for p in lens-desktop lens; do
+    if rpm -q "$p" &>/dev/null; then
+      sudo dnf remove -y "$p" || true
+    fi
+  done
   if [[ -f "$LENS_REPO" ]]; then
     sudo rm -f "$LENS_REPO"
   fi
   echo "✅ Lens Desktop removed."
 }
+
+fedora_guard
 
 case "$ACTION" in
   deps)

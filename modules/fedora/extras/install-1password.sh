@@ -10,18 +10,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# === OS Detection ========================================================
-if [[ -r /etc/os-release ]]; then
-  . /etc/os-release
-else
-  echo "❌ Unable to detect OS."
-  exit 1
-fi
-
-if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This script supports Fedora/RHEL-based systems only."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 # === Constants ===========================================================
 FEDORA_REPO="/etc/yum.repos.d/1password.repo"
@@ -105,6 +102,8 @@ clean_1password() {
 }
 
 # === Dispatcher ==========================================================
+fedora_guard
+
 case "$ACTION" in
 deps)
   install_deps

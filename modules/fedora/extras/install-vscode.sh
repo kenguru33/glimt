@@ -15,17 +15,12 @@ REPO_FILE="/etc/yum.repos.d/vscode.repo"
 # Fedora / RHEL guard
 # ------------------------------------------------------------
 fedora_guard() {
-  [[ -r /etc/os-release ]] || {
-    echo "❌ /etc/os-release missing"
-    exit 1
-  }
-
-  . /etc/os-release
-
-  [[ "$ID" == "fedora" || "$ID" == "rhel" || "$ID_LIKE" == *"fedora"* ]] || {
-    echo "❌ Fedora/RHEL-based systems only."
-    exit 1
-  }
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
 }
 
 # ------------------------------------------------------------

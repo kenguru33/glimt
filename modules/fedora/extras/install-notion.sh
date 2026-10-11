@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Glimt: Notion (Chrome app-mode, isolated profile, X11-forced on Wayland)
-# Actions: all | install | clean | config
-# Fedora-only, user-scope, no sudo.
+# Actions: all | deps | install | config | clean
+# Fedora-only. deps uses sudo dnf; everything else is user-scope (run as $REAL_USER).
 set -Eeuo pipefail
 trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
@@ -13,10 +13,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# Fedora guard
-if [[ -r /etc/os-release ]]; then . /etc/os-release
-else die "Cannot detect OS."; fi
-[[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora/RHEL-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 BIN_DIR="$HOME_DIR/.local/bin"
 CLI_LAUNCHER="$BIN_DIR/notion"
@@ -29,6 +34,10 @@ LAUNCHER_DIR="$HOME_DIR/.local/share/applications"
 ICON_DIR="$HOME_DIR/.local/share/icons"
 ICON_FILE="$ICON_DIR/notion.png"
 DESKTOP_FILE="$LAUNCHER_DIR/${WMCLASS}.desktop"
+# Launchers written by earlier versions of this module — the only ones we
+# remove besides $DESKTOP_FILE. Other *notion*.desktop files (Chrome PWAs,
+# Flatpak/RPM Notion clients, the user's own) are left alone.
+LEGACY_LAUNCHERS=(Notion.desktop)
 
 # --- Deps ---
 install_deps(){
@@ -54,7 +63,8 @@ effective_flags() {
 
 fetch_icon() {
   sudo -u "$REAL_USER" mkdir -p "$ICON_DIR"
-  local tmp="/tmp/notion-icon.$$"; sudo -u "$REAL_USER" rm -f "$tmp" || true
+  local tmp
+  tmp="$(run_as_user mktemp "${TMPDIR:-/tmp}/notion-icon.XXXXXX")"
   for url in \
     "https://www.notion.so/front-static/favicon/notion-app-icon-256.png" \
     "https://www.notion.so/front-static/favicon/notion-icon-192.png" \
@@ -64,7 +74,6 @@ fetch_icon() {
   done
   if [[ -s "$tmp" ]]; then
     sudo -u "$REAL_USER" mv -f "$tmp" "$ICON_FILE"
-    chown "$REAL_USER:$REAL_USER" "$ICON_FILE"
     log "Icon saved: $ICON_FILE"
   else
     sudo -u "$REAL_USER" rm -f "$tmp" || true
@@ -74,9 +83,13 @@ fetch_icon() {
 
 remove_old_launchers() {
   log "Cleaning old launchers…"
-  sudo -u "$REAL_USER" rm -f "$LAUNCHER_DIR/Notion.desktop" 2>/dev/null || true
-  sudo -u "$REAL_USER" find "$LAUNCHER_DIR" -maxdepth 1 -type f -name "*notion*.desktop" ! -name "$(basename "$DESKTOP_FILE")" -print0 \
-    | xargs -0r sudo -u "$REAL_USER" rm -f
+  local f
+  for f in "${LEGACY_LAUNCHERS[@]}"; do
+    [[ "$f" == "$(basename "$DESKTOP_FILE")" ]] && continue
+    if [[ -f "$LAUNCHER_DIR/$f" ]]; then
+      run_as_user rm -f "$LAUNCHER_DIR/$f"
+    fi
+  done
   sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
 }
 
@@ -84,13 +97,12 @@ write_cli_launcher() {
   local chrome_bin="$1" flags; flags="$(effective_flags)"
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
 
-  sudo -u "$REAL_USER" sh -c "cat > \"$CLI_LAUNCHER\" <<EOF
+  run_as_user tee "$CLI_LAUNCHER" >/dev/null <<EOF
 #!/usr/bin/env bash
-exec $chrome_bin --class=$WMCLASS --name=$WMCLASS --user-data-dir=\"$PROFILE_DIR\" --app=$APP_URL $flags \"\\\$@\"
-EOF"
+exec $chrome_bin --class=$WMCLASS --name=$WMCLASS --user-data-dir="$PROFILE_DIR" --app=$APP_URL $flags "\$@"
+EOF
 
-  chmod +x "$CLI_LAUNCHER"
-  chown "$REAL_USER:$REAL_USER" "$CLI_LAUNCHER"
+  run_as_user chmod +x "$CLI_LAUNCHER"
   log "CLI launcher written: $CLI_LAUNCHER (run 'notion' from terminal)"
 }
 
@@ -99,7 +111,7 @@ write_desktop_file() {
   local chrome_bin="$1" flags; flags="$(effective_flags)"
   sudo -u "$REAL_USER" mkdir -p "$LAUNCHER_DIR" "$PROFILE_DIR"
 
-  sudo -u "$REAL_USER" sh -c "cat > \"$DESKTOP_FILE\" <<EOF
+  run_as_user tee "$DESKTOP_FILE" >/dev/null <<EOF
 [Desktop Entry]
 Name=$APP_NAME
 Comment=Open Notion in a chromeless Chrome window
@@ -112,10 +124,9 @@ Categories=Office;Productivity;
 StartupNotify=false
 # X11: GNOME matches by WM_CLASS (we set it via --class/--name)
 StartupWMClass=$WMCLASS
-EOF"
+EOF
 
-  chmod 0644 "$DESKTOP_FILE"
-  chown "$REAL_USER:$REAL_USER" "$DESKTOP_FILE"
+  run_as_user chmod 0644 "$DESKTOP_FILE"
   command -v desktop-file-validate >/dev/null 2>&1 && sudo -u "$REAL_USER" desktop-file-validate "$DESKTOP_FILE" || true
   sudo -u "$REAL_USER" update-desktop-database "$LAUNCHER_DIR" >/dev/null 2>&1 || true
   log "Launcher written: $DESKTOP_FILE"
@@ -127,7 +138,7 @@ do_install() {
   fetch_icon
   write_desktop_file "$chrome_bin"
   write_cli_launcher "$chrome_bin"
-  log "Installed. Launch "$APP_NAME" from the app grid or run 'notion' in a terminal."
+  log "Installed. Launch $APP_NAME from the app grid or run 'notion' in a terminal."
   log "Note: On Wayland this window runs under XWayland to ensure correct icon."
 }
 
@@ -140,6 +151,8 @@ do_clean() {
 }
 
 do_config(){ log "No extra config."; }
+
+fedora_guard
 
 case "$ACTION" in
   deps)    install_deps ;;

@@ -10,22 +10,19 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# === OS Detection ===
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  OS_ID="$ID"
-else
-  echo "❌ Could not detect operating system."
-  exit 1
-fi
-
-if [[ "$OS_ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]]; then
-  echo "❌ This script supports Fedora/RHEL-based systems only."
-  exit 1
-fi
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 TABLEPLUS_REPO="/etc/yum.repos.d/tableplus.repo"
 TABLEPLUS_GPG_KEY_URL="https://yum.tableplus.com/apt.tableplus.com.gpg.key"
+# TablePlus only publishes an x86_64 RPM repo
 TABLEPLUS_REPOFILE_URL="https://yum.tableplus.com/rpm/x86_64/tableplus.repo"
 
 install_deps() {
@@ -35,6 +32,14 @@ install_deps() {
 
 install_tableplus() {
   echo "🧰 Installing TablePlus..."
+
+  local arch
+  arch="$(normalize_arch 2>/dev/null || true)"
+  if [[ "$arch" != "amd64" ]]; then
+    # warn + exit 0 so setup-extras / glimt update carry on with other modules
+    warn "TablePlus provides x86_64 builds only (detected: $(uname -m)) — skipping."
+    exit 0
+  fi
 
   if command -v tableplus &>/dev/null || rpm -q tableplus &>/dev/null; then
     echo "✅ TablePlus is already installed."
@@ -71,6 +76,8 @@ clean_tableplus() {
   fi
   echo "✅ TablePlus removed."
 }
+
+fedora_guard
 
 case "$ACTION" in
   deps)

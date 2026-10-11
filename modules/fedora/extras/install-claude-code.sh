@@ -15,9 +15,15 @@ source "$GLIMT_LIB"
 
 ACTION="${1:-all}"
 
-# --- Fedora-only guard ---
-if [[ -r /etc/os-release ]]; then . /etc/os-release; else die "Cannot detect OS."; fi
-[[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || die "Fedora-only module."
+# ---- Fedora-only guard ----
+fedora_guard() {
+  if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${ID:-}" == "fedora" || "${ID_LIKE:-}" == *"fedora"* || "${ID:-}" == "rhel" ]] || die "Fedora/RHEL-only module."
+  else
+    die "Cannot detect OS."
+  fi
+}
 
 CLAUDE_BIN="$HOME_DIR/.local/bin/claude"
 
@@ -28,7 +34,7 @@ deps() {
   log "Checking dependencies..."
 
   if ! command -v curl >/dev/null 2>&1; then
-    die "curl is required but not founsnd."
+    die "curl is required but not found."
   fi
 
   log "Dependencies OK"
@@ -42,11 +48,7 @@ install_pkg() {
   run_as_user bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
   log "Claude Code installed."
 
-  if [[ -x "$CLAUDE_BIN" ]]; then
-    log "✅ claude OK"
-  else
-    warn "claude not found at $CLAUDE_BIN after install"
-  fi
+  PATH="$(dirname "$CLAUDE_BIN"):$PATH" verify_binary claude --version
 }
 
 # ------------------------------------------------------------
@@ -61,8 +63,8 @@ config() {
 # ------------------------------------------------------------
 clean() {
   log "Removing Claude Code..."
-  rm -f "$HOME_DIR/.local/bin/claude"
-  rm -rf "$HOME_DIR/.local/share/claude"
+  run_as_user rm -f "$CLAUDE_BIN"
+  run_as_user rm -rf "$HOME_DIR/.local/share/claude"
   # ~/.claude and ~/.claude.json hold the user's settings, credentials and
   # memory — never delete them just because the module was deselected.
   log "Claude Code removed (kept ~/.claude and ~/.claude.json)."
@@ -81,6 +83,8 @@ all() {
 # ------------------------------------------------------------
 # Entrypoint
 # ------------------------------------------------------------
+fedora_guard
+
 case "$ACTION" in
 deps) deps ;;
 install) install_pkg ;;
