@@ -67,6 +67,7 @@ declare -A MODULES=(
   [teams]="teams"
   [chatgpt]="chatgpt"
   ["claude-code"]="claude"
+  [powershell]="pwsh"
 )
 
 declare -A MODULE_DESCRIPTIONS=(
@@ -90,6 +91,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [teams]="Teams PWA"
   [chatgpt]="ChatGPT PWA"
   ["claude-code"]="Claude Code CLI"
+  [powershell]="PowerShell 7 (pwsh)"
 )
 
 # -----------------------------

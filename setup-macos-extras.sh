@@ -74,6 +74,7 @@ ORDERED_MODULES=(
   lens
   magnet
   notion
+  powershell
   spotify
   tableplus
   things
@@ -97,6 +98,7 @@ declare -A MODULES=(
   [lens]="/Applications/Lens.app"
   [magnet]="/Applications/Magnet.app"
   [notion]="/Applications/Notion.app"
+  [powershell]="pwsh"
   [spotify]="/Applications/Spotify.app"
   [tableplus]="/Applications/TablePlus.app"
   [things]="/Applications/Things3.app"
@@ -120,6 +122,7 @@ declare -A MODULE_DESCRIPTIONS=(
   [lens]="Lens Kubernetes IDE"
   [magnet]="Magnet window manager"
   [notion]="Notion"
+  [powershell]="PowerShell 7 (pwsh)"
   [spotify]="Spotify"
   [tableplus]="TablePlus"
   [things]="Things 3 task manager"
