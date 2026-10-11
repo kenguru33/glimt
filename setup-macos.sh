@@ -6,11 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/modules/macos"
 
 # === Argument Parsing ===
+# Default: a single progress bar, module output goes to log files.
+# -v/--verbose: show every module's full output instead.
 VERBOSE=false
-if [[ "${1:-}" == "--verbose" ]]; then
-  VERBOSE=true
-  shift
-fi
+for arg in "$@"; do
+  case "$arg" in
+  -v | --verbose) VERBOSE=true ;;
+  -h | --help)
+    echo "Usage: $(basename "$0") [-v|--verbose]"
+    exit 0
+    ;;
+  *)
+    echo "❌ Unknown option: $arg" >&2
+    exit 1
+    ;;
+  esac
+done
 
 # === macOS guard ===
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -92,41 +103,11 @@ fi
 
 brew update -q
 
-# === Helper: run a module with (optional) spinner ===
-run_with_spinner() {
-  local title="$1"
-  shift
-
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
-     command -v gum >/dev/null 2>&1 && \
-     [[ -t 1 ]] && [[ -t 2 ]] && \
-     [[ -n "${TERM:-}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
-    if gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@"; then
-      :
-    else
-      echo "▶️  $title"
-      "$@"
-    fi
-  else
-    echo "▶️  $title"
-    "$@"
-  fi
-}
-
-run_module() {
-  local script="$1"
-  local name
-  name="$(basename "$script")"
-
-  if $VERBOSE; then
-    echo "▶️  Running: $name"
-    bash "$script" all
-    echo "✅ Finished: $name"
-  else
-    run_with_spinner "Running $name..." bash "$script" all
-    gum style --foreground 10 "✔️  $name finished"
-  fi
-}
+# === Progress bar + sudo keepalive ===
+source "$SCRIPT_DIR/setup-lib.sh"
+# The askpass helper covers sudo -A in modules; keep the plain sudo timestamp
+# warm too, for anything (e.g. Homebrew casks) that calls sudo directly.
+glimt_sudo_keepalive
 
 # === Splash Screen ===
 clear
@@ -186,22 +167,18 @@ PRIORITY_MODULES=(
   install-starship.sh
 )
 
-echo ""
-gum style --foreground 220 --bold "📦 Running priority modules..."
+# Build the full run list up front so the progress bar knows the total
+RUN_LIST=()
 for module in "${PRIORITY_MODULES[@]}"; do
-  script="$MODULES_DIR/$module"
-  if [[ -f "$script" ]]; then
-    run_module "$script"
+  if [[ -f "$MODULES_DIR/$module" ]]; then
+    RUN_LIST+=("$MODULES_DIR/$module")
   else
-    echo "⚠️  Not found: $script"
+    echo "⚠️  Not found: $MODULES_DIR/$module"
   fi
 done
 
-# === Remaining modules (alphabetical, skip priority + homebrew) ===
-echo ""
-gum style --foreground 220 --bold "📦 Running remaining modules..."
+# Remaining modules (alphabetical, skip priority + homebrew)
 mapfile -t all_scripts < <(find "$MODULES_DIR" -maxdepth 1 -name 'install-*.sh' -print | sort)
-
 for script in "${all_scripts[@]}"; do
   module="$(basename "$script")"
 
@@ -211,8 +188,16 @@ for script in "${all_scripts[@]}"; do
   done
   $skip && continue
 
-  run_module "$script"
+  RUN_LIST+=("$script")
 done
+
+echo ""
+gum style --foreground 220 --bold "📦 Installing modules..."
+progress_init "${#RUN_LIST[@]}"
+for script in "${RUN_LIST[@]}"; do
+  progress_run "$(basename "$script")" bash "$script" all
+done
+progress_finish
 
 # === Optional Extras ===
 EXTRAS_SCRIPT="$SCRIPT_DIR/setup-macos-extras.sh"
@@ -222,7 +207,7 @@ if [[ -x "$EXTRAS_SCRIPT" ]]; then
   if $VERBOSE; then
     bash "$EXTRAS_SCRIPT" --verbose
   else
-    bash "$EXTRAS_SCRIPT" --quiet
+    bash "$EXTRAS_SCRIPT"
   fi
 else
   echo "⚠️  Extras script not found: $EXTRAS_SCRIPT"

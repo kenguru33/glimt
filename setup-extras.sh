@@ -12,7 +12,7 @@ ACTION="all"
 
 for arg in "$@"; do
   case "$arg" in
-  --verbose) VERBOSE=true ;;
+  -v | --verbose) VERBOSE=true ;;
   --quiet) VERBOSE=false ;;
   all | install) ACTION="$arg" ;;
   *)
@@ -26,6 +26,7 @@ done
 # Paths
 # -----------------------------
 GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/setup-lib.sh"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
 
@@ -119,46 +120,22 @@ module_installed() {
 }
 
 # -----------------------------
-# Spinner (INSTALL ONLY)
-# -----------------------------
-run_with_spinner() {
-  local title="$1"
-  shift
-  if command -v gum &>/dev/null && [[ -t 1 && -t 2 ]]; then
-    gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@" || "$@"
-  else
-    echo "▶️  $title"
-    "$@"
-  fi
-}
-
-# -----------------------------
-# Run module
+# Run module (progress bar by default, full output with --verbose)
 # -----------------------------
 run_module() {
   local name="$1"
   local mode="$2"
   local script="$MODULE_DIR/install-$name.sh"
 
-  [[ -x "$script" ]] || {
+  if [[ ! -x "$script" ]]; then
     echo "⚠️ Missing $script"
-    return
-  }
-
-  if [[ "$mode" == "clean" ]]; then
-    echo "🧹 Cleaning $name…"
-    bash "$script" clean >/dev/null
-    echo "✔️ install-$name.sh cleaned"
     return
   fi
 
-  if $VERBOSE; then
-    echo "▶️ Running install-$name.sh"
-    bash "$script" all
-    echo "✔️ install-$name.sh finished"
+  if [[ "$mode" == "clean" ]]; then
+    progress_run "Removing $name" bash "$script" clean
   else
-    run_with_spinner "Running $name…" bash "$script" all
-    gum style --foreground 10 "✔️ install-$name.sh finished"
+    progress_run "Installing $name" bash "$script" all
   fi
 }
 
@@ -203,16 +180,27 @@ main() {
     done
   done
 
+  # Work out what changes first, so the progress bar knows the total
+  PLAN=()
   for m in "${!MODULES[@]}"; do
     now="${WANT[$m]:-}"
     before="${PREV[$m]:-}"
 
     if [[ "$now" == "1" && "$before" != "1" ]]; then
-      run_module "$m" all
+      PLAN+=("all:$m")
     elif [[ "$now" != "1" ]] && { [[ "$before" == "1" ]] || module_installed "$m"; }; then
-      run_module "$m" clean
+      PLAN+=("clean:$m")
     fi
   done
+
+  if (( ${#PLAN[@]} > 0 )); then
+    glimt_require_sudo
+    progress_init "${#PLAN[@]}"
+    for step in "${PLAN[@]}"; do
+      run_module "${step#*:}" "${step%%:*}"
+    done
+    progress_finish
+  fi
 
   printf "%s\n" "${!WANT[@]}" >"$STATE_FILE"
 }

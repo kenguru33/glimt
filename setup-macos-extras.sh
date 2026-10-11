@@ -10,7 +10,7 @@ ACTION="all"
 
 for arg in "$@"; do
   case "$arg" in
-  --verbose) VERBOSE=true ;;
+  -v | --verbose) VERBOSE=true ;;
   --quiet)   VERBOSE=false ;;
   all | install) ACTION="$arg" ;;
   *)
@@ -27,6 +27,7 @@ GLIMT_ROOT="${GLIMT_ROOT:-$HOME/.glimt}"
 MODULE_DIR="$GLIMT_ROOT/modules/macos/extras"
 STATE_FILE="$HOME/.config/glimt/optional-extras.selected"
 mkdir -p "$(dirname "$STATE_FILE")"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/setup-lib.sh"
 
 # -----------------------------
 # OS guard
@@ -178,27 +179,7 @@ module_installed() {
 }
 
 # -----------------------------
-# Spinner (install only)
-# -----------------------------
-run_with_spinner() {
-  if command -v gum &>/dev/null && [[ -t 1 && -t 2 ]]; then
-    gum spin --spinner dot --title "$1" -- bash -c '"$@" >/dev/null 2>&1' _ "${@:2}" || "${@:2}"
-  else
-    echo "▶️  $1"
-    "${@:2}"
-  fi
-}
-
-gum_style_ok() {
-  if command -v gum &>/dev/null; then
-    gum style --foreground 10 "$1"
-  else
-    echo "$1"
-  fi
-}
-
-# -----------------------------
-# Run module
+# Run module (progress bar by default, full output with --verbose)
 # -----------------------------
 run_module() {
   [[ -n "${1:-}" ]] || { echo "⚠️  run_module called without a module name"; return 1; }
@@ -206,19 +187,9 @@ run_module() {
   [[ -x "$MODULE_DIR/install-$1.sh" ]] || chmod +x "$MODULE_DIR/install-$1.sh"
 
   if [[ "${2:-all}" == "clean" ]]; then
-    echo "🧹 Cleaning $1…"
-    bash "$MODULE_DIR/install-$1.sh" clean >/dev/null
-    gum_style_ok "✔️  install-$1.sh cleaned"
-    return
-  fi
-
-  if [[ "$VERBOSE" == "true" ]]; then
-    echo "▶️  Running install-$1.sh"
-    bash "$MODULE_DIR/install-$1.sh" all
-    echo "✔️  install-$1.sh finished"
+    progress_run "Removing $1" bash "$MODULE_DIR/install-$1.sh" clean
   else
-    run_with_spinner "Running $1…" bash "$MODULE_DIR/install-$1.sh" all
-    gum_style_ok "✔️  install-$1.sh finished"
+    progress_run "Installing $1" bash "$MODULE_DIR/install-$1.sh" all
   fi
 }
 
@@ -286,16 +257,26 @@ main() {
   gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
   echo ""
 
+  # Work out what changes first, so the progress bar knows the total
+  PLAN=()
   for m in "${ORDERED_MODULES[@]}"; do
     now="${WANT[$m]:-}"
     before="${PREV[$m]:-}"
 
     if [[ "$now" == "1" && "$before" != "1" ]]; then
-      run_module "$m" all
+      PLAN+=("all:$m")
     elif [[ "$now" != "1" ]] && { [[ "$before" == "1" ]] || module_installed "$m"; }; then
-      run_module "$m" clean
+      PLAN+=("clean:$m")
     fi
   done
+
+  if (( ${#PLAN[@]} > 0 )); then
+    progress_init "${#PLAN[@]}"
+    for step in "${PLAN[@]}"; do
+      run_module "${step#*:}" "${step%%:*}"
+    done
+    progress_finish
+  fi
 
   for m in "${ORDERED_MODULES[@]}"; do
     if [[ "${WANT[$m]:-}" == "1" ]]; then printf "%s\n" "$m"; fi

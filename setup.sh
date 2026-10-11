@@ -2,23 +2,39 @@
 set -Euo pipefail
 trap 'echo "❌ Script failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
 
-# === Argument Parsing ===
-VERBOSE=false
-if [[ "${1:-}" == "--verbose" ]]; then
-  VERBOSE=true
-  shift
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# === macOS → delegate to setup-macos.sh (before parsing, so flags pass through) ===
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  exec "$SCRIPT_DIR/setup-macos.sh" "$@"
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# === Argument Parsing ===
+# Default: a single progress bar, module output goes to log files.
+# -v/--verbose: show every module's full output instead.
+VERBOSE=false
+MODULES_DIR=""
+for arg in "$@"; do
+  case "$arg" in
+  -v | --verbose) VERBOSE=true ;;
+  -h | --help)
+    echo "Usage: $(basename "$0") [-v|--verbose] [modules-dir]"
+    exit 0
+    ;;
+  -*)
+    echo "❌ Unknown option: $arg" >&2
+    exit 1
+    ;;
+  *) MODULES_DIR="$arg" ;;
+  esac
+done
+
+source "$SCRIPT_DIR/setup-lib.sh"
+
 CONFIG_DIR="$HOME/.config/glimt"
 GIT_CONFIG="$CONFIG_DIR/user-git-info.config"
 AVATAR_CONFIG="$CONFIG_DIR/set-user-avatar.config"
 mkdir -p "$CONFIG_DIR"
-
-# === macOS → delegate to setup-macos.sh ===
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  exec "$SCRIPT_DIR/setup-macos.sh" "$@"
-fi
 
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
@@ -35,7 +51,7 @@ if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" 
   exit 1
 fi
 
-MODULES_DIR="${1:-"$SCRIPT_DIR/modules/fedora"}"
+MODULES_DIR="${MODULES_DIR:-"$SCRIPT_DIR/modules/fedora"}"
 PKG_MANAGER="dnf"
 
 TARGET_DIR="$MODULES_DIR"
@@ -50,6 +66,9 @@ pkg_quiet() {
   fi
 }
 
+# === Ask for sudo once, up front; kept alive for the whole run ===
+glimt_require_sudo
+
 # Ensure computer doesn't go to sleep or lock while installing (guard for non-GNOME)
 if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.screensaver lock-enabled false || true
@@ -59,9 +78,6 @@ fi
 # === Ensure git, gum, wget ===
 ensure_deps() {
   echo "🔧 Checking for required tools..."
-
-  # If sudo token isn't cached yet, ask now (prevents hidden prompts when stdout is /dev/null)
-  sudo -n true 2>/dev/null || sudo -v
 
   # Refresh metadata once here — modules must NOT call makecache individually
   pkg_quiet makecache -y
@@ -81,40 +97,6 @@ ensure_deps() {
 }
 ensure_deps
 
-# === Helper: run a command with (optional) spinner ===
-run_with_spinner() {
-  local title="$1"
-  shift
-
-  # Use spinner if:
-  # - Not explicitly disabled (GLIMT_DISABLE_SPIN != 1)
-  # - gum is available
-  # - stdout is a TTY (interactive terminal)
-  # - stderr is a TTY (needed for spinner output)
-  # - TERM is set and not "dumb" (indicates a real terminal with escape sequence support)
-  if [[ "${GLIMT_DISABLE_SPIN:-0}" != "1" ]] && \
-     command -v gum >/dev/null 2>&1 && \
-     [[ -t 1 ]] && \
-     [[ -t 2 ]] && \
-     [[ -n "${TERM:-}" ]] && \
-     [[ "${TERM:-}" != "dumb" ]]; then
-    # Use spinner: wrap command to suppress its stdout and stderr output
-    # gum spin writes its animation to stderr independently, so this won't interfere
-    # The wrapper ensures the command's output doesn't interfere with the spinner animation
-    if gum spin --spinner dot --title "$title" -- bash -c '"$@" >/dev/null 2>&1' _ "$@"; then
-      : # Spinner completed successfully
-    else
-      # Fallback if spinner fails
-      echo "▶️  $title"
-      "$@"
-    fi
-  else
-    # No spinner: simple message (output is piped, logged, or terminal doesn't support it)
-    echo "▶️  $title"
-    "$@"
-  fi
-}
-
 # === Splash Screen ===
 clear
 cat <<"EOF"
@@ -124,12 +106,6 @@ cat <<"EOF"
        ✨  The Final Shine for Fresh Installs
 
 EOF
-
-# === Ask for Sudo (kept for your UX; token may already be warm) ===
-echo ""
-echo "🔐 This setup requires sudo privileges..."
-sudo -v
-gum style --foreground 10 "✅ Sudo access granted."
 
 # === Load existing config (if any) ===
 [[ -f "$GIT_CONFIG" ]] && source "$GIT_CONFIG"
@@ -194,38 +170,28 @@ PRIORITY_MODULES=(
   "install-gnome-terminal-theme.sh"
 )
 
-# Run priority modules first (if present & executable)
+# Build the full run list up front so the progress bar knows the total
+RUN_LIST=()
 for p in "${PRIORITY_MODULES[@]}"; do
-  script="$TARGET_DIR/$p"
-      if [[ -x "$script" ]]; then
-        if $VERBOSE; then
-          echo "▶️  Running (priority): $p"
-          "$script" all
-          echo "✅ Finished: $p"
-        else
-          run_with_spinner "Running $p..." "$script" all
-          gum style --foreground 10 "✔️  $p finished"
-        fi
-      else
-    echo "⚠️  Priority module not found or not executable: $script"
+  if [[ -x "$TARGET_DIR/$p" ]]; then
+    RUN_LIST+=("$TARGET_DIR/$p")
+  else
+    echo "⚠️  Priority module not found or not executable: $TARGET_DIR/$p"
   fi
 done
+while IFS= read -r script; do
+  RUN_LIST+=("$script")
+done < <(
+  find "$TARGET_DIR" -maxdepth 1 -type f -name "*.sh" -executable \
+    | grep -v -E "/(install-gnome-config|install-nerdfonts|install-gnome-terminal-theme)\.sh$" \
+    | sort
+)
 
-# Run remaining modules (excluding the priority ones)
-find "$TARGET_DIR" -maxdepth 1 -type f -name "*.sh" -executable \
-  | grep -v -E "/(install-gnome-config|install-nerdfonts|install-gnome-terminal-theme)\.sh$" \
-  | sort \
-  | while read -r script; do
-      MODULE_NAME="$(basename "$script")"
-      if $VERBOSE; then
-        echo "▶️  Running: $MODULE_NAME"
-        "$script" all
-        echo "✅ Finished: $MODULE_NAME"
-      else
-        run_with_spinner "Running $MODULE_NAME..." "$script" all
-        gum style --foreground 10 "✔️  $MODULE_NAME finished"
-      fi
-    done
+progress_init "${#RUN_LIST[@]}"
+for script in "${RUN_LIST[@]}"; do
+  progress_run "$(basename "$script")" "$script" all
+done
+progress_finish
 
 # === Optional Extras ===
 EXTRAS_SCRIPT="$SCRIPT_DIR/setup-extras.sh"
@@ -235,7 +201,7 @@ if [[ -x "$EXTRAS_SCRIPT" ]]; then
   if $VERBOSE; then
     bash "$EXTRAS_SCRIPT" --verbose
   else
-    bash "$EXTRAS_SCRIPT" --quiet
+    bash "$EXTRAS_SCRIPT"
   fi
 else
   echo "⚠️  Optional extras script not found or not executable: $EXTRAS_SCRIPT"
