@@ -3,7 +3,7 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="papirus-icon-theme"
 ACTION="${1:-all}"
@@ -21,23 +21,23 @@ INSTALLER_URL="https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-
 
 require_user() {
   if [[ "$EUID" -eq 0 ]]; then
-    echo "❌ Do not run this module as root." >&2
+    echo "Error: Do not run this module as root." >&2
     exit 1
   fi
 }
 
 deps() {
-  log "📦 Installing dependencies..."
+  log "Installing dependencies..."
   sudo dnf install -y curl tar
 }
 
 install() {
   require_user
 
-  log "🔌 Installing papirus-icon-theme from git..."
+  log "Installing papirus-icon-theme from git..."
 
   if [[ -d "$PAPIRUS_DIR" ]]; then
-    log "✅ papirus-icon-theme already installed at $PAPIRUS_DIR"
+    log "papirus-icon-theme already installed at $PAPIRUS_DIR"
     log "ℹ️  To update, run 'clean' first, then 'install' again"
     return
   fi
@@ -51,9 +51,9 @@ install() {
   DESTDIR="$ICONS_DIR" sh -c "$installer"
 
   if [[ -d "$PAPIRUS_DIR" ]]; then
-    log "✅ papirus-icon-theme installed successfully to $PAPIRUS_DIR"
+    log "papirus-icon-theme installed successfully to $PAPIRUS_DIR"
   else
-    log "❌ papirus-icon-theme installation failed"
+    log "papirus-icon-theme installation failed"
     exit 1
   fi
 }
@@ -61,35 +61,35 @@ install() {
 config() {
   require_user
 
-  log "🔧 Configuring papirus-icon-theme..."
+  log "Configuring papirus-icon-theme..."
 
   if [[ ! -d "$PAPIRUS_DIR" ]]; then
-    log "❌ papirus-icon-theme not found. Run 'install' first."
+    log "papirus-icon-theme not found. Run 'install' first."
     exit 1
   fi
 
-  log "⚙️  Setting Papirus icon theme as default..."
+  log "Setting Papirus icon theme as default..."
   if command -v gsettings &>/dev/null 2>&1; then
     gsettings set org.gnome.desktop.interface icon-theme "Papirus"
-    log "✅ Papirus is now the default icon theme"
+    log "Papirus is now the default icon theme"
   else
-    log "⚠️  gsettings not available; cannot set theme automatically"
+    log "gsettings not available; cannot set theme automatically"
     log "ℹ️  You can set it manually in GNOME Settings > Appearance"
   fi
 
-  log "✅ papirus-icon-theme configuration complete"
+  log "papirus-icon-theme configuration complete"
 }
 
 clean() {
   require_user
 
-  log "🧹 Removing papirus-icon-theme..."
+  log "Removing papirus-icon-theme..."
 
   local variant removed=0
   for variant in "${PAPIRUS_VARIANTS[@]}"; do
     if [[ -d "$ICONS_DIR/$variant" ]]; then
       rm -rf "${ICONS_DIR:?}/$variant"
-      log "🔄 Removed $variant"
+      log "Removed $variant"
       removed=1
     fi
   done
@@ -102,11 +102,11 @@ clean() {
     current="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)"
     if [[ "$current" == "'Papirus"* || "$current" == "'ePapirus"* ]]; then
       gsettings reset org.gnome.desktop.interface icon-theme || true
-      log "🔄 Reset icon theme to the GNOME default"
+      log "Reset icon theme to the GNOME default"
     fi
   fi
 
-  log "✅ Clean complete"
+  log "Clean complete"
 }
 
 case "$ACTION" in

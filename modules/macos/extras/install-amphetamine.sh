@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="amphetamine"
 ACTION="${1:-all}"
@@ -34,7 +34,7 @@ case "$ACTION" in
   config)  config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

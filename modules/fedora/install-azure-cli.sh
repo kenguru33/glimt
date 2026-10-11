@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="azure-cli"
 
@@ -21,12 +21,12 @@ $VERBOSE && set -x || true
 
 # === OS detection ========================================================
 [[ -r /etc/os-release ]] || {
-  echo "❌ Cannot detect OS."
+  echo "Error: Cannot detect OS."
   exit 1
 }
 . /etc/os-release
 [[ "$ID" == "fedora" || "$ID_LIKE" == *"fedora"* || "$ID" == "rhel" ]] || {
-  echo "❌ Fedora/RHEL-family only."
+  echo "Error: Fedora/RHEL-family only."
   exit 1
 }
 

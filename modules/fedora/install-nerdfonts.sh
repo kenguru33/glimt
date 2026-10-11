@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="nerdfonts"
 ACTION="${1:-all}"
@@ -29,12 +29,12 @@ declare -A FONTS=(
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS."
+  echo "Error: Cannot detect OS."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* ]]; then
-  echo "❌ This script supports Fedora only."
+  echo "Error: This script supports Fedora only."
   exit 1
 fi
 
@@ -42,19 +42,19 @@ fi
 DEPS=("wget" "unzip" "fontconfig")
 
 install_deps() {
-  echo "📦 Installing required DNF packages..."
+  echo "Installing required DNF packages..."
   for dep in "${DEPS[@]}"; do
     if ! rpm -q "$dep" &>/dev/null; then
-      echo "➡️  Installing $dep..."
+      echo "Installing $dep..."
       sudo dnf install -y "$dep"
     else
-      echo "✅ $dep is already installed."
+      echo "$dep is already installed."
     fi
   done
 }
 
 install_fonts() {
-  echo "🔤 Installing Nerd Fonts to $NERDFONTS_DIR..."
+  echo "Installing Nerd Fonts to $NERDFONTS_DIR..."
   run_as_user mkdir -p "$NERDFONTS_DIR"
 
   # Private, user-owned download dir (downloads and unzip run as the user)
@@ -65,7 +65,7 @@ install_fonts() {
   for name in "${!FONTS[@]}"; do
     # grep -q would exit early and SIGPIPE fc-list, failing the pipe under pipefail
     if fc-list | grep -i "$name Nerd Font" >/dev/null; then
-      echo "✅ $name Nerd Font already installed. Skipping."
+      echo "$name Nerd Font already installed. Skipping."
       continue
     fi
 
@@ -76,16 +76,16 @@ install_fonts() {
       die "Download failed: ${FONTS[$name]}"
     fi
 
-    echo "📦 Extracting $name..."
+    echo "Extracting $name..."
     run_as_user mkdir -p "$NERDFONTS_DIR/$name"
     run_as_user unzip -o "$zip_path" -d "$NERDFONTS_DIR/$name" >/dev/null
     run_as_user rm -f "$zip_path"
   done
   run_as_user rm -rf "$tmp_dir"
 
-  echo "🔄 Rebuilding font cache..."
+  echo "Rebuilding font cache..."
   run_as_user fc-cache -f >/dev/null
-  echo "✅ Font cache rebuilt."
+  echo "Font cache rebuilt."
   verify_binary fc-list
 }
 
@@ -94,7 +94,7 @@ configure_fonts() {
 }
 
 clean_fonts() {
-  echo "🧹 Removing installed Nerd Fonts..."
+  echo "Removing installed Nerd Fonts..."
 
   local name f legacy
   for name in "${!FONTS[@]}"; do
@@ -113,9 +113,9 @@ clean_fonts() {
   done
   run_as_user rmdir "$NERDFONTS_DIR" 2>/dev/null || true
 
-  echo "🔄 Rebuilding font cache..."
+  echo "Rebuilding font cache..."
   run_as_user fc-cache -f >/dev/null 2>&1 || true
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # === Entry Point ===
@@ -138,7 +138,7 @@ case "$ACTION" in
     clean_fonts
     ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

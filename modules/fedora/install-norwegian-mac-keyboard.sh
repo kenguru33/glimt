@@ -7,7 +7,7 @@
 # Actions: all | deps | install | config | clean   (safe to re-run)
 
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="norwegian-mac-keyboard"
 ACTION="${1:-all}"
@@ -109,10 +109,10 @@ config() {
 
   cat <<EOF
 
-✅ Norwegian Mac keyboard fix applied.
+Norwegian Mac keyboard fix applied.
 
 IMPORTANT:
-➡ You MUST log out and log back in for this to fully apply.
+You MUST log out and log back in for this to fully apply.
 
 After login, these will work exactly like macOS:
   ⌥ (left Option) + Shift + 7  ->  \\

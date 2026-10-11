@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="k9s"
 ACTION="${1:-all}"
@@ -29,24 +29,24 @@ LEGACY_PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
 # === Step: deps ===
 install_dependencies() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y curl tar gzip
 }
 
 # === Step: install ===
 install_k9s() {
-  echo "🔧 Installing K9s $K9S_VERSION to ~/.local/bin..."
+  echo "Installing K9s $K9S_VERSION to ~/.local/bin..."
 
   local norm_arch url
   norm_arch="$(normalize_arch)"
@@ -66,13 +66,13 @@ install_k9s() {
   sudo install -o "$REAL_USER" -g "$REAL_USER" -m 0755 "$tmp_dir/k9s" "$HOME_DIR/.local/bin/k9s"
   rm -rf "$tmp_dir"
 
-  echo "✅ K9s installed at ~/.local/bin/k9s"
+  echo "K9s installed at ~/.local/bin/k9s"
   verify_binary "$HOME_DIR/.local/bin/k9s" version
 }
 
 # === Step: config ===
 config_k9s() {
-  echo "🧠 Installing K9s config and theme..."
+  echo "Installing K9s config and theme..."
 
   if [[ ! -x "$HOME_DIR/.local/bin/k9s" ]]; then
     die "K9s binary not found. Run 'install' first."
@@ -81,7 +81,7 @@ config_k9s() {
   # Shell completion loader config
   if [[ -f "$CONFIG_TEMPLATE_DIR/k9s.zsh" ]]; then
     deploy_config "$CONFIG_TEMPLATE_DIR/k9s.zsh" "$TARGET_CONFIG_FILE"
-    echo "✅ Installed Zsh completion config: $TARGET_CONFIG_FILE"
+    echo "Installed Zsh completion config: $TARGET_CONFIG_FILE"
   fi
 
   # Bash/fish completions — the redirect runs in the user's shell so the
@@ -96,16 +96,16 @@ config_k9s() {
   run_as_user mkdir -p "$SKIN_DIR"
   run_as_user curl -fsSL "https://raw.githubusercontent.com/catppuccin/k9s/main/dist/$SKIN_FILE" \
     -o "$SKIN_DIR/$SKIN_FILE"
-  echo "✅ Theme saved to $SKIN_DIR/$SKIN_FILE"
+  echo "Theme saved to $SKIN_DIR/$SKIN_FILE"
 
   # config.yaml (an existing one is backed up by deploy_config)
   deploy_config "$K9S_CONFIG_TEMPLATE" "$K9S_CONFIG_DIR/config.yaml"
-  echo "✅ config.yaml set to Catppuccin Mocha"
+  echo "config.yaml set to Catppuccin Mocha"
 }
 
 # === Step: clean ===
 clean_k9s() {
-  echo "🧹 Removing K9s and related files..."
+  echo "Removing K9s and related files..."
 
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/k9s"
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/share/bash-completion/completions/k9s"
@@ -133,10 +133,10 @@ clean_k9s() {
   # the same line near the top and that one must stay.
   if [[ -f "$HOME_DIR/.zshrc" && "$(tail -n 1 "$HOME_DIR/.zshrc")" == "$LEGACY_PATH_LINE" ]]; then
     run_as_user sed -i '$d' "$HOME_DIR/.zshrc"
-    echo "✅ Removed legacy PATH line appended to ~/.zshrc"
+    echo "Removed legacy PATH line appended to ~/.zshrc"
   fi
 
-  echo "✅ All K9s files removed."
+  echo "All K9s files removed."
 }
 
 # === Entry Point ===
@@ -147,7 +147,7 @@ case "$ACTION" in
   clean)   clean_k9s ;;
   all)     install_dependencies; install_k9s; config_k9s ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

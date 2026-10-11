@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="git-config"
 ACTION="${1:-all}"
@@ -98,22 +98,22 @@ EOF
 
 prompt_git_config() {
   while true; do
-    name=$(gum input --prompt "📝 Full name: ")
+    name=$(gum input --prompt "Full name: ")
     [[ -n "$name" ]] && break
     gum style --foreground 1 "Name cannot be empty"
   done
 
   while true; do
-    email=$(gum input --prompt "📧 Email: ")
+    email=$(gum input --prompt "Email: ")
     [[ "$email" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
     gum style --foreground 1 "Invalid email"
   done
 
-  editor=$(gum input --prompt "🖊 Default editor:" --value "nvim")
-  branch=$(gum input --prompt "🌿 Default branch:" --value "main")
+  editor=$(gum input --prompt "Default editor:" --value "nvim")
+  branch=$(gum input --prompt "Default branch:" --value "main")
 
   rebase=false
-  gum confirm "🔁 Use rebase on pull?" && rebase=true
+  gum confirm "Use rebase on pull?" && rebase=true
 
   gum format <<EOF
 # Review Git config

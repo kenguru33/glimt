@@ -3,7 +3,7 @@
 # Actions: all | deps | install | config | clean
 # Fedora-only. deps uses sudo dnf; everything else is user-scope (run as $REAL_USER).
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="notion-chrome"
 

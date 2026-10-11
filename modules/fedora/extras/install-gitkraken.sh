@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gitkraken"
 
@@ -49,13 +49,13 @@ download_rpm() {
   local tmp="$RPM_FILE.part"
   run_as_user rm -f "$tmp"
   if ! sudo -u "$REAL_USER" curl -fL "$RPM_URL" -o "$tmp"; then
-    echo "❌ Failed to download GitKraken RPM"
+    echo "Error: Failed to download GitKraken RPM"
     exit 1
   fi
   
   # Verify it's actually an RPM file
   if ! file "$tmp" | grep -qE "(RPM|rpm)"; then
-    echo "❌ Downloaded file is not a valid RPM file"
+    echo "Error: Downloaded file is not a valid RPM file"
     echo "   File type: $(file "$tmp")"
     run_as_user rm -f "$tmp"
     exit 1
@@ -101,7 +101,7 @@ install_pkg_file() {
     echo "→ Installing $PKG_NAME ($remote_ver)..."
     sudo dnf install -y "$RPM_FILE"
   else
-    echo "✓ $PKG_NAME is up to date ($inst_ver). Skipping install."
+    echo "$PKG_NAME is up to date ($inst_ver). Skipping install."
   fi
 }
 
@@ -121,7 +121,7 @@ do_clean() {
   echo "→ [$MODULE_NAME] Removing $PKG_NAME and cache..."
   sudo dnf remove -y "$PKG_NAME" || true
   sudo -u "$REAL_USER" rm -rf "$CACHE_DIR" 2>/dev/null || true
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # ===== Verify =====

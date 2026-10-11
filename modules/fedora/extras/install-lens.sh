@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lens"
 
@@ -24,19 +24,19 @@ fedora_guard() {
 LENS_REPO="/etc/yum.repos.d/lens.repo"
 
 install_deps() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y dnf-plugins-core curl
 }
 
 install_lens() {
-  echo "📦 Installing Lens Desktop..."
+  echo "Installing Lens Desktop..."
 
   if command -v lens-desktop &>/dev/null || command -v lens &>/dev/null; then
-    echo "✅ Lens is already installed."
+    echo "Lens is already installed."
     return
   fi
 
-  echo "📁 Adding Lens repository..."
+  echo "Adding Lens repository..."
   if [[ -f "$LENS_REPO" ]]; then
     echo "ℹ️  Lens repository already exists, removing old one..."
     sudo rm -f "$LENS_REPO"
@@ -46,15 +46,15 @@ install_lens() {
   echo "⬇️ Installing Lens..."
   sudo dnf install -y lens
 
-  echo "✅ Lens Desktop installed."
+  echo "Lens Desktop installed."
 }
 
 config_lens() {
-  echo "⚙️  Configuring Lens (no Fedora-specific tweaks yet)..."
+  echo "Configuring Lens (no Fedora-specific tweaks yet)..."
 }
 
 clean_lens() {
-  echo "🧹 Removing Lens Desktop..."
+  echo "Removing Lens Desktop..."
   # Remove only what is actually installed: dnf errors on unknown packages,
   # which would make `|| true` hide a real removal failure too.
   local p
@@ -66,7 +66,7 @@ clean_lens() {
   if [[ -f "$LENS_REPO" ]]; then
     sudo rm -f "$LENS_REPO"
   fi
-  echo "✅ Lens Desktop removed."
+  echo "Lens Desktop removed."
 }
 
 fedora_guard

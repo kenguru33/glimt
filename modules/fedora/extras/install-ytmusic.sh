@@ -3,7 +3,7 @@
 # YouTube Music PWA (Chrome/Chromium) — Fedora only
 # Actions: all | deps | install | config | clean
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="ytmusic-pwa"
 

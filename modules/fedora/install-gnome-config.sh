@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gnome-config"
 ACTION="${1:-all}"
@@ -24,12 +24,12 @@ WALLPAPER_DEST="$HOME_DIR/Pictures/background.jpg"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* ]]; then
-  echo "❌ Unsupported OS: $ID (Fedora only)"
+  echo "Error: Unsupported OS: $ID (Fedora only)"
   exit 1
 fi
 
@@ -39,15 +39,15 @@ DEPS_CMDS=(gsettings)
 
 # === Dependency Installer ===
 install_dependencies() {
-  echo "🔧 Ensuring required dependencies..."
+  echo "Ensuring required dependencies..."
   sudo dnf install -y "${DEPS_PKGS[@]}"
 
   # Verify commands exist
   for cmd in "${DEPS_CMDS[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
-      echo "✅ $cmd is available."
+      echo "$cmd is available."
     else
-      echo "❌ $cmd not found after install."
+      echo "Error: $cmd not found after install."
       exit 1
     fi
   done
@@ -55,37 +55,37 @@ install_dependencies() {
 
 # === Wallpaper installer ===
 install_config() {
-  echo "📁 Checking for wallpaper in: $WALLPAPER_SOURCE"
+  echo "Checking for wallpaper in: $WALLPAPER_SOURCE"
 
   if [[ ! -f "$WALLPAPER_SOURCE" ]]; then
-    echo "⚠️  Wallpaper not found: $WALLPAPER_SOURCE"
+    echo "Warning: Wallpaper not found: $WALLPAPER_SOURCE"
     echo "   Skipping wallpaper setup."
     return 0
   fi
 
-  echo "📥 Copying wallpaper to Pictures folder..."
+  echo "Copying wallpaper to Pictures folder..."
   run_as_user mkdir -p "$HOME_DIR/Pictures"
   run_as_user install -m 0644 "$WALLPAPER_SOURCE" "$WALLPAPER_DEST"
-  echo "✅ Wallpaper copied to: $WALLPAPER_DEST"
+  echo "Wallpaper copied to: $WALLPAPER_DEST"
 
   if command -v gsettings >/dev/null 2>&1; then
-    echo "🎨 Setting wallpaper via gsettings..."
+    echo "Setting wallpaper via gsettings..."
     run_as_user gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_DEST"
     run_as_user gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_DEST"
-    echo "✅ Wallpaper set."
+    echo "Wallpaper set."
   else
-    echo "⚠️  gsettings not available. Set wallpaper manually."
+    echo "Warning: gsettings not available. Set wallpaper manually."
   fi
 }
 
 # === GNOME Settings ===
 configure_gnome() {
   if ! command -v gsettings >/dev/null 2>&1; then
-    echo "⚠️  gsettings not available. Skipping GNOME configuration."
+    echo "Warning: gsettings not available. Skipping GNOME configuration."
     return 0
   fi
 
-  echo "⚙️  Applying GNOME settings..."
+  echo "Applying GNOME settings..."
 
   # Dark theme preference
   run_as_user gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' || true
@@ -97,7 +97,7 @@ configure_gnome() {
   # Disable animations (optional, for performance)
   # run_as_user gsettings set org.gnome.desktop.interface enable-animations false || true
 
-  echo "✅ GNOME settings applied."
+  echo "GNOME settings applied."
 }
 
 # === Clean ===
@@ -109,7 +109,7 @@ GSETTINGS_KEYS=(
 )
 
 clean_config() {
-  echo "🧹 Cleaning GNOME config..."
+  echo "Cleaning GNOME config..."
 
   if command -v gsettings >/dev/null 2>&1; then
     local entry key current
@@ -124,15 +124,15 @@ clean_config() {
         run_as_user gsettings reset org.gnome.desktop.background "$key" || true
       fi
     done
-    echo "✅ GNOME settings reset to defaults."
+    echo "GNOME settings reset to defaults."
   fi
 
   if [[ -f "$WALLPAPER_DEST" ]]; then
     run_as_user rm -f "$WALLPAPER_DEST"
-    echo "✅ Removed wallpaper."
+    echo "Removed wallpaper."
   fi
 
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # === Entry Point ===

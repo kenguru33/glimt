@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lazydocker"
 
@@ -54,7 +54,7 @@ map_arch() {
   x86_64) echo "x86_64" ;;
   aarch64) echo "arm64" ;;
   *)
-    echo "❌ Unsupported architecture: $arch"
+    echo "Error: Unsupported architecture: $arch"
     exit 1
     ;;
   esac
@@ -72,7 +72,7 @@ _download_from_release() {
 
   local tag="$LAZYDOCKER_VERSION"
   [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-    echo "❌ LAZYDOCKER_VERSION must look like v0.23.3 (got: $tag)"
+    echo "Error: LAZYDOCKER_VERSION must look like v0.23.3 (got: $tag)"
     exit 1
   }
 
@@ -112,7 +112,7 @@ install_pkg() {
   else
     _download_latest_via_upstream_script
   fi
-  echo "✅ Installed: $(command -v lazydocker || echo "$BIN_DIR/lazydocker")"
+  echo "Installed: $(command -v lazydocker || echo "$BIN_DIR/lazydocker")"
   verify_binary lazydocker --version
 }
 
@@ -155,7 +155,7 @@ EOF
 config() {
   # Binary presence
   if ! command -v lazydocker >/dev/null 2>&1 && [[ ! -f "$BIN_DIR/lazydocker" ]]; then
-    echo "❌ lazydocker binary not found; run install first."
+    echo "Error: lazydocker binary not found; run install first."
     exit 1
   fi
   write_wrapper

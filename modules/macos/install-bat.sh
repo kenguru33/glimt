@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="bat"
 ACTION="${1:-all}"
@@ -43,7 +43,7 @@ config() {
   bat cache --build || warn "Failed to rebuild bat theme cache"
 
   echo "--theme=\"$BAT_THEME_NAME\"" > "$bat_config_file"
-  log "✅ Catppuccin themes installed, default set to $BAT_THEME_NAME"
+  log "Catppuccin themes installed, default set to $BAT_THEME_NAME"
 }
 
 clean() {
@@ -60,7 +60,7 @@ case "$ACTION" in
   config)  config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

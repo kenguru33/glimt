@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="eza"
 ACTION="${1:-all}"
@@ -16,44 +16,44 @@ TARGET_FILE="$CONFIG_DIR/eza.zsh"
 
 # === Step: deps ===
 deps() {
-  echo "📦 Installing eza..."
+  echo "Installing eza..."
   
   # Check if eza is already installed
   if command -v eza &>/dev/null; then
-    echo "✅ eza is already installed."
+    echo "eza is already installed."
     return
   fi
   
   # Try Fedora repos first
   if sudo dnf install -y eza 2>/dev/null; then
-    echo "✅ eza installed from Fedora repos."
+    echo "eza installed from Fedora repos."
     return
   fi
   
   # Fallback: Enable COPR repository and install
-  echo "⚠️  eza not available in Fedora repos. Enabling COPR repository..."
+  echo "Warning: eza not available in Fedora repos. Enabling COPR repository..."
   
   # Install dnf-plugins-core if not present (needed for copr)
   if ! rpm -q dnf-plugins-core &>/dev/null; then
-    echo "📦 Installing dnf-plugins-core..."
+    echo "Installing dnf-plugins-core..."
     sudo dnf install -y dnf-plugins-core
   fi
   
   # Enable dturner/eza COPR repository
-  echo "🔧 Enabling dturner/eza COPR repository..."
+  echo "Enabling dturner/eza COPR repository..."
   if sudo dnf copr enable -y dturner/eza; then
-    echo "✅ COPR repository enabled."
+    echo "COPR repository enabled."
   else
-    echo "❌ Failed to enable COPR repository."
+    echo "Error: Failed to enable COPR repository."
     exit 1
   fi
   
   # Install eza from COPR
-  echo "📦 Installing eza from COPR repository..."
+  echo "Installing eza from COPR repository..."
   if sudo dnf install -y eza; then
-    echo "✅ eza installed from COPR repository."
+    echo "eza installed from COPR repository."
   else
-    echo "❌ Failed to install eza from COPR repository."
+    echo "Error: Failed to install eza from COPR repository."
     exit 1
   fi
 }
@@ -65,23 +65,23 @@ install() {
 
 # === Step: config ===
 config() {
-  echo "📝 Writing eza.zsh config from template..."
+  echo "Writing eza.zsh config from template..."
 
   deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
 
-  echo "✅ Installed $TARGET_FILE"
+  echo "Installed $TARGET_FILE"
 }
 
 # === Step: clean ===
 clean() {
-  echo "🧹 Cleaning eza setup..."
+  echo "Cleaning eza setup..."
 
-  echo "❌ Removing eza.zsh config"
+  echo "Removing eza.zsh config"
   rm -f "$TARGET_FILE"
 
   if confirm "Uninstall eza package as well?"; then
     sudo dnf remove -y eza
-    echo "✅ eza package removed."
+    echo "eza package removed."
   fi
 }
 
@@ -93,7 +93,7 @@ case "$ACTION" in
   config) config ;;
   clean)  clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

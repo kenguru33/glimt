@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeo pipefail
-trap 'echo "❌ Failed: $BASH_COMMAND (line $LINENO, file ${BASH_SOURCE[0]})" >&2' ERR
+trap 'echo "Error: bootstrap failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 SCRIPT_NAME="bootstrap.sh"
 REPO_URL="https://github.com/kenguru33/glimt.git"
@@ -25,7 +25,7 @@ for arg in "$@"; do
     --dark)       THEME_AUTO=0; THEME_OVERRIDE="dark"  ;;
     --no-color)   NO_COLOR=1 ;;
     *)
-      echo "❌ Unknown argument: $arg"
+      echo "Unknown argument: $arg" >&2
       echo "Usage: $SCRIPT_NAME [--verbose] [branch=branchname] [--light|--dark] [--no-color]"
       exit 1
       ;;
@@ -33,8 +33,7 @@ for arg in "$@"; do
 done
 
 [[ "$VERBOSE" -eq 1 ]] && {
-  echo "🔍 Verbose mode enabled"
-  echo "🌿 Using branch: $BRANCH"
+  echo "Verbose mode, branch: $BRANCH"
 }
 
 # === Detect OS ===
@@ -46,18 +45,18 @@ elif [[ -f /etc/os-release ]]; then
   OS_ID="$ID"
   OS_ID_LIKE="${ID_LIKE:-}"
 else
-  echo "❌ Could not detect OS."
+  echo "Error: cannot detect OS" >&2
   exit 1
 fi
 
 if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" && "$OS_ID" != "macos" ]]; then
-  echo "❌ Unsupported OS: $OS_ID. Glimt requires Fedora, RHEL, or macOS."
+  echo "Error: unsupported OS '$OS_ID' (glimt requires Fedora, RHEL or macOS)" >&2
   exit 1
 fi
 
 # === Prevent root execution ===
 if [[ "$(id -u)" -eq 0 ]] && [[ "$OS_ID" != "macos" ]]; then
-  echo "❌ Do not run as root. Use a normal user."
+  echo "Error: do not run as root; use a normal user" >&2
   exit 1
 fi
 
@@ -95,19 +94,12 @@ _set_palette() {
 print_banner() {
   clear || true
   _set_palette
-  local theme="$(_detect_bg_theme)"
   echo -e "
-      ${GOLD}🌟   ✨${RESET}
-   ${GOLD}✨${RESET}   ${CYAN}G L I M T${RESET}     ${GOLD}🌟${RESET}
-       ${GOLD}✨${RESET}  ${WHITE}The Final Shine for Fresh Installs${RESET}
+  ${CYAN}glimt${RESET}
+  ${DIM}Post-install setup for Fedora and macOS${RESET}
 
-    ${WHITE}Installs essential tools and configurations${RESET}
-    ${WHITE}Optimizes settings with minimal system changes${RESET}
-    ${WHITE}Uses sudo only when absolutely necessary${RESET}
-
-    ${CYAN}OS:${RESET}     ${WHITE}$OS_ID${RESET}
-    ${CYAN}Branch:${RESET} ${WHITE}$BRANCH${RESET}
-    ${CYAN}Theme:${RESET}  ${WHITE}${theme}${RESET}${DIM} (override with --light/--dark)${RESET}
+  ${DIM}OS${RESET}      $OS_ID
+  ${DIM}Branch${RESET}  $BRANCH
 "
 }
 
@@ -117,7 +109,7 @@ run() {
     "$@"
   else
     if ! "$@" 1>/dev/null; then
-      echo "❌ Command failed: $*" >&2
+      echo "Error: command failed: $*" >&2
       # Re-run without stdout suppression so you see the error/stderr
       "$@"
       exit 1
@@ -131,37 +123,15 @@ require_sudo() {
   if [[ "$OS_ID" == "macos" ]]; then
     return 0
   fi
-  _set_palette
-  echo -e "    ${CYAN}💡 Install Philosophy${RESET}
-    ${WHITE}• Work in \$HOME when possible${RESET}
-    ${WHITE}• Use sudo only if no user-space option exists${RESET}
-    ${WHITE}• Keep changes safe and reversible${RESET}
-    ${WHITE}• Be transparent about actions taken${RESET}
-"
-  echo -e "    ${CYAN}🔑 Sudo Access${RESET}"
-  echo -e "    ${WHITE}Needed for installing packages or small system tweaks.${RESET}\n"
-
   # Use /dev/tty to avoid accidental non-interactive cancellation
-  read -rp "    Proceed with setup? [y/N]: " confirm </dev/tty || true
+  read -rp "  Continue? [y/N] " confirm </dev/tty || true
   case "$confirm" in
     [yY][eE][sS]|[yY]) ;;
-    *) echo -e "    ${GOLD}⚠️  Setup cancelled by user.${RESET}"; exit 0 ;;
+    *) echo "  Cancelled."; exit 0 ;;
   esac
 
-  echo ""
-  echo -e "    ${CYAN}🛡 Enter Your Sudo Password${RESET}"
-  echo -e "    ${WHITE}This is required to continue setup...${RESET}"
-  echo ""
-
-  if ! sudo -v >/dev/null 2>&1; then
-    echo ""
-    echo -e "    ${GOLD}🚫 Sudo unavailable or authentication failed for '$REAL_USER'.${RESET}
-
-    ${CYAN}🛠 If you need sudo:${RESET}
-    ${WHITE}1) su -${RESET}
-    ${WHITE}2) usermod -aG sudo $REAL_USER${RESET}
-    ${WHITE}3) Log out/in (or reboot)${RESET}
-"
+  if ! sudo -v -p "  [glimt] password for %u: "; then
+    echo "Error: sudo failed for '$REAL_USER'. glimt needs a user with sudo rights." >&2
     exit 1
   fi
 }
@@ -175,26 +145,20 @@ ensure_git() {
     if xcode-select -p >/dev/null 2>&1; then
       return 0
     fi
-    echo "📦 Installing the Xcode Command Line Tools (required for git)..."
-    echo "   A macOS dialog will open — click \"Install\" and accept the license."
+    echo "Installing Xcode Command Line Tools (needed for git)."
+    echo "Click \"Install\" in the macOS dialog and accept the license."
     xcode-select --install >/dev/null 2>&1 || true
-    echo "⏳ Waiting for the Command Line Tools to finish installing..."
     until xcode-select -p >/dev/null 2>&1; do
       sleep 5
     done
-    echo "✅ Command Line Tools installed."
 
     # git ships with the CLT — confirm it is actually functional before we rely on it.
     if ! git --version >/dev/null 2>&1; then
-      echo "❌ git is still not available after installing the Command Line Tools." >&2
-      echo "   Finish the install manually, then re-run bootstrap:" >&2
-      echo "     xcode-select --install" >&2
-      echo "   or install the full tools with:" >&2
-      echo "     sudo xcode-select --reset && xcode-select --install" >&2
+      echo "Error: git is still unavailable. Run 'xcode-select --install' (or" >&2
+      echo "'sudo xcode-select --reset && xcode-select --install'), then re-run bootstrap." >&2
       exit 1
     fi
   elif ! command -v git >/dev/null 2>&1; then
-    echo "📦 Installing git..."
     run sudo dnf install -y git
   fi
 }
@@ -203,7 +167,7 @@ ensure_git() {
 install_repo() {
   ensure_git
 
-  echo "📥 Cloning or updating glimt repo (branch: $BRANCH)..."
+  echo "Fetching glimt ($BRANCH)..."
   if [[ -d "$REPO_DIR/.git" ]]; then
     run git -C "$REPO_DIR" fetch origin
     run git -C "$REPO_DIR" checkout "$BRANCH"
@@ -220,7 +184,7 @@ run_installer() {
   [[ "$OS_ID" == "macos" ]] && setup_script="setup-macos.sh"
 
   if [[ ! -f "$setup_script" ]]; then
-    echo "❌ $setup_script not found in $REPO_DIR" >&2
+    echo "Error: $setup_script not found in $REPO_DIR" >&2
     ls -la "$REPO_DIR"
     exit 1
   fi

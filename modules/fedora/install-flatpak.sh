@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="flatpak"
 ACTION="${1:-all}"
@@ -16,12 +16,12 @@ REMOTE_URL="https://flathub.org/repo/flathub.flatpakrepo"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
@@ -30,35 +30,35 @@ has_remote() {
 }
 
 install_deps() {
-  log "📦 Installing Flatpak..."
+  log "Installing Flatpak..."
   sudo dnf install -y flatpak
 }
 
 install_flatpak() {
-  log "🔧 Setting up Flathub remote..."
+  log "Setting up Flathub remote..."
   if ! has_remote; then
-    log "🌐 Adding Flathub remote..."
+    log "Adding Flathub remote..."
     sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
   else
-    log "✅ Flathub remote already added."
+    log "Flathub remote already added."
   fi
 }
 
 config_flatpak() {
-  log "⚙️  Ensuring Flathub is set up..."
+  log "Ensuring Flathub is set up..."
   if ! has_remote; then
     sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
   fi
-  log "✅ Flatpak is configured with Flathub."
+  log "Flatpak is configured with Flathub."
 }
 
 # Flatpak itself is a preinstalled system component on Fedora Workstation
 # (GNOME Software depends on it), so clean only removes the remote glimt added.
 clean_flatpak() {
-  log "🧹 Removing Flathub remote..."
+  log "Removing Flathub remote..."
   if command -v flatpak >/dev/null 2>&1 && has_remote; then
     if sudo flatpak remote-delete "$REMOTE_NAME"; then
-      log "✅ Flathub remote removed (flatpak itself is left installed)."
+      log "Flathub remote removed (flatpak itself is left installed)."
     else
       warn "Could not remove the $REMOTE_NAME remote (apps still installed from it?)"
     fi

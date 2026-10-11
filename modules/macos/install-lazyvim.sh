@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lazyvim"
 ACTION="${1:-all}"
@@ -50,7 +50,7 @@ install() {
   log "Cloning LazyVim starter..."
   git clone https://github.com/LazyVim/starter "$HOME_DIR/.config/nvim"
   rm -rf "$HOME_DIR/.config/nvim/.git"
-  log "✅ LazyVim installed. Run nvim and :Lazy sync"
+  log "LazyVim installed. Run nvim and :Lazy sync"
 }
 
 config() {
@@ -78,7 +78,7 @@ return {
   },
 }
 EOF
-  log "✅ Catppuccin plugin added and set as default colorscheme."
+  log "Catppuccin plugin added and set as default colorscheme."
 }
 
 clean() {
@@ -114,7 +114,7 @@ case "$ACTION" in
   clean)   clean ;;
   restore) restore ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean|restore]"
     exit 1
     ;;

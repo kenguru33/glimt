@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="1password"
 
@@ -68,7 +68,7 @@ config_1password() {
   if command -v 1password >/dev/null 2>&1 || rpm -q 1password >/dev/null 2>&1; then
     log "1Password is installed and ready."
   else
-    echo "❌ 1Password not found. Run install first."
+    echo "Error: 1Password not found. Run install first."
     exit 1
   fi
   verify_binary 1password --version

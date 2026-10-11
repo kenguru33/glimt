@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="kubectl"
 ACTION="${1:-all}"
@@ -22,12 +22,12 @@ COMPLETION_FILE="$PLUGIN_DIR/kubectl.zsh"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
@@ -40,9 +40,9 @@ ensure_dirs() {
 }
 
 deps() {
-  echo "📦 Checking dependencies..."
+  echo "Checking dependencies..."
   if ! command -v curl >/dev/null 2>&1; then
-    echo "➡️  Installing curl via dnf..."
+    echo "Installing curl via dnf..."
     sudo dnf install -y curl
   fi
 }
@@ -69,31 +69,31 @@ do_install() {
 
   verify_binary "$LOCAL_BIN/kubectl" version --client
 
-  echo "📄 Generating zsh completion"
+  echo "Generating zsh completion"
   # The redirect runs inside the user's shell, so the file is user-owned
   run_as_user sh -c '"$1" completion zsh > "$2"' _ "$LOCAL_BIN/kubectl" "$COMPLETION_FILE"
 
-  echo "✅ kubectl installed at $LOCAL_BIN/kubectl"
-  echo "✅ Completion at $COMPLETION_FILE"
+  echo "kubectl installed at $LOCAL_BIN/kubectl"
+  echo "Completion at $COMPLETION_FILE"
 }
 
 do_config() {
-  echo "📝 Installing kubectl.zsh config"
+  echo "Installing kubectl.zsh config"
   ensure_dirs
   if [[ -f "$TEMPLATE_FILE" ]]; then
     deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
-    echo "✅ $TARGET_FILE"
+    echo "$TARGET_FILE"
   else
-    echo "⚠️  Template not found: $TEMPLATE_FILE (skipping)"
+    echo "Warning: Template not found: $TEMPLATE_FILE (skipping)"
   fi
 }
 
 clean() {
-  echo "🧹 Cleaning kubectl setup"
+  echo "Cleaning kubectl setup"
   sudo -u "$REAL_USER" rm -f "$LOCAL_BIN/kubectl"
   sudo -u "$REAL_USER" rm -rf "$PLUGIN_DIR"
   sudo -u "$REAL_USER" rm -f "$TARGET_FILE"
-  echo "✅ Clean complete"
+  echo "Clean complete"
 }
 
 case "$ACTION" in
@@ -103,7 +103,7 @@ case "$ACTION" in
   config)  do_config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

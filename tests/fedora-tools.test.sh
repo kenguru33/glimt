@@ -45,7 +45,7 @@ test_fedora_tools_standard_header() {
   for m in "${FT_MODULES[@]}"; do
     f="$ROOT/modules/fedora/install-$m.sh"
     [[ "$(head -1 "$f")" == "#!/usr/bin/env bash" ]] || bad+=" $m(shebang)"
-    grep -qxF "trap 'echo \"❌ [\$MODULE_NAME] Error on line \$LINENO\" >&2' ERR" "$f" || bad+=" $m(trap)"
+    grep -qxF "trap 'echo \"[\$MODULE_NAME] error on line \$LINENO\" >&2' ERR" "$f" || bad+=" $m(trap)"
     grep -qx "MODULE_NAME=\"$m\"" "$f" || bad+=" $m(MODULE_NAME)"
   done
   [[ -z "$bad" ]] || fail "non-standard header:$bad"

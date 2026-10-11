@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="bat"
 ACTION="${1:-all}"
@@ -20,40 +20,40 @@ BAT_CONFIG_TEMPLATE="$SCRIPT_DIR/config/bat.config"  # sets --theme="Catppuccin 
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
 # === Step: deps ===
 install_deps() {
-  echo "📦 Installing bat and wget..."
+  echo "Installing bat and wget..."
   sudo dnf install -y bat wget
 }
 
 # === Step: install ===
 install_bat() {
-  echo "✅ Bat is installed via DNF (no symlink needed on Fedora)"
+  echo "Bat is installed via DNF (no symlink needed on Fedora)"
 
   if ! command -v bat >/dev/null 2>&1; then
-    echo "❌ bat command not found. Installing..."
+    echo "bat not found. Installing..."
     install_deps
   fi
 
-  echo "✅ Bat is ready: $(command -v bat)"
+  echo "Bat is ready: $(command -v bat)"
   verify_binary bat --version
 }
 
 # === Step: config ===
 config_bat() {
-  echo "🎨 Installing Catppuccin themes..."
+  echo "Installing Catppuccin themes..."
 
   if ! command -v bat >/dev/null 2>&1; then
-    echo "❌ bat command not found. Run 'install' first."
+    echo "Error: bat command not found. Run 'install' first."
     exit 1
   fi
 
@@ -70,34 +70,34 @@ config_bat() {
     
     if command -v curl >/dev/null 2>&1; then
       sudo -u "$REAL_USER" curl -fsSL -o "$theme_file" "$theme_url" || {
-        echo "⚠️  Failed to download Catppuccin ${variant} theme"
+        echo "Warning: Failed to download Catppuccin ${variant} theme"
         continue
       }
     elif command -v wget >/dev/null 2>&1; then
       sudo -u "$REAL_USER" wget --quiet --output-document="$theme_file" "$theme_url" || {
-        echo "⚠️  Failed to download Catppuccin ${variant} theme"
+        echo "Warning: Failed to download Catppuccin ${variant} theme"
         continue
       }
     else
-      echo "❌ Neither curl nor wget found. Cannot download themes."
+      echo "Error: Neither curl nor wget found. Cannot download themes."
       exit 1
     fi
   done
 
-  echo "🧹 Rebuilding theme cache..."
+  echo "Rebuilding theme cache..."
   sudo -u "$REAL_USER" bat cache --build || {
-    echo "⚠️  Failed to rebuild theme cache (themes may still work)"
+    echo "Warning: Failed to rebuild theme cache (themes may still work)"
   }
 
-  echo "⚙️ Setting default theme: $BAT_THEME_NAME"
+  echo "Setting default theme: $BAT_THEME_NAME"
   deploy_config "$BAT_CONFIG_TEMPLATE" "$BAT_CONFIG_FILE"
   
-  echo "✅ Catppuccin themes installed successfully"
+  echo "Catppuccin themes installed successfully"
 }
 
 # === Step: clean ===
 clean_bat() {
-  echo "🧹 Removing bat themes and config..."
+  echo "Removing bat themes and config..."
   BAT_CONFIG_DIR="$(sudo -u "$REAL_USER" bat --config-dir 2>/dev/null || echo "$HOME_DIR/.config/bat")"
   BAT_THEME_DIR="$BAT_CONFIG_DIR/themes"
   BAT_CONFIG_FILE="$BAT_CONFIG_DIR/config"
@@ -105,7 +105,7 @@ clean_bat() {
 
   sudo -u "$REAL_USER" rm -rf "$BAT_THEME_DIR" "$BAT_CONFIG_FILE" "$BAT_CACHE_DIR"
 
-  echo "✅ Bat config and themes removed."
+  echo "Bat config and themes removed."
   echo "ℹ️  To remove bat package: sudo dnf remove -y bat"
 }
 
@@ -117,7 +117,7 @@ case "$ACTION" in
   config)  config_bat ;;
   clean)   clean_bat ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

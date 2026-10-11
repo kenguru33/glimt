@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gravatar"
 ACTION="${1:-all}"
@@ -22,24 +22,24 @@ EMAIL=""
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
   if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-    echo "❌ This script is for Fedora/RHEL-based systems only."
+    echo "Error: This script is for Fedora/RHEL-based systems only."
     exit 1
   fi
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 # === Dependencies ===
 install_dependencies() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y curl
   # Check if gum is available, install if not
   if ! command -v gum &>/dev/null; then
     if sudo dnf install -y gum 2>/dev/null; then
-      echo "✅ Installed gum"
+      echo "Installed gum"
     else
-      echo "⚠️  gum not available in repos, will use basic prompts"
+      echo "Warning: gum not available in repos, will use basic prompts"
     fi
   fi
 }
@@ -56,35 +56,35 @@ prompt_user_email() {
 
   if command -v gum &>/dev/null; then
     gum format --theme=dark <<EOF
-# 🖼️ Set your GNOME/GDM Avatar
+# Set your GNOME/GDM Avatar
 
 This will fetch your Gravatar image using the email address you provide.
 EOF
 
     while true; do
-      EMAIL=$(gum input --prompt "📧 Email address: " --placeholder "user@example.com" --width 50)
+      EMAIL=$(gum input --prompt "Email address: " --placeholder "user@example.com" --width 50)
       if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
         break
       else
-        gum style --foreground 1 "❌ Invalid email format. Please try again."
+        gum style --foreground 1 "Invalid email format. Please try again."
       fi
     done
   else
-    echo "🖼️ Set your GNOME/GDM Avatar"
+    echo "Set your GNOME/GDM Avatar"
     echo "This will fetch your Gravatar image using the email address you provide."
     while true; do
-      read -rp "📧 Email address: " EMAIL
+      read -rp "Email address: " EMAIL
       if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
         break
       else
-        echo "❌ Invalid email format. Please try again."
+        echo "Error: Invalid email format. Please try again."
       fi
     done
   fi
 
   sudo -u "$REAL_USER" mkdir -p "$CONFIG_DIR"
   echo "gravatar_email=\"$EMAIL\"" | sudo -u "$REAL_USER" tee "$CONFIG_FILE" > /dev/null
-  echo "✅ Saved to $CONFIG_FILE"
+  echo "Saved to $CONFIG_FILE"
 }
 
 # === Load email from config, or prompt ===
@@ -121,16 +121,16 @@ config_avatar() {
   fi
   sudo -u "$REAL_USER" mv -f "$FACE_IMAGE.tmp" "$FACE_IMAGE"
   chown "$REAL_USER:$REAL_USER" "$FACE_IMAGE"
-  echo "🖼️  Saved avatar to $FACE_IMAGE"
+  echo "Saved avatar to $FACE_IMAGE"
 
   # GNOME user picture
   if command -v gsettings &>/dev/null; then
-    echo "🔧 Setting GNOME account picture..."
+    echo "Setting GNOME account picture..."
     sudo -u "$REAL_USER" gsettings set org.gnome.desktop.account-service account-picture "$FACE_IMAGE" 2>/dev/null || true
   fi
 
   # GDM login avatar
-  echo "🔧 Setting GDM login avatar..."
+  echo "Setting GDM login avatar..."
   sudo mkdir -p "$GDM_ICON_DIR"
   sudo cp "$FACE_IMAGE" "$GDM_ICON_DIR/$REAL_USER"
   sudo chmod 644 "$GDM_ICON_DIR/$REAL_USER"
@@ -143,17 +143,17 @@ config_avatar() {
 Icon=$GDM_ICON_DIR/$REAL_USER
 EOF
 
-  echo "✅ GNOME and GDM avatar updated."
+  echo "GNOME and GDM avatar updated."
 }
 
 # === Clean avatar ===
 clean_avatar() {
-  echo "🧹 Removing avatar and config..."
+  echo "Removing avatar and config..."
   sudo -u "$REAL_USER" rm -f "$FACE_IMAGE"
   sudo -u "$REAL_USER" rm -f "$CONFIG_FILE"
   sudo rm -f "$GDM_ICON_DIR/$REAL_USER"
   sudo rm -f "/var/lib/AccountsService/users/$REAL_USER"
-  echo "✅ Avatar and config cleaned."
+  echo "Avatar and config cleaned."
 }
 
 # === Entry Point ===
@@ -166,7 +166,7 @@ case "$ACTION" in
     install_dependencies
     ;;
   install)
-    echo "📦 No-op install step."
+    echo "No-op install step."
     ;;
   config)
     config_avatar

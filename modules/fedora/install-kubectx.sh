@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="kubectx"
 ACTION="${1:-all}"
@@ -21,12 +21,12 @@ CONFIG_DEST="$HOME_DIR/.zsh/config/kubectx.zsh"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
@@ -50,7 +50,7 @@ deps() {
 
 # === install ===
 install() {
-  echo "📦 Installing kubectx and kubens from GitHub releases..."
+  echo "Installing kubectx and kubens from GitHub releases..."
 
   ARCH_NORM="$(normalize_arch_kubectx)"
   BIN_DIR="$HOME_DIR/.local/bin"
@@ -83,24 +83,24 @@ install() {
 
   verify_binary kubectx
   verify_binary kubens
-  log "✅ Installed kubectx and kubens to $BIN_DIR"
+  log "Installed kubectx and kubens to $BIN_DIR"
 }
 
 # === config ===
 config() {
-  echo "⚙️  Copying Zsh config for kubectx..."
+  echo "Copying Zsh config for kubectx..."
 
   deploy_config "$CONFIG_SRC" "$CONFIG_DEST"
 
-  echo "✅ Config copied to $CONFIG_DEST"
+  echo "Config copied to $CONFIG_DEST"
 }
 
 # === clean ===
 clean() {
-  echo "🧹 Removing kubectx and related config..."
+  echo "Removing kubectx and related config..."
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/kubectx" "$HOME_DIR/.local/bin/kubens"
   sudo -u "$REAL_USER" rm -f "$CONFIG_DEST"
-  echo "✅ Cleaned up"
+  echo "Cleaned up"
 }
 
 # === entry point ===

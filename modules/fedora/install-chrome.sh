@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="chrome"
 ACTION="${1:-all}"
@@ -15,12 +15,12 @@ REPO_FILE="/etc/yum.repos.d/google-chrome.repo"
 if [[ -r /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This script supports Fedora/RHEL-based systems only."
+  echo "Error: This script supports Fedora/RHEL-based systems only."
   exit 1
 fi
 

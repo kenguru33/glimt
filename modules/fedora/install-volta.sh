@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="volta"
 ACTION="${1:-all}"
@@ -20,21 +20,21 @@ VOLTA_BIN="$VOLTA_HOME_DIR/bin/volta"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
 # === Step: deps ===
 deps() {
-  echo "📦 Checking for curl..."
+  echo "Checking for curl..."
 
   if ! command -v curl >/dev/null; then
-    echo "➡️  Installing curl via dnf..."
+    echo "Installing curl via dnf..."
     sudo dnf install -y curl
   fi
 }
@@ -46,7 +46,7 @@ install() {
   if [[ ! -x "$VOLTA_BIN" ]]; then
     # Run the installer itself as the user (not the caller) so ~/.volta is theirs
     curl -fsSL https://get.volta.sh | run_as_user env VOLTA_HOME="$VOLTA_HOME_DIR" bash -s -- --skip-setup
-    echo "✅ Volta installed to ~/.volta"
+    echo "Volta installed to ~/.volta"
   else
     echo "⏭️  Volta already installed"
   fi
@@ -56,28 +56,28 @@ install() {
   echo "⬇️ Installing latest Node.js via Volta..."
   run_as_user env VOLTA_HOME="$VOLTA_HOME_DIR" PATH="$VOLTA_HOME_DIR/bin:$PATH" \
     "$VOLTA_BIN" install node
-  echo "✅ Node.js installed via Volta"
+  echo "Node.js installed via Volta"
 }
 
 # === Step: config ===
 config() {
-  echo "📝 Installing volta.zsh config from template..."
+  echo "Installing volta.zsh config from template..."
 
   deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
-  echo "✅ Installed $TARGET_FILE"
+  echo "Installed $TARGET_FILE"
 }
 
 # === Step: clean ===
 clean() {
-  echo "🧹 Cleaning Volta setup..."
+  echo "Cleaning Volta setup..."
 
-  echo "❌ Removing ~/.volta"
+  echo "Removing ~/.volta"
   sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.volta"
 
-  echo "❌ Removing volta.zsh config"
+  echo "Removing volta.zsh config"
   sudo -u "$REAL_USER" rm -f "$TARGET_FILE"
 
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # === Entry Point ===
@@ -92,7 +92,7 @@ install) install ;;
 config) config ;;
 clean) clean ;;
 *)
-  echo "❌ Unknown action: $ACTION"
+  echo "[$MODULE_NAME] unknown action: $ACTION" >&2
   echo "Usage: $0 [all|deps|install|config|clean]"
   exit 1
   ;;

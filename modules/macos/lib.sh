@@ -29,8 +29,8 @@ HOME_DIR="${HOME_DIR:-$(eval echo "~$REAL_USER")}"
 
 # === Logging ===
 log()  { printf "[%s] %s\n"    "${MODULE_NAME:-glimt}" "$*"; }
-warn() { printf "⚠️  [%s] %s\n" "${MODULE_NAME:-glimt}" "$*" >&2; }
-die()  { printf "❌ [%s] %s\n"  "${MODULE_NAME:-glimt}" "$*" >&2; exit 1; }
+warn() { printf "[%s] warning: %s\n" "${MODULE_NAME:-glimt}" "$*" >&2; }
+die()  { printf "[%s] error: %s\n"  "${MODULE_NAME:-glimt}" "$*" >&2; exit 1; }
 
 # === sudo wrapper: use askpass when the orchestrator provides one ===
 # setup-macos.sh captures the password once and exports SUDO_ASKPASS. Modules
@@ -200,5 +200,5 @@ verify_binary() {
     warn "$bin found but '$bin $*' failed"
     return 0
   fi
-  log "✅ $bin OK"
+  log "$bin OK"
 }

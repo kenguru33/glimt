@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gnome-terminal-theme"
 ACTION="${1:-all}"
@@ -56,7 +56,7 @@ install() {
 
   run_as_user gsettings set org.gnome.Ptyxis interface-style 'dark'
 
-  log "✅ Catppuccin Mocha applied to all Ptyxis profiles"
+  log "Catppuccin Mocha applied to all Ptyxis profiles"
 }
 
 # === config ===
@@ -91,7 +91,7 @@ clean() {
 
   run_as_user gsettings reset org.gnome.Ptyxis interface-style
 
-  log "✅ Ptyxis profiles reset"
+  log "Ptyxis profiles reset"
 }
 
 # === Entry Point ===
@@ -102,7 +102,7 @@ case "$ACTION" in
   config)  config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

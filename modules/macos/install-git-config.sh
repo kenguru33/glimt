@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="git-config"
 ACTION="${1:-all}"
@@ -32,24 +32,24 @@ prompt_git_config() {
   # mis-renders here (duplicate prompt) under the setup orchestration. read is
   # robust regardless of terminal/stdin state and asks exactly once.
   while true; do
-    read -rp "📝 Full name: " name < /dev/tty
+    read -rp "Full name: " name < /dev/tty
     [[ -n "$name" ]] && break
     printf '  Name cannot be empty\n' >&2
   done
 
   while true; do
-    read -rp "📧 Email: " email < /dev/tty
+    read -rp "Email: " email < /dev/tty
     [[ "$email" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
     printf '  Invalid email\n' >&2
   done
 
-  read -rp "🖊  Default editor [nvim]: " editor < /dev/tty
+  read -rp "Default editor [nvim]: " editor < /dev/tty
   editor="${editor:-nvim}"
-  read -rp "🌿 Default branch [main]: " branch < /dev/tty
+  read -rp "Default branch [main]: " branch < /dev/tty
   branch="${branch:-main}"
 
   local ans
-  read -rp "🔁 Use rebase on pull? [y/N]: " ans < /dev/tty
+  read -rp "Use rebase on pull? [y/N]: " ans < /dev/tty
   local rebase=false
   [[ "$ans" =~ ^[Yy]$ ]] && rebase=true
 
@@ -146,7 +146,7 @@ case "$ACTION" in
   reconfigure)  ACTION=reconfigure; load_git_config; configure_git; install_git_completion_zsh; config_git_shell ;;
   clean)        clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|prompt|deps|install|config|reconfigure|clean]"
     exit 1
     ;;

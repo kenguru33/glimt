@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 # === Metadata ===
 MODULE_NAME="zellij"
@@ -34,17 +34,17 @@ fedora_guard() {
 DEPS=(curl tar wl-clipboard)
 
 install_deps() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y "${DEPS[@]}"
 }
 
 install() {
-  echo "📦 Installing Zellij..."
+  echo "Installing Zellij..."
 
   run_as_user mkdir -p "$HOME_DIR/.local/bin"
 
   if [[ -x "$ZELLIJ_BIN" ]]; then
-    echo "✔️ Zellij already installed."
+    echo "Zellij already installed."
     return
   fi
 
@@ -67,33 +67,33 @@ install() {
   run_as_user install -m 0755 "$tmp_dir/zellij" "$ZELLIJ_BIN"
   run_as_user rm -rf "$tmp_dir"
 
-  echo "✅ Installed to $ZELLIJ_BIN"
+  echo "Installed to $ZELLIJ_BIN"
   PATH="$HOME_DIR/.local/bin:$PATH" verify_binary zellij --version
 }
 
 config() {
-  echo "⚙️ Configuring Zellij theme..."
+  echo "Configuring Zellij theme..."
   deploy_config "$KDL_TEMPLATE" "$ZELLIJ_CONFIG_FILE"
 
-  echo "📁 Copying Zsh config template..."
+  echo "Copying Zsh config template..."
   deploy_config "$LOCAL_CONFIG_TEMPLATE" "$ZSH_TARGET_CONFIG"
 }
 
 clean() {
-  echo "🧹 Cleaning Zellij install..."
+  echo "Cleaning Zellij install..."
 
   # Use if-blocks, not `[[ ]] && rm`: a false test as the last statement would
   # return 1 and abort the caller under set -e when the file is already gone.
   if [[ -f "$ZELLIJ_BIN" ]]; then
     run_as_user rm -f "$ZELLIJ_BIN"
-    echo "🗑️ Removed binary: $ZELLIJ_BIN"
+    echo "Removed binary: $ZELLIJ_BIN"
   fi
   # Only remove the config glimt deployed (unless the user edited it), and
   # keep any layouts/themes the user added
   if [[ -f "$ZELLIJ_CONFIG_FILE" ]]; then
     if cmp -s "$ZELLIJ_CONFIG_FILE" "$KDL_TEMPLATE"; then
       run_as_user rm -f "$ZELLIJ_CONFIG_FILE"
-      echo "🗑️ Removed config: $ZELLIJ_CONFIG_FILE"
+      echo "Removed config: $ZELLIJ_CONFIG_FILE"
     else
       echo "ℹ️  Kept edited config: $ZELLIJ_CONFIG_FILE"
     fi
@@ -103,7 +103,7 @@ clean() {
   fi
   if [[ -f "$ZSH_TARGET_CONFIG" ]]; then
     run_as_user rm -f "$ZSH_TARGET_CONFIG"
-    echo "🗑️ Removed Zsh config: $ZSH_TARGET_CONFIG"
+    echo "Removed Zsh config: $ZSH_TARGET_CONFIG"
   fi
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="pbcopy"
 ACTION="${1:-all}"
@@ -13,12 +13,12 @@ source "$GLIMT_LIB"
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: Cannot detect OS. /etc/os-release missing."
   exit 1
 fi
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
-  echo "❌ This module supports Fedora/RHEL-based systems only."
+  echo "Error: This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
 
@@ -26,7 +26,7 @@ fi
 DEPS=(wl-clipboard xclip)
 
 install_deps() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y "${DEPS[@]}"
 }
 
@@ -39,12 +39,12 @@ install() {
   if (( ${#missing[@]} > 0 )); then
     install_deps
   else
-    echo "✅ wl-clipboard and xclip are installed"
+    echo "wl-clipboard and xclip are installed"
   fi
 }
 
 config() {
-  echo "⚙️  Creating pbcopy/pbpaste wrappers in $HOME_DIR/.local/bin ..."
+  echo "Creating pbcopy/pbpaste wrappers in $HOME_DIR/.local/bin ..."
   BIN_DIR="$HOME_DIR/.local/bin"
   run_as_user mkdir -p "$BIN_DIR"
 
@@ -82,7 +82,7 @@ EOF
 }
 
 clean() {
-  echo "🧹 Removing pbcopy/pbpaste wrappers..."
+  echo "Removing pbcopy/pbpaste wrappers..."
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/pbcopy" "$HOME_DIR/.local/bin/pbpaste" || true
 
   # wl-clipboard/xclip may predate glimt and other tools rely on them, so
@@ -123,6 +123,6 @@ case "$ACTION" in
     ;;
 esac
 
-echo "✅ Done ($MODULE_NAME: $ACTION)"
+echo "Done ($MODULE_NAME: $ACTION)"
 
 

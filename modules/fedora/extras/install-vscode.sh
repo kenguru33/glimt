@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="vscode"
 
@@ -27,12 +27,12 @@ fedora_guard() {
 # Dependencies + repo
 # ------------------------------------------------------------
 deps() {
-  echo "🔧 [$MODULE_NAME] Installing dependencies and VS Code repo…"
+  echo "[$MODULE_NAME] Installing dependencies and VS Code repo…"
 
   sudo dnf install -y curl
 
   if [[ ! -f "$REPO_FILE" ]]; then
-    echo "➕ Adding VS Code yum repo…"
+    echo "Adding VS Code yum repo…"
 
     sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
 
@@ -53,9 +53,9 @@ EOF
 # Install
 # ------------------------------------------------------------
 install_pkg() {
-  echo "📦 [$MODULE_NAME] Installing VS Code…"
+  echo "[$MODULE_NAME] Installing VS Code…"
   sudo dnf install -y code
-  echo "✅ VS Code installed."
+  echo "VS Code installed."
   verify_binary code --version
 }
 
@@ -63,14 +63,14 @@ install_pkg() {
 # Config (placeholder)
 # ------------------------------------------------------------
 config() {
-  echo "⚙️  [$MODULE_NAME] No extra VS Code config yet (package defaults)."
+  echo "[$MODULE_NAME] No extra VS Code config yet (package defaults)."
 }
 
 # ------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------
 clean() {
-  echo "🧹 [$MODULE_NAME] Removing VS Code and repo…"
+  echo "[$MODULE_NAME] Removing VS Code and repo…"
   sudo dnf remove -y code || true
   sudo rm -f "$REPO_FILE"
 }
@@ -82,7 +82,7 @@ all() {
   deps
   install_pkg
   config
-  echo "✅ [$MODULE_NAME] Done."
+  echo "[$MODULE_NAME] Done."
 }
 
 # ------------------------------------------------------------

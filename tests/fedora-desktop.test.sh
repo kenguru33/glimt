@@ -294,7 +294,7 @@ test_fedora_desktop_module_headers() {
     gnome-terminal-theme gravatar just-perfection norwegian-mac-keyboard papirus-icon-theme; do
     f="$ROOT/$FD/install-$m.sh"
     [[ "$(head -1 "$f")" == "#!/usr/bin/env bash" ]] || bad+=" $m:shebang"
-    grep -qxF "trap 'echo \"❌ [\$MODULE_NAME] Error on line \$LINENO\" >&2' ERR" "$f" || bad+=" $m:trap"
+    grep -qxF "trap 'echo \"[\$MODULE_NAME] error on line \$LINENO\" >&2' ERR" "$f" || bad+=" $m:trap"
     grep -qx "MODULE_NAME=\"$m\"" "$f" || bad+=" $m:MODULE_NAME"
     grep -qx 'ACTION="${1:-all}"' "$f" || bad+=" $m:ACTION"
   done

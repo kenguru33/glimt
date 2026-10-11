@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="zsh"
 ACTION="${1:-all}"
@@ -25,16 +25,16 @@ declare -A PLUGINS=(
 
 # === Step: deps ===
 deps() {
-  echo "📦 Installing Zsh dependencies..."
+  echo "Installing Zsh dependencies..."
   sudo dnf install -y zsh git
 
-  echo "🛠 Ensuring $LOCAL_BIN exists..."
+  echo "Ensuring $LOCAL_BIN exists..."
   run_as_user mkdir -p "$LOCAL_BIN"
 }
 
 # === Step: install ===
 install() {
-  echo "🔌 Installing or updating Zsh plugins..."
+  echo "Installing or updating Zsh plugins..."
   run_as_user mkdir -p "$PLUGIN_DIR"
 
   for name in "${!PLUGINS[@]}"; do
@@ -42,21 +42,21 @@ install() {
     dir="$PLUGIN_DIR/$name"
 
     if [[ -d "$dir/.git" ]]; then
-      echo "🔄 Updating $name..."
+      echo "Updating $name..."
       run_as_user git -C "$dir" pull --quiet --rebase
-      echo "✅ Updated $name"
+      echo "Updated $name"
     else
       echo "⬇️  Installing $name..."
       rm -rf "$dir"
       run_as_user git clone --depth=1 "$repo" "$dir"
-      echo "✅ Installed $name"
+      echo "Installed $name"
     fi
   done
 
-  echo "🛠 Ensuring Zsh is default shell for $REAL_USER..."
+  echo "Ensuring Zsh is default shell for $REAL_USER..."
   if [[ "$(getent passwd "$REAL_USER" | cut -d: -f7)" != "$(command -v zsh)" ]]; then
     sudo chsh -s "$(command -v zsh)" "$REAL_USER"
-    echo "✅ Default shell set to Zsh"
+    echo "Default shell set to Zsh"
   else
     echo "⏭️  Zsh already default shell"
   fi
@@ -64,33 +64,33 @@ install() {
 
 # === Step: config ===
 config() {
-  echo "🔧 Installing Zsh plugin configs..."
+  echo "Installing Zsh plugin configs..."
   for name in "${CONFIG_TEMPLATES[@]}"; do
     deploy_config "$SCRIPT_DIR/config/$name.zsh" "$CONFIG_DIR/$name.zsh"
   done
 
-  echo "🔧 Installing .zshrc template..."
+  echo "Installing .zshrc template..."
   deploy_config "$ZSHRC_TEMPLATE" "$ZSHRC_FILE"
-  echo "✅ Installed new .zshrc"
+  echo "Installed new .zshrc"
 }
 
 # === Step: clean ===
 clean() {
-  echo "🧹 Cleaning Zsh setup..."
+  echo "Cleaning Zsh setup..."
 
   # Only remove what this module created — other modules (fzf, gh, kubectl,
   # eza, ...) also keep their plugins and configs under ~/.zsh.
-  echo "❌ Removing plugins from $PLUGIN_DIR"
+  echo "Removing plugins from $PLUGIN_DIR"
   for name in "${!PLUGINS[@]}"; do
     rm -rf "${PLUGIN_DIR:?}/$name"
   done
 
-  echo "❌ Removing Zsh config files"
+  echo "Removing Zsh config files"
   for name in "${CONFIG_TEMPLATES[@]}"; do
     rm -f "$CONFIG_DIR/$name.zsh"
   done
 
-  echo "❌ Removing .zshrc"
+  echo "Removing .zshrc"
   rm -f "$ZSHRC_FILE"
 
   # Changing the login shell back is left to the user (we can't know which
@@ -102,7 +102,7 @@ clean() {
     warn "Change it back with: sudo chsh -s /bin/bash $REAL_USER"
   fi
 
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # === Entry Point ===
@@ -113,7 +113,7 @@ case "$ACTION" in
   config) config ;;
   clean)  clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

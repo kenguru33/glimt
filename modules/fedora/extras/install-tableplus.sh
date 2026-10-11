@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="tableplus"
 
@@ -26,12 +26,12 @@ TABLEPLUS_GPG_KEY_URL="https://yum.tableplus.com/apt.tableplus.com.gpg.key"
 TABLEPLUS_REPOFILE_URL="https://yum.tableplus.com/rpm/x86_64/tableplus.repo"
 
 install_deps() {
-  echo "📦 Installing dependencies..."
+  echo "Installing dependencies..."
   sudo dnf install -y dnf-plugins-core
 }
 
 install_tableplus() {
-  echo "🧰 Installing TablePlus..."
+  echo "Installing TablePlus..."
 
   local arch
   arch="$(normalize_arch 2>/dev/null || true)"
@@ -42,14 +42,14 @@ install_tableplus() {
   fi
 
   if command -v tableplus &>/dev/null || rpm -q tableplus &>/dev/null; then
-    echo "✅ TablePlus is already installed."
+    echo "TablePlus is already installed."
     return
   fi
 
-  echo "🔑 Importing GPG key..."
+  echo "Importing GPG key..."
   sudo rpm -v --import "$TABLEPLUS_GPG_KEY_URL"
 
-  echo "📁 Adding TablePlus repository..."
+  echo "Adding TablePlus repository..."
   if [[ -f "$TABLEPLUS_REPO" ]]; then
     echo "ℹ️  TablePlus repo already exists, removing old one..."
     sudo rm -f "$TABLEPLUS_REPO"
@@ -61,20 +61,20 @@ install_tableplus() {
   echo "⬇️  Installing TablePlus..."
   sudo dnf install -y tableplus
 
-  echo "✅ TablePlus installed."
+  echo "TablePlus installed."
 }
 
 config_tableplus() {
-  echo "⚙️  Configuring TablePlus (no Fedora-specific tweaks yet)..."
+  echo "Configuring TablePlus (no Fedora-specific tweaks yet)..."
 }
 
 clean_tableplus() {
-  echo "🧹 Removing TablePlus..."
+  echo "Removing TablePlus..."
   sudo dnf remove -y tableplus || true
   if [[ -f "$TABLEPLUS_REPO" ]]; then
     sudo rm -f "$TABLEPLUS_REPO"
   fi
-  echo "✅ TablePlus removed."
+  echo "TablePlus removed."
 }
 
 fedora_guard

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="dotnet-userspace"
 
@@ -86,7 +86,7 @@ ENVEOF
 
   cat <<MSG
 
-✅ .NET userspace installation complete.
+.NET userspace installation complete.
 
 IMPORTANT:
 • Log OUT and IN again (required for GUI apps like Rider)
@@ -125,7 +125,7 @@ clean_dotnet() {
 
   cat <<MSG
 
-✅ Userspace .NET fully removed.
+Userspace .NET fully removed.
 
 IMPORTANT:
 • Log OUT and IN again to purge GUI environment

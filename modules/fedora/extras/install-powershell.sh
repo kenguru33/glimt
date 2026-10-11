@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="powershell"
 
@@ -25,14 +25,14 @@ MS_PROD_REPO="/etc/yum.repos.d/microsoft-prod.repo"
 # ------------------------------------------------------------
 fedora_guard() {
   [[ -r /etc/os-release ]] || {
-    echo "❌ /etc/os-release missing"
+    echo "Error: /etc/os-release missing"
     exit 1
   }
 
   . /etc/os-release
 
   [[ "$ID" == "fedora" || "$ID" == "rhel" || "${ID_LIKE:-}" == *"fedora"* ]] || {
-    echo "❌ Fedora/RHEL-based systems only."
+    echo "Error: Fedora/RHEL-based systems only."
     exit 1
   }
 }
@@ -49,7 +49,7 @@ arch_supported() {
 # Dependencies + repo
 # ------------------------------------------------------------
 deps() {
-  echo "🔧 [$MODULE_NAME] Installing dependencies and Microsoft repo…"
+  echo "[$MODULE_NAME] Installing dependencies and Microsoft repo…"
   arch_supported || return 0
 
   sudo dnf install -y curl
@@ -60,7 +60,7 @@ deps() {
   fi
 
   if [[ ! -f "$REPO_FILE" ]]; then
-    echo "➕ Adding Microsoft PowerShell yum repo…"
+    echo "Adding Microsoft PowerShell yum repo…"
     sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
   else
     echo "ℹ️  Refreshing Microsoft PowerShell repo definition…"
@@ -89,26 +89,26 @@ install_pkg() {
     echo "⬆️  [$MODULE_NAME] Upgrading PowerShell to the latest release…"
     sudo dnf upgrade -y powershell
   else
-    echo "📦 [$MODULE_NAME] Installing PowerShell…"
+    echo "[$MODULE_NAME] Installing PowerShell…"
     sudo dnf install -y powershell
   fi
 
   verify_binary pwsh --version || true
-  echo "✅ PowerShell $(rpm -q --qf '%{VERSION}' powershell 2>/dev/null || echo '?') installed."
+  echo "PowerShell $(rpm -q --qf '%{VERSION}' powershell 2>/dev/null || echo '?') installed."
 }
 
 # ------------------------------------------------------------
 # Config (placeholder)
 # ------------------------------------------------------------
 config() {
-  echo "⚙️  [$MODULE_NAME] No extra PowerShell config (package defaults)."
+  echo "[$MODULE_NAME] No extra PowerShell config (package defaults)."
 }
 
 # ------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------
 clean() {
-  echo "🧹 [$MODULE_NAME] Removing PowerShell…"
+  echo "[$MODULE_NAME] Removing PowerShell…"
   sudo dnf remove -y powershell || true
   # Only remove the repo glimt added; leave Microsoft's own repo package alone.
   sudo rm -f "$REPO_FILE"
@@ -121,7 +121,7 @@ all() {
   deps
   install_pkg
   config
-  echo "✅ [$MODULE_NAME] Done."
+  echo "[$MODULE_NAME] Done."
 }
 
 # ------------------------------------------------------------

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="fzf"
 ACTION="${1:-all}"
@@ -18,57 +18,57 @@ TARGET_FILE="$CONFIG_DIR/fzf.zsh"
 
 # === Step: deps ===
 deps() {
-  echo "📦 Installing fzf dependencies..."
+  echo "Installing fzf dependencies..."
   sudo dnf install -y fzf bat fd-find curl unzip
 
-  echo "🛠 Ensuring $LOCAL_BIN exists..."
+  echo "Ensuring $LOCAL_BIN exists..."
   run_as_user mkdir -p "$LOCAL_BIN"
 }
 
 # === Step: install ===
 install() {
-  echo "🔌 Installing or updating fzf-tab..."
+  echo "Installing or updating fzf-tab..."
 
   if [[ -d "$PLUGIN_DIR/.git" ]]; then
-    echo "🔄 Updating fzf-tab..."
+    echo "Updating fzf-tab..."
     run_as_user git -C "$PLUGIN_DIR" pull --quiet --rebase
-    echo "✅ Updated fzf-tab"
+    echo "Updated fzf-tab"
   else
     echo "⬇️  Installing fzf-tab..."
     rm -rf "$PLUGIN_DIR"
     run_as_user mkdir -p "$(dirname "$PLUGIN_DIR")"
     run_as_user git clone --depth=1 https://github.com/Aloxaf/fzf-tab.git "$PLUGIN_DIR"
-    echo "✅ Installed fzf-tab"
+    echo "Installed fzf-tab"
   fi
 }
 
 # === Step: config ===
 config() {
-  echo "♻️ Replacing fzf.zsh config from template..."
+  echo "Replacing fzf.zsh config from template..."
 
-  echo "🔍 Template: $TEMPLATE_FILE"
-  echo "📁 Target:   $TARGET_FILE"
+  echo "Template: $TEMPLATE_FILE"
+  echo "Target:   $TARGET_FILE"
 
   if [[ ! -f "$TEMPLATE_FILE" ]]; then
-    echo "❌ Template file not found: $TEMPLATE_FILE"
+    echo "Error: Template file not found: $TEMPLATE_FILE"
     exit 1
   fi
 
   deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
-  echo "✅ Replaced $TARGET_FILE"
+  echo "Replaced $TARGET_FILE"
 }
 
 # === Step: clean ===
 clean() {
-  echo "🧹 Cleaning FZF setup..."
+  echo "Cleaning FZF setup..."
 
-  echo "❌ Removing fzf-tab plugin"
+  echo "Removing fzf-tab plugin"
   rm -rf "$PLUGIN_DIR"
 
-  echo "❌ Removing fzf.zsh config"
+  echo "Removing fzf.zsh config"
   rm -f "$TARGET_FILE"
 
-  echo "✅ Clean complete."
+  echo "Clean complete."
 }
 
 # === Entry Point ===
@@ -79,7 +79,7 @@ case "$ACTION" in
   config)  config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

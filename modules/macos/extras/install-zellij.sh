@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="zellij"
 ACTION="${1:-all}"
@@ -63,7 +63,7 @@ mouse_mode true
 osc8_hyperlinks true
 EOF
 
-  log "✅ Theme written to $ZELLIJ_CONFIG_FILE"
+  log "Theme written to $ZELLIJ_CONFIG_FILE"
 
   log "Deploying zellij.zsh config..."
   mkdir -p "$ZSH_CONFIG_DIR"
@@ -85,7 +85,7 @@ case "$ACTION" in
   config)  config ;;
   clean)   clean ;;
   *)
-    echo "❌ Unknown action: $ACTION"
+    echo "[$MODULE_NAME] unknown action: $ACTION" >&2
     echo "Usage: $0 [all|deps|install|config|clean]"
     exit 1
     ;;

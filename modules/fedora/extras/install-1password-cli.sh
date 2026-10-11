@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="1password-cli"
 
@@ -68,7 +68,7 @@ config_cli() {
   if command -v op >/dev/null 2>&1; then
     log "1Password CLI is installed and ready."
   else
-    echo "❌ 1Password CLI not found. Run install first."
+    echo "Error: 1Password CLI not found. Run install first."
     exit 1
   fi
   verify_binary op --version

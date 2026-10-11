@@ -113,7 +113,7 @@ Every module header must follow this pattern:
 ```bash
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="my-module"
 ACTION="${1:-all}"
