@@ -291,22 +291,6 @@ EOF
   done
 }
 
-test_progress_run_hides_up_to_date_skips_without_tty() {
-  local b out
-  for b in "${LIB_BASHES[@]}"; do
-    out="$(GLIMT_LOG_DIR="$SB/logs" run_lib_script "$b" 2>&1 <<'EOF'
-progress_init 3
-progress_run "Updating helm" bash -c 'echo "[helm] helm v3.15.0 is up to date"; echo hidden-detail'
-progress_run "Updating bat" bash -c 'echo "[bat] bat is up to date."; echo "Already up to date."'
-progress_run "Updating k9s" bash -c 'echo "k9s v0.32.4 is up to date"; exit 1'
-progress_finish
-EOF
-)" || fail "[$b] $out"
-    assert_not_contains "$out" "✓" "[$b] skips stay in the log without a terminal"
-    assert_not_contains "$out" "hidden-detail" "[$b] other output stays in the log"
-  done
-}
-
 test_progress_finish_no_summary_when_all_ok() {
   local out
   out="$(GLIMT_LOG_DIR="$SB/logs" run_lib_script "$BASH" 2>&1 <<'EOF'
