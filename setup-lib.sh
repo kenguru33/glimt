@@ -163,19 +163,38 @@ glimt_changes() {
 }
 
 # === Header ===
-glimt_banner() {
-  local subtitle="${1:-}"
-  clear 2>/dev/null || true
-  if command -v gum >/dev/null 2>&1; then
-    echo
-    gum style --bold --padding "0 2" "glimt"
-    [[ -n "$subtitle" ]] && gum style --faint --padding "0 2" "$subtitle"
-    echo
+# glimt_banner [subtitle] →
+#
+#   glimt  Fedora post-install setup
+#   e1e4a84 · Fedora Linux 43 · bernt@laptop
+#   ────────────────────────────────────────
+_glimt_os_name() {
+  if [[ "${GLIMT_OS:-$(uname -s)}" == "Darwin" ]]; then
+    echo "macOS $(sw_vers -productVersion 2>/dev/null)"
+  elif [[ -r /etc/os-release ]]; then
+    ( . /etc/os-release && echo "${PRETTY_NAME:-${NAME:-Linux}}" )
   else
-    printf '\nglimt\n'
-    [[ -n "$subtitle" ]] && echo "$subtitle"
-    echo
+    uname -s
   fi
+}
+
+glimt_banner() {
+  local subtitle="${1:-}" root rev meta rule
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  rev="$(git -C "$root" rev-parse --short HEAD 2>/dev/null)" || rev=""
+  meta="${rev:+$rev · }$(_glimt_os_name) · $(id -un)@$(hostname -s 2>/dev/null || hostname)"
+  printf -v rule '%*s' 40 ''
+  rule="${rule// /─}"
+  clear 2>/dev/null || true
+  echo
+  if [[ -z "${NO_COLOR:-}" ]] && _progress_tty; then
+    printf '  \033[1mglimt\033[0m%s\n' "${subtitle:+  $subtitle}"
+    printf '  \033[2m%s\033[0m\n' "$meta"
+    printf '  \033[2m%s\033[0m\n' "$rule"
+  else
+    printf '  glimt%s\n  %s\n  %s\n' "${subtitle:+  $subtitle}" "$meta" "$rule"
+  fi
+  echo
   return 0
 }
 
