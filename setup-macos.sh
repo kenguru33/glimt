@@ -195,7 +195,7 @@ echo ""
 gum style --foreground 220 --bold "📦 Installing modules..."
 progress_init "${#RUN_LIST[@]}"
 for script in "${RUN_LIST[@]}"; do
-  progress_run "$(basename "$script")" bash "$script" all
+  progress_run "Installing $(basename "$script" .sh | sed 's/^install-//')" bash "$script" all
 done
 progress_finish
 

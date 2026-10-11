@@ -92,7 +92,14 @@ load_setup_lib() {
   fi
 }
 
-# run_modules <all|clean> <script>... — runs installers behind the progress bar
+# module_label <script> — install-k9s.sh → k9s
+module_label() {
+  local name
+  name="$(basename "$1" .sh)"
+  echo "${name#install-}"
+}
+
+# run_modules <install|update|clean> <script>... — runs installers behind the progress bar
 # (full output with -v). Asks for sudo once up front if any of them needs it,
 # so no password prompt can hide behind the bar. Fails if any module failed.
 run_modules() {
@@ -113,11 +120,11 @@ run_modules() {
   cd "$REPO_DIR"
   progress_init "$#"
   for script in "$@"; do
-    if [[ "$mode" == "clean" ]]; then
-      progress_run "Removing $(basename "$script")" bash "$script" clean
-    else
-      progress_run "$(basename "$script")" bash "$script" all
-    fi
+    case "$mode" in
+      clean)  progress_run "Removing $(module_label "$script")" bash "$script" clean ;;
+      update) progress_run "Updating $(module_label "$script")" bash "$script" all ;;
+      *)      progress_run "Installing $(module_label "$script")" bash "$script" all ;;
+    esac
   done
   progress_finish
   # exit (not return) so the ERR trap doesn't add a confusing second message
@@ -169,7 +176,7 @@ run_update() {
     local script
     script="$(find_module_script "$maybe_module")"
     [[ -n "$script" ]] || { echo "❌ Module not found: $maybe_module"; exit 1; }
-    run_modules all "$script"
+    run_modules update "$script"
   else
     # Core modules + selected extras, all under one progress bar
     local installers=()
@@ -191,8 +198,8 @@ run_update() {
       done < "$state_file"
     fi
 
-    echo "🚀 Running ${#installers[@]} modules..."
-    run_modules all "${installers[@]+"${installers[@]}"}"
+    echo "🔄 Updating ${#installers[@]} modules..."
+    run_modules update "${installers[@]+"${installers[@]}"}"
   fi
 }
 
@@ -205,7 +212,7 @@ run_install() {
   [[ -n "$module" ]] || { echo "Usage: $SCRIPT_NAME install <module>"; exit 2; }
   local script; script="$(find_module_script "$module")"
   [[ -n "$script" ]] || { echo "❌ Module not found: $module"; exit 1; }
-  run_modules all "$script"
+  run_modules install "$script"
 }
 
 run_clean() {

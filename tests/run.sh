@@ -738,6 +738,7 @@ test_glimt_verbose_shows_module_output() {
   local out
   out="$(glimt_run -v install alpha)" || fail "$out"
   assert_contains "$out" "alpha-output"
+  assert_contains "$out" "Installing alpha"
   assert_not_contains "$out" "░"
   out="$(glimt_run install alpha --verbose)" || fail "$out"
   assert_contains "$out" "alpha-output" "--verbose after the action"
@@ -756,7 +757,7 @@ test_glimt_clean_runs_clean_action() {
   fake_repo
   local out
   out="$(glimt_run clean alpha)" || fail "$out"
-  assert_contains "$out" "Removing install-alpha.sh"
+  assert_contains "$out" "Removing alpha"
   assert_eq "$(cat "$SB/ran")" "alpha clean" "module call:"
 }
 
@@ -765,7 +766,7 @@ test_glimt_install_failure_exits_nonzero() {
   local out rc=0
   out="$(glimt_run install gamma)" || rc=$?
   assert_eq "$rc" "1" "exit code:"
-  assert_contains "$out" "install-gamma.sh failed (exit 5)"
+  assert_contains "$out" "Installing gamma failed (exit 5)"
   assert_contains "$out" "gamma-boom" "log tail"
   assert_not_contains "$out" "An error occurred" "no duplicate ERR-trap message"
 }
@@ -776,7 +777,9 @@ test_glimt_update_runs_core_and_selected_extras_in_one_bar() {
   printf 'delta\n' >"$SB/.config/glimt/optional-extras.selected"
   local out
   out="$(glimt_run update)" || fail "$out"
-  assert_contains "$out" "Running 3 modules"
+  assert_contains "$out" "Updating 3 modules"
+  assert_contains "$out" "Updating alpha"
+  assert_contains "$out" "Updating delta"
   assert_contains "$out" "100% (3/3)"
   assert_eq "$(sort "$SB/ran" | tr '\n' ',')" "alpha all,beta all,delta all," "modules run:"
 }
@@ -791,7 +794,7 @@ test_glimt_update_continues_with_pulled_glimt() {
     git -C "$SB/repo" fetch -q origin && git -C "$SB/repo" branch -q -u origin/main || fail "git setup failed"
   # a change that only exists in the pulled version of glimt.sh
   git clone -q "$SB/origin.git" "$SB/work"
-  sed -i.bak 's/echo "🚀 Running \${#installers\[@\]} modules..."/echo "PULLED-GLIMT"; &/' "$SB/work/glimt.sh"
+  sed -i.bak 's/echo "🔄 Updating \${#installers\[@\]} modules..."/echo "PULLED-GLIMT"; &/' "$SB/work/glimt.sh"
   git -C "$SB/work" -c user.name=t -c user.email=t@t commit -qam change && git -C "$SB/work" push -q origin main
   local out
   out="$(GLIMT_SKIP_PULL=0 glimt_run update)" || fail "$out"
