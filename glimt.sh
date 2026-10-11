@@ -2,7 +2,7 @@
 # Use env bash (not /bin/bash) — macOS ships Bash 3.2, but this script uses
 # mapfile (Bash 4+). Homebrew's bash is first on PATH after setup.
 set -euo pipefail
-trap 'echo "❌ An error occurred at: $BASH_COMMAND" >&2' ERR
+trap 'echo "Error: glimt failed at: $BASH_COMMAND" >&2' ERR
 
 # === Config ===
 SCRIPT_NAME="glimt"
@@ -50,12 +50,9 @@ acquire_lock() {
       return 0
     fi
     if kill -0 "$pid" 2>/dev/null; then
-      echo "🔒 Glimt is already running (PID $pid)"
-      echo "If this is an error, delete the lock file and retry:"
-      echo "  rm -f $LOCK_FILE"
+      echo "glimt is already running (PID $pid). If not, remove $LOCK_FILE" >&2
       exit 1
     fi
-    echo "⚠️  Removing stale lock (PID $pid no longer running)"
     rm -f "$LOCK_FILE"
   fi
   echo "$$" >"$LOCK_FILE"
@@ -64,9 +61,7 @@ acquire_lock() {
 
 ensure_repo() {
   if [[ ! -d "$REPO_DIR" ]]; then
-    echo "❌ Repo directory not found: $REPO_DIR"
-    echo "   Clone your repo there, e.g.:"
-    echo "   git clone <url> \"$REPO_DIR\""
+    echo "Error: $REPO_DIR not found (clone glimt there first)" >&2
     exit 1
   fi
 }
@@ -87,7 +82,7 @@ load_setup_lib() {
     PROGRESS_FAILED=()
     glimt_require_sudo() { :; }
     progress_init() { PROGRESS_FAILED=(); }
-    progress_run() { local t="$1"; shift; echo "▶️  $t"; "$@" || PROGRESS_FAILED+=("$t"); }
+    progress_run() { local t="$1"; shift; echo "==> $t"; "$@" || PROGRESS_FAILED+=("$t"); }
     progress_finish() { :; }
   fi
 }
@@ -108,7 +103,7 @@ run_modules() {
   (( $# > 0 )) || return 0
   local script
   for script in "$@"; do
-    [[ -f "$script" ]] || { echo "❌ Installer not found: $script"; exit 1; }
+    [[ -f "$script" ]] || { echo "Error: installer not found: $script" >&2; exit 1; }
     [[ -x "$script" ]] || chmod +x "$script"
   done
 
@@ -141,7 +136,6 @@ run_update() {
     local before after
     before="$(git -C "$REPO_DIR" rev-parse --short HEAD)"
     if $VERBOSE; then
-      echo "🔄 Updating repository in $REPO_DIR..."
       git -C "$REPO_DIR" fetch --all --prune
       git -C "$REPO_DIR" pull --rebase --stat
     else
@@ -151,16 +145,15 @@ run_update() {
     fi
     after="$(git -C "$REPO_DIR" rev-parse --short HEAD)"
     if [[ "$before" == "$after" ]]; then
-      echo "✅ glimt is up to date ($after)"
+      echo "glimt $after (up to date)"
     else
-      echo "✅ glimt updated $before → $after"
+      echo "glimt $before → $after"
     fi
 
     local bin_target="$HOME/.local/bin/glimt"
     if [[ -f "$bin_target" ]]; then
       cp "$REPO_DIR/glimt.sh" "$bin_target"
       chmod +x "$bin_target"
-      $VERBOSE && echo "✅ glimt binary updated"
     fi
 
     # Continue with the freshly pulled glimt, so changes to this script take
@@ -175,14 +168,14 @@ run_update() {
   if [[ -n "$maybe_module" ]]; then
     local script
     script="$(find_module_script "$maybe_module")"
-    [[ -n "$script" ]] || { echo "❌ Module not found: $maybe_module"; exit 1; }
+    [[ -n "$script" ]] || { echo "Error: unknown module: $maybe_module" >&2; exit 1; }
     run_modules update "$script"
   else
     # Core modules + selected extras, all under one progress bar
     local installers=()
     mapfile -t installers < <(find "$MODULES_DIR" -maxdepth 1 -type f -name 'install-*.sh' -print 2>/dev/null | sort)
     if (( ${#installers[@]} == 0 )); then
-      echo "ℹ️  No core installers found under: $MODULES_DIR"
+      echo "Warning: no modules found in $MODULES_DIR" >&2
     fi
 
     local state_file="$HOME/.config/glimt/optional-extras.selected"
@@ -193,12 +186,11 @@ run_update() {
         if [[ -f "$extra_script" ]]; then
           installers+=("$extra_script")
         else
-          echo "⚠️  Extras module script not found: $module"
+          echo "Warning: extras module not found: $module" >&2
         fi
       done < "$state_file"
     fi
 
-    echo "🔄 Updating ${#installers[@]} modules..."
     run_modules update "${installers[@]+"${installers[@]}"}"
   fi
 }
@@ -211,7 +203,7 @@ run_install() {
   local module="${1:-}"
   [[ -n "$module" ]] || { echo "Usage: $SCRIPT_NAME install <module>"; exit 2; }
   local script; script="$(find_module_script "$module")"
-  [[ -n "$script" ]] || { echo "❌ Module not found: $module"; exit 1; }
+  [[ -n "$script" ]] || { echo "Error: unknown module: $module" >&2; exit 1; }
   run_modules install "$script"
 }
 
@@ -223,7 +215,7 @@ run_clean() {
   local module="${1:-}"
   [[ -n "$module" ]] || { echo "Usage: $SCRIPT_NAME clean <module>"; exit 2; }
   local script; script="$(find_module_script "$module")"
-  [[ -n "$script" ]] || { echo "❌ Module not found: $module"; exit 1; }
+  [[ -n "$script" ]] || { echo "Error: unknown module: $module" >&2; exit 1; }
   run_modules clean "$script"
 }
 
@@ -232,7 +224,6 @@ run_module_selection() {
   ensure_repo
   export GLIMT_ROOT="$REPO_DIR"
 
-  echo "🎛️ Running module selection..."
   if [[ -x "$EXTRA_SCRIPT" ]]; then
     if $VERBOSE; then
       ( cd "$REPO_DIR" && bash "$EXTRA_SCRIPT" --verbose all )
@@ -240,7 +231,7 @@ run_module_selection() {
       ( cd "$REPO_DIR" && bash "$EXTRA_SCRIPT" all )
     fi
   else
-    echo "❌ Missing or non-executable: $EXTRA_SCRIPT"
+    echo "Error: not found or not executable: $EXTRA_SCRIPT" >&2
     exit 1
   fi
 }

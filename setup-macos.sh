@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Euo pipefail
-trap 'echo "❌ Setup failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
+trap 'echo "Error: setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/modules/macos"
@@ -17,7 +17,7 @@ for arg in "$@"; do
     exit 0
     ;;
   *)
-    echo "❌ Unknown option: $arg" >&2
+    echo "Unknown option: $arg" >&2
     exit 1
     ;;
   esac
@@ -25,7 +25,7 @@ done
 
 # === macOS guard ===
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "❌ This setup script is for macOS only."
+  echo "Error: setup-macos.sh requires macOS" >&2
   exit 1
 fi
 
@@ -43,16 +43,15 @@ if [[ -z "${GLIMT_ASKPASS:-}" || ! -f "${GLIMT_PW_FILE:-/nonexistent}" ]]; then
   chmod 700 "$GLIMT_ASKPASS"
   printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
 
-  echo "🔐  Some steps require administrator access. Please enter your password."
   while true; do
-    printf '🔐 sudo password: ' >&2
+    printf '[glimt] password for %s: ' "$(id -un)" >&2
     IFS= read -rs glimt_pw; echo >&2
     printf '%s\n' "$glimt_pw" > "$GLIMT_PW_FILE"
     unset glimt_pw
     # -S reads the password from stdin and -v caches it (do NOT use -k here, it
     # would validate without caching, so Homebrew's installer would re-prompt).
     if sudo -S -p '' -v < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
-    echo "❌ Incorrect password — try again." >&2
+    echo "Sorry, try again." >&2
   done
   export GLIMT_PW_FILE GLIMT_ASKPASS
 fi
@@ -63,7 +62,7 @@ export SUDO_ASKPASS="$GLIMT_ASKPASS"
 
 # === Bootstrap Homebrew before running any modules ===
 if ! command -v brew &>/dev/null; then
-  echo "🍺 Homebrew not found. Installing..."
+  echo "Installing Homebrew..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
@@ -81,7 +80,7 @@ fi
 # resolves to it too.
 if (( BASH_VERSINFO[0] < 4 )); then
   if ! brew list bash &>/dev/null; then
-    echo "🔁 Installing a modern Bash (macOS ships 3.2)..."
+    echo "Installing Bash 5..."
     brew install bash -q
   fi
   BREW_BASH="$(brew --prefix)/bin/bash"
@@ -97,7 +96,7 @@ fi
 
 # === Ensure gum is available ===
 if ! command -v gum &>/dev/null; then
-  echo "📦 Installing gum..."
+  echo "Installing gum..."
   brew install gum -q
 fi
 
@@ -109,45 +108,23 @@ source "$SCRIPT_DIR/setup-lib.sh"
 # warm too, for anything (e.g. Homebrew casks) that calls sudo directly.
 glimt_sudo_keepalive
 
-# === Splash Screen ===
-clear
-cat <<"EOF"
-
-      🌟   ✨
-   ✨   G L I M T     🌟
-       ✨  The Final Shine for Fresh Installs
-
-EOF
+# === Header ===
+glimt_banner "macOS post-install setup"
 
 # === Heads-up: optional macOS permission ===
-echo ""
-gum style --border rounded --padding "0 1" --border-foreground 220 \
-  "🔐  Optional: App Management permission" \
-  "" \
-  "To set kitty's custom icon, Glimt edits /Applications/kitty.app, which" \
-  "macOS protects. If you want the icon, grant your terminal app" \
-  "(Terminal/iTerm/kitty…) permission first:" \
-  "" \
-  "  System Settings → Privacy & Security → App Management → enable your" \
-  "  terminal, then quit and reopen it." \
-  "" \
-  "It's optional — without it the icon step is skipped and setup continues."
+gum style --faint \
+  "Optional: to set kitty's custom icon, allow your terminal under" \
+  "System Settings → Privacy & Security → App Management, then reopen it." \
+  "Without it the icon step is skipped."
 
 # === Confirm Start ===
 echo ""
-gum confirm "🚀 Ready to run all Glimt modules?" || {
-  echo "❌ Setup cancelled."
+gum confirm "Start setup?" || {
+  echo "Setup cancelled."
   exit 1
 }
 
-clear
-cat <<"EOF"
-
-      🌟   ✨
-   ✨   G L I M T     🌟
-       ✨  The Final Shine for Fresh Installs
-
-EOF
+glimt_banner "macOS post-install setup"
 
 # === Collect interactive answers up front ===
 # git-config prompts for name/email; gather it here so every module below can
@@ -155,8 +132,7 @@ EOF
 # its config file, then skips prompting when it runs under the spinner.
 GIT_CONFIG_MODULE="$MODULES_DIR/install-git-config.sh"
 if [[ -f "$GIT_CONFIG_MODULE" ]]; then
-  echo ""
-  gum style --foreground 220 --bold "📝 Git configuration"
+  glimt_section "Git"
   bash "$GIT_CONFIG_MODULE" prompt
 fi
 
@@ -173,7 +149,7 @@ for module in "${PRIORITY_MODULES[@]}"; do
   if [[ -f "$MODULES_DIR/$module" ]]; then
     RUN_LIST+=("$MODULES_DIR/$module")
   else
-    echo "⚠️  Not found: $MODULES_DIR/$module"
+    echo "Warning: module not found: $MODULES_DIR/$module" >&2
   fi
 done
 
@@ -191,8 +167,7 @@ for script in "${all_scripts[@]}"; do
   RUN_LIST+=("$script")
 done
 
-echo ""
-gum style --foreground 220 --bold "📦 Installing modules..."
+glimt_section "Core modules"
 progress_init "${#RUN_LIST[@]}"
 for script in "${RUN_LIST[@]}"; do
   progress_run "Installing $(basename "$script" .sh | sed 's/^install-//')" bash "$script" all
@@ -202,37 +177,31 @@ progress_finish
 # === Optional Extras ===
 EXTRAS_SCRIPT="$SCRIPT_DIR/setup-macos-extras.sh"
 if [[ -x "$EXTRAS_SCRIPT" ]]; then
-  echo ""
-  gum style --foreground 220 --bold "🎛 Installing optional extras..."
+  glimt_section "Optional extras"
   if $VERBOSE; then
     bash "$EXTRAS_SCRIPT" --verbose
   else
     bash "$EXTRAS_SCRIPT"
   fi
 else
-  echo "⚠️  Extras script not found: $EXTRAS_SCRIPT"
+  echo "Warning: extras script not found: $EXTRAS_SCRIPT" >&2
 fi
 
 # === Install glimt CLI ===
 mkdir -p "$HOME/.local/bin"
 cp "$SCRIPT_DIR/glimt.sh" "$HOME/.local/bin/glimt"
 chmod +x "$HOME/.local/bin/glimt"
-gum style --foreground 10 "✔️  glimt CLI installed → ~/.local/bin/glimt"
 
 # === Install zsh completion ===
 mkdir -p "$HOME/.zsh/completions"
 COMPLETION_FILE="$MODULES_DIR/config/_glimt"
 if [[ -f "$COMPLETION_FILE" ]]; then
   cp -f "$COMPLETION_FILE" "$HOME/.zsh/completions/_glimt"
-  gum style --foreground 10 "✔️  zsh completion installed → ~/.zsh/completions/_glimt"
 else
-  echo "⚠️  Completion file not found: $COMPLETION_FILE"
+  echo "Warning: zsh completion not found: $COMPLETION_FILE" >&2
 fi
 
 # === Done ===
 echo ""
-gum style --padding "1 4" --margin "1" --align center \
-  --foreground 10 --bold \
-  "🎉 Glimt setup complete!" "" \
-  "$(gum style --foreground 15 "Your macOS system is now ready to use.")" "" \
-  "$(gum style --foreground 220 '🔁 Restart your terminal to apply all changes.')"
+gum style --bold "Setup complete"
+gum style --faint "Restart your terminal to apply all changes. Manage glimt with: glimt"

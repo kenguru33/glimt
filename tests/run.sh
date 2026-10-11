@@ -277,7 +277,7 @@ EOF
     assert_not_contains "$out" "hidden-module-output" "[$b] module output must go to the log"
     assert_contains "$out" "install-bad.sh failed (exit 3)" "[$b]"
     assert_contains "$out" "boom-line" "[$b] failure must show the log tail"
-    assert_contains "$out" "1 step(s) failed" "[$b]"
+    assert_contains "$out" "Failed: install-bad.sh" "[$b]"
     assert_contains "$out" "100% (3/3)" "[$b]"
     assert_contains "$(cat "$SB/logs/install-ok.sh.log")" "hidden-module-output" "[$b] log file"
   done
@@ -309,8 +309,8 @@ echo END
 EOF
 )" || fail "[$b] $out"
     assert_contains "$out" "visible-module-output" "[$b] verbose must show module output"
-    assert_contains "$out" "✅ Finished: install-ok.sh" "[$b]"
-    assert_contains "$out" "❌ Failed: install-bad.sh (exit 4)" "[$b]"
+    assert_contains "$out" "==> install-ok.sh" "[$b]"
+    assert_contains "$out" "✗ install-bad.sh failed (exit 4)" "[$b]"
     assert_not_contains "$out" "░" "[$b] verbose must not draw a bar"
     assert_contains "$out" "END" "[$b]"
   done
@@ -403,9 +403,9 @@ kill "$GLIMT_SUDO_KEEPALIVE_PID"
 echo END
 EOF
 )" || fail "$out"
-  assert_contains "$out" "Enter your password once"
   assert_contains "$out" "END"
-  assert_eq "$(grep -c '^sudo -v$' "$CALLS")" "1" "sudo -v calls:"
+  assert_eq "$(grep -c '^sudo -v -p' "$CALLS")" "1" "sudo -v calls:"
+  assert_contains "$(cat "$CALLS")" "sudo -v -p [glimt] password for %u: " "short, branded prompt"
 }
 
 test_require_sudo_exits_when_auth_fails() {
@@ -748,7 +748,6 @@ test_glimt_asks_sudo_up_front_when_needed() {
   fake_repo
   local out
   out="$(SUDO_CACHED_RC=1 SUDO_AUTH_RC=0 glimt_run install beta)" || fail "$out"
-  assert_contains "$out" "Enter your password once"
   assert_eq "$(grep -n '' "$CALLS" | grep -m1 'sudo -v' | cut -d: -f1)" "2" "sudo -v must come right after the cache check, before the module:"
   assert_contains "$(sed -n 1p "$CALLS")" "sudo -n true"
 }
@@ -777,7 +776,7 @@ test_glimt_update_runs_core_and_selected_extras_in_one_bar() {
   printf 'delta\n' >"$SB/.config/glimt/optional-extras.selected"
   local out
   out="$(glimt_run update)" || fail "$out"
-  assert_contains "$out" "Updating 3 modules"
+  assert_eq "$(sed -n 1p <<<"$out")" "$(sed -n 1p <<<"$out" | grep -v modules)" "no 'Updating N modules' header:"
   assert_contains "$out" "Updating alpha"
   assert_contains "$out" "Updating delta"
   assert_contains "$out" "100% (3/3)"
@@ -794,12 +793,12 @@ test_glimt_update_continues_with_pulled_glimt() {
     git -C "$SB/repo" fetch -q origin && git -C "$SB/repo" branch -q -u origin/main || fail "git setup failed"
   # a change that only exists in the pulled version of glimt.sh
   git clone -q "$SB/origin.git" "$SB/work"
-  sed -i.bak 's/echo "🔄 Updating \${#installers\[@\]} modules..."/echo "PULLED-GLIMT"; &/' "$SB/work/glimt.sh"
+  sed -i.bak 's/run_modules update "\${installers/echo "PULLED-GLIMT"; &/' "$SB/work/glimt.sh"
   git -C "$SB/work" -c user.name=t -c user.email=t@t commit -qam change && git -C "$SB/work" push -q origin main
   local out
   out="$(GLIMT_SKIP_PULL=0 glimt_run update)" || fail "$out"
   assert_contains "$out" "PULLED-GLIMT" "update must continue with the freshly pulled glimt.sh"
-  assert_eq "$(grep -c 'glimt updated' <<<"$out")" "1" "pull count:"
+  assert_eq "$(grep -c '^glimt .* → ' <<<"$out")" "1" "pull count:"
   assert_not_contains "$out" "already running" "re-exec must reuse its own lock"
   # default mode: one summary line instead of git's fetch/pull/diffstat output
   assert_not_contains "$out" "glimt.sh |" "git diffstat must be hidden by default"
@@ -816,8 +815,8 @@ test_glimt_update_verbose_shows_git_output() {
     git -C "$SB/repo" fetch -q origin && git -C "$SB/repo" branch -q -u origin/main || fail "git setup failed"
   local out
   out="$(GLIMT_SKIP_PULL=0 glimt_run -v update)" || fail "$out"
-  assert_contains "$out" "Updating repository"
-  assert_contains "$out" "glimt is up to date"
+  assert_contains "$out" "Already up to date" "git output in verbose mode"
+  assert_contains "$out" "(up to date)"
 }
 
 # Additional test files: tests/*.test.sh define more test_* functions and

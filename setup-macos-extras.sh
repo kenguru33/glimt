@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Optional extras setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo "Error: extras setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 # -----------------------------
 # Args
@@ -14,7 +14,7 @@ for arg in "$@"; do
   --quiet)   VERBOSE=false ;;
   all | install) ACTION="$arg" ;;
   *)
-    echo "❌ Unknown argument: $arg"
+    echo "Unknown argument: $arg" >&2
     exit 1
     ;;
   esac
@@ -33,7 +33,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/setup-lib.sh"
 # OS guard
 # -----------------------------
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "❌ setup-macos-extras.sh requires macOS."
+  echo "Error: setup-macos-extras.sh requires macOS" >&2
   exit 1
 fi
 
@@ -50,7 +50,7 @@ if (( BASH_VERSINFO[0] < 4 )); then
       exec "$_b" "$0" "$@"
     fi
   done
-  echo "❌ This script needs Bash 4+. Install it with: brew install bash" >&2
+  echo "Error: Bash 4+ required (brew install bash)" >&2
   exit 1
 fi
 
@@ -150,16 +150,14 @@ glimt_ensure_askpass() {
   chmod 700 "$GLIMT_ASKPASS"
   printf '#!/bin/sh\ncat %q\n' "$GLIMT_PW_FILE" > "$GLIMT_ASKPASS"
 
-  echo ""
-  echo "🔐  Some selected apps (from the App Store) require administrator access."
   local pw
   while true; do
-    printf '🔐 sudo password: ' >&2
+    printf '[glimt] password for %s: ' "$(id -un)" >&2
     IFS= read -rs pw; echo >&2
     printf '%s\n' "$pw" > "$GLIMT_PW_FILE"
     unset pw
     if sudo -S -p '' -v < "$GLIMT_PW_FILE" 2>/dev/null; then break; fi
-    echo "❌ Incorrect password — try again." >&2
+    echo "Sorry, try again." >&2
   done
   export SUDO_ASKPASS="$GLIMT_ASKPASS"
 }
@@ -185,8 +183,8 @@ module_installed() {
 # Run module (progress bar by default, full output with --verbose)
 # -----------------------------
 run_module() {
-  [[ -n "${1:-}" ]] || { echo "⚠️  run_module called without a module name"; return 1; }
-  [[ -f "$MODULE_DIR/install-$1.sh" ]] || { echo "⚠️  Missing $MODULE_DIR/install-$1.sh"; return; }
+  [[ -n "${1:-}" ]] || { echo "Error: run_module called without a module name" >&2; return 1; }
+  [[ -f "$MODULE_DIR/install-$1.sh" ]] || { echo "Warning: module not found: $MODULE_DIR/install-$1.sh" >&2; return; }
   [[ -x "$MODULE_DIR/install-$1.sh" ]] || chmod +x "$MODULE_DIR/install-$1.sh"
 
   if [[ "${2:-all}" == "clean" ]]; then
@@ -256,9 +254,7 @@ main() {
   done
 
   # === Clear and restore header before installs begin ===
-  clear
-  gum style --foreground 220 --bold "🌟  G L I M T  —  Optional Extras"
-  echo ""
+  glimt_banner "Optional extras"
 
   # Work out what changes first, so the progress bar knows the total
   PLAN=()

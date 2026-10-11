@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Optional extras setup failed." >&2' ERR
+trap 'echo "Error: extras setup failed at line $LINENO" >&2' ERR
 
 export PATH="$HOME/.dotnet:$PATH"
 
@@ -16,7 +16,7 @@ for arg in "$@"; do
   --quiet) VERBOSE=false ;;
   all | install) ACTION="$arg" ;;
   *)
-    echo "❌ Unknown argument: $arg"
+    echo "Unknown argument: $arg" >&2
     exit 1
     ;;
   esac
@@ -37,7 +37,7 @@ mkdir -p "$(dirname "$STATE_FILE")"
 ID_LIKE="${ID_LIKE:-}"
 
 if [[ "$ID" != "fedora" && "$ID_LIKE" != *fedora* && "$ID" != "rhel" ]]; then
-  echo "❌ Unsupported OS: $ID. Glimt requires Fedora or RHEL."
+  echo "Error: unsupported OS '$ID' (glimt requires Fedora or RHEL)" >&2
   exit 1
 fi
 
@@ -130,7 +130,7 @@ run_module() {
   local script="$MODULE_DIR/install-$name.sh"
 
   if [[ ! -x "$script" ]]; then
-    echo "⚠️ Missing $script"
+    echo "Warning: module not found: $script" >&2
     return
   fi
 
@@ -146,7 +146,7 @@ run_module() {
 # -----------------------------
 main() {
   if ! command -v gum >/dev/null 2>&1; then
-    echo "❌ gum is required for the extras picker (sudo dnf install -y gum)." >&2
+    echo "Error: gum is required (sudo dnf install -y gum)" >&2
     exit 1
   fi
 

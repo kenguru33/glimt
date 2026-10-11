@@ -1,6 +1,6 @@
 #!/bin/bash
 set -Euo pipefail
-trap 'echo "❌ Script failed at: $BASH_COMMAND (line $LINENO)" >&2' ERR
+trap 'echo "Error: setup failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -22,7 +22,7 @@ for arg in "$@"; do
     exit 0
     ;;
   -*)
-    echo "❌ Unknown option: $arg" >&2
+    echo "Unknown option: $arg" >&2
     exit 1
     ;;
   *) MODULES_DIR="$arg" ;;
@@ -42,12 +42,12 @@ if [[ -f /etc/os-release ]]; then
   OS_ID="$ID"
   OS_ID_LIKE="${ID_LIKE:-}"
 else
-  echo "❌ Cannot detect OS. /etc/os-release missing."
+  echo "Error: cannot detect OS (/etc/os-release missing)" >&2
   exit 1
 fi
 
 if [[ "$OS_ID" != "fedora" && "$OS_ID_LIKE" != *"fedora"* && "$OS_ID" != "rhel" ]]; then
-  echo "❌ Unsupported OS: $OS_ID. Glimt requires Fedora or RHEL."
+  echo "Error: unsupported OS '$OS_ID' (glimt requires Fedora or RHEL)" >&2
   exit 1
 fi
 
@@ -60,7 +60,7 @@ TARGET_DIR="$MODULES_DIR"
 pkg_quiet() {
   # usage: pkg_quiet install -y git wget
   if ! sudo dnf "$@" -q >/dev/null 2>&1; then
-    echo "❌ dnf $* failed" >&2
+    echo "Error: dnf $* failed" >&2
     sudo dnf "$@"
     exit 1
   fi
@@ -77,54 +77,42 @@ fi
 
 # === Ensure git, gum, wget ===
 ensure_deps() {
-  echo "🔧 Checking for required tools..."
-
   # Refresh metadata once here — modules must NOT call makecache individually
   pkg_quiet makecache -y
   pkg_quiet install -y git wget
   if ! command -v gum >/dev/null 2>&1; then
-    echo "📦 Installing gum..."
     pkg_quiet makecache -y
     if ! pkg_quiet install -y gum 2>/dev/null; then
-      echo "⚠️  gum not in repos, will install via go or manual method"
       if command -v go >/dev/null 2>&1; then
         go install github.com/charmbracelet/gum@v0.14.3
       else
-        echo "❌ Please install gum manually or install golang first"
+        echo "Error: gum is not in the repos; install gum or Go and retry" >&2
       fi
     fi
   fi
 }
 ensure_deps
 
-# === Splash Screen ===
-clear
-cat <<"EOF"
-
-      🌟   ✨
-   ✨   G L I M T     🌟
-       ✨  The Final Shine for Fresh Installs
-
-EOF
+# === Header ===
+glimt_banner "Fedora post-install setup"
 
 # === Load existing config (if any) ===
 [[ -f "$GIT_CONFIG" ]] && source "$GIT_CONFIG"
 [[ -f "$AVATAR_CONFIG" ]] && source "$AVATAR_CONFIG"
 
 # === Git Config Prompt ===
-echo ""
-echo "🛠 Git configuration (used for commit identity)"
+glimt_section "Git"
 DEFAULT_NAME="${name:-$(git config --global user.name 2>/dev/null || echo "")}"
 DEFAULT_EMAIL="${email:-$(git config --global user.email 2>/dev/null || echo "")}"
 DEFAULT_EDITOR="${editor:-nvim}"
 DEFAULT_BRANCH="${branch:-main}"
 DEFAULT_REBASE="${rebase:-true}"
 
-name=$(gum input --value "$DEFAULT_NAME" --placeholder "Full Name" --prompt "👤 Name: ")
-email=$(gum input --value "$DEFAULT_EMAIL" --placeholder "you@example.com" --prompt "📧 Email: ")
-editor=$(gum input --value "$DEFAULT_EDITOR" --placeholder "nano/nvim/vim" --prompt "📝 Default editor: ")
-branch=$(gum input --value "$DEFAULT_BRANCH" --prompt "🌿 Default branch: ")
-if gum confirm "🔄 Use rebase when pulling?"; then
+name=$(gum input --value "$DEFAULT_NAME" --placeholder "Full Name" --prompt "Name: ")
+email=$(gum input --value "$DEFAULT_EMAIL" --placeholder "you@example.com" --prompt "Email: ")
+editor=$(gum input --value "$DEFAULT_EDITOR" --placeholder "nano/nvim/vim" --prompt "Editor: ")
+branch=$(gum input --value "$DEFAULT_BRANCH" --prompt "Default branch: ")
+if gum confirm "Rebase when pulling?"; then
   rebase="true"
 else
   rebase="false"
@@ -137,29 +125,25 @@ editor="$editor"
 branch="$branch"
 rebase="$rebase"
 EOF
-gum style --foreground 10 "✅ Git config saved"
 
 # === Gravatar Config Prompt ===
-echo ""
-echo "👤 Gravatar email (used to download your profile picture)"
+glimt_section "Gravatar"
 DEFAULT_GRAVATAR_EMAIL="${gravatar_email:-$email}"
-gravatar_email=$(gum input --value "$DEFAULT_GRAVATAR_EMAIL" --prompt "📧 Gravatar Email: ")
+gravatar_email=$(gum input --value "$DEFAULT_GRAVATAR_EMAIL" --prompt "Email: ")
 echo "gravatar_email=\"$gravatar_email\"" >"$AVATAR_CONFIG"
-gum style --foreground 10 "✅ Gravatar config saved"
 
 # === Confirm Start ===
 echo ""
-gum confirm "🚀 Ready to run all Glimt modules?" || {
-  echo "❌ Setup cancelled."
+gum confirm "Start setup?" || {
+  echo "Setup cancelled."
   exit 1
 }
 
 # === Run All Installers ===
-echo ""
-gum style --foreground 220 --bold "📦 Installing required modules..."
+glimt_section "Core modules"
 
 if [[ ! -d "$TARGET_DIR" ]]; then
-  echo "❌ Directory not found: $TARGET_DIR" >&2
+  echo "Error: directory not found: $TARGET_DIR" >&2
   exit 1
 fi
 
@@ -176,7 +160,7 @@ for p in "${PRIORITY_MODULES[@]}"; do
   if [[ -x "$TARGET_DIR/$p" ]]; then
     RUN_LIST+=("$TARGET_DIR/$p")
   else
-    echo "⚠️  Priority module not found or not executable: $TARGET_DIR/$p"
+    echo "Warning: module not found: $TARGET_DIR/$p" >&2
   fi
 done
 while IFS= read -r script; do
@@ -196,15 +180,14 @@ progress_finish
 # === Optional Extras ===
 EXTRAS_SCRIPT="$SCRIPT_DIR/setup-extras.sh"
 if [[ -x "$EXTRAS_SCRIPT" ]]; then
-  echo ""
-  gum style --foreground 220 --bold "🎛 Installing optional extras..."
+  glimt_section "Optional extras"
   if $VERBOSE; then
     bash "$EXTRAS_SCRIPT" --verbose
   else
     bash "$EXTRAS_SCRIPT"
   fi
 else
-  echo "⚠️  Optional extras script not found or not executable: $EXTRAS_SCRIPT"
+  echo "Warning: extras script not found: $EXTRAS_SCRIPT" >&2
 fi
 
 # === Copy glimt.sh to ~/.local/bin ===
@@ -219,7 +202,7 @@ if [[ -f "$COMPLETION_FILE" ]]; then
   # Always overwrite the installed completion so updates take effect immediately.
   cp -f "$COMPLETION_FILE" "$HOME/.zsh/completions/_glimt"
 else
-  echo "⚠️  Zsh completion file not found: $COMPLETION_FILE"
+  echo "Warning: zsh completion not found: $COMPLETION_FILE" >&2
 fi
 
 # Revert to normal idle and lock settings (guard for non-GNOME)
@@ -232,8 +215,5 @@ fi
 echo ""
 OS_NAME="Fedora ${VERSION_ID:-}"
 
-gum style --padding "1 4" --margin "1" --align center \
-  --foreground 10 --bold \
-  "🎉 Glimt setup complete!" "" \
-  "$(gum style --foreground 15 "Your $OS_NAME system is now ready to use.")" "" \
-  "$(gum style --foreground 220 '🔁 Please reboot to apply all changes.')"
+gum style --bold "Setup complete"
+gum style --faint "$OS_NAME is ready. Reboot to apply all changes."
