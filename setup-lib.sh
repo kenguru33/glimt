@@ -58,6 +58,15 @@ glimt_cleanup() {
   return 0
 }
 
+# No terminal (e.g. run from an IDE or agent): fail now instead of prompting
+# into the void and ending in a misleading "authentication failed"
+_glimt_require_tty() {
+  if ! { : <"${GLIMT_TTY:-/dev/tty}"; } 2>/dev/null; then
+    echo "glimt: no terminal to ask for the sudo password; run glimt from a terminal" >&2
+    exit 1
+  fi
+}
+
 # macOS: Homebrew calls `sudo` itself, from inside the progress bar, and macOS
 # keeps the sudo timestamp per terminal, so a cached credential is not enough.
 # Ask once and hand the password to every later sudo through SUDO_ASKPASS:
@@ -65,12 +74,7 @@ glimt_cleanup() {
 _glimt_askpass_setup() {
   if [[ -n "${SUDO_ASKPASS:-}" && -x "${SUDO_ASKPASS:-}" ]]; then return 0; fi
   local pw_file askpass pw tries=0 tty="${GLIMT_TTY:-/dev/tty}"
-  # No terminal (e.g. run from an IDE or agent): fail now instead of three
-  # empty attempts that end in a misleading "authentication failed"
-  if ! { : <"$tty"; } 2>/dev/null; then
-    echo "glimt: no terminal to ask for the sudo password; run glimt from a terminal" >&2
-    exit 1
-  fi
+  _glimt_require_tty
   pw_file="$(mktemp -t glimt-sudo)"
   askpass="$(mktemp -t glimt-askpass)"
   GLIMT_CLEANUP_FILES+=("$pw_file" "$askpass")
@@ -95,6 +99,7 @@ glimt_require_sudo() {
   if [[ "${GLIMT_OS:-$(uname -s)}" == "Darwin" ]]; then
     _glimt_askpass_setup
   elif ! sudo -n true 2>/dev/null; then
+    _glimt_require_tty
     sudo -v -p "[glimt] password for %u: " || { echo "glimt: sudo authentication failed" >&2; exit 1; }
   fi
   glimt_sudo_keepalive

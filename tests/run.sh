@@ -448,6 +448,30 @@ EOF
 }
 
 
+test_require_sudo_linux_without_terminal_fails_fast() {
+  local out rc=0
+  out="$(SUDO_CACHED_RC=1 GLIMT_TTY="$SB/no-such-tty" run_lib_script "$BASH" 2>&1 <<'EOF'
+glimt_require_sudo
+echo SHOULD-NOT-GET-HERE
+EOF
+)" || rc=$?
+  assert_eq "$rc" "1" "exit code:"
+  assert_contains "$out" "no terminal to ask for the sudo password"
+  assert_not_contains "$(cat "$CALLS")" "sudo -v -p" "must not prompt without a terminal"
+  assert_not_contains "$out" "SHOULD-NOT-GET-HERE"
+}
+
+test_require_sudo_linux_cached_without_terminal_does_not_fail() {
+  local out
+  out="$(SUDO_CACHED_RC=0 GLIMT_TTY="$SB/no-such-tty" run_lib_script "$BASH" 2>&1 <<'EOF'
+glimt_require_sudo
+kill "$GLIMT_SUDO_KEEPALIVE_PID"
+echo END
+EOF
+)" || fail "$out"
+  assert_contains "$out" "END" "cached credential needs no terminal"
+}
+
 test_glimt_asks_sudo_up_front_for_brew_casks() {
   fake_repo
   local out
@@ -1019,7 +1043,11 @@ for t in $(declare -F | awk '{print $3}' | grep '^test_'); do
     export GIT_CONFIG_GLOBAL="$SB/.gitconfig" GIT_CONFIG_NOSYSTEM=1
     export PATH="$STUBS:$PATH" GLIMT_LOG_DIR="$SB/logs"
     unset SUDO_ASKPASS SUDO_USER GLIMT_SUDO_KEEPALIVE_PID GLIMT_ASSUME_YES VERBOSE
+    # Fake terminal for the sudo prompt, so results don't depend on whether
+    # the runner itself has one; tests write the "typed" password into it
+    export GLIMT_TTY="$SB/tty"
     : >"$CALLS"
+    : >"$GLIMT_TTY"
     cd "$SB"
     "$t"
   ) >"$out" 2>&1
