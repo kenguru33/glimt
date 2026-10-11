@@ -43,8 +43,13 @@ install() {
 
     if [[ -d "$dir/.git" ]]; then
       echo "Updating $name..."
+      old="$(run_as_user git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
       run_as_user git -C "$dir" pull --quiet --rebase
-      echo "Updated $name"
+      if [[ "$(run_as_user git -C "$dir" rev-parse HEAD 2>/dev/null || true)" == "$old" ]]; then
+        echo "$name is up to date"
+      else
+        echo "Updated $name"
+      fi
     else
       echo "⬇️  Installing $name..."
       rm -rf "$dir"
@@ -58,7 +63,7 @@ install() {
     sudo chsh -s "$(command -v zsh)" "$REAL_USER"
     echo "Default shell set to Zsh"
   else
-    echo "⏭️  Zsh already default shell"
+    echo "Default shell (zsh) is up to date"
   fi
 }
 

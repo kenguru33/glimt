@@ -20,8 +20,7 @@ deps() {
   
   # Already installed from a repo: upgrade it (no-op when current)
   if rpm -q eza &>/dev/null; then
-    echo "eza is already installed, checking for updates..."
-    sudo dnf upgrade -y eza
+    dnf_ensure eza
     return
   fi
 

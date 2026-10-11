@@ -69,7 +69,7 @@ install() {
     # interactively — that prompt is invisible under the gum spinner and hangs.
     sudo chsh -s "$brew_zsh" "$REAL_USER"
   else
-    log "Zsh already default shell."
+    log "Default shell (zsh) is up to date."
   fi
 }
 

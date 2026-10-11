@@ -170,7 +170,18 @@ dnf_ensure() {
     sudo dnf install -y "${missing[@]}"
   fi
   if (( ${#present[@]} > 0 )); then
+    local before=() i=0
+    for pkg in "${present[@]}"; do
+      before+=("$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$pkg" 2>/dev/null || true)")
+    done
     sudo dnf upgrade -y "${present[@]}"
+    # Same wording as the binary modules, so the progress bar lists the skip
+    for pkg in "${present[@]}"; do
+      if [[ "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$pkg" 2>/dev/null || true)" == "${before[i]}" ]]; then
+        log "$pkg ${before[i]} is up to date"
+      fi
+      i=$(( i + 1 ))
+    done
   fi
 }
 

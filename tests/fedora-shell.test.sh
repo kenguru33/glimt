@@ -267,9 +267,19 @@ test_dnf_ensure_only_upgrades_when_all_installed() {
   assert_not_contains "$(calls)" "dnf install"
 }
 
+test_dnf_ensure_reports_unchanged_packages_as_up_to_date() {
+  local out
+  # rpm stub reports the same version before and after the upgrade
+  out="$(RPM_INSTALLED="bat curl" run_module_fn fedora modules/fedora/install-fzf.sh deps 2>&1)" || fail "$out"
+  assert_contains "$out" "bat 7.6.6 is up to date"
+  assert_contains "$out" "curl 7.6.6 is up to date"
+  assert_not_contains "$out" "fzf 7.6.6 is up to date" "newly installed packages are not skips"
+}
+
 test_eza_upgrades_when_installed_from_repo() {
   local out
   out="$(RPM_INSTALLED="eza" run_module_fn fedora modules/fedora/install-eza.sh deps 2>&1)" || fail "$out"
+  assert_contains "$out" "eza 7.6.6 is up to date"
   assert_contains "$(calls)" "sudo dnf upgrade -y eza"
   assert_not_contains "$(calls)" "dnf install"
   assert_not_contains "$(calls)" "copr"
