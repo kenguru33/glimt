@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-Glimt is a **Fedora-only** post-installation automation tool. It installs and configures a development environment (shell, GNOME, Kubernetes tooling, etc.) on a fresh Fedora install. There is no build step, no test suite, and no package manager — everything is bash.
+Glimt is a **Fedora-only** post-installation automation tool. It installs and configures a development environment (shell, GNOME, Kubernetes tooling, etc.) on a fresh Fedora install. There is no build step and no package manager — everything is bash, including the test suite in `tests/run.sh`.
 
 ## Running things
 
@@ -30,6 +30,14 @@ glimt clean <module>
 glimt update
 glimt module-selection
 ```
+
+Tests (plain bash, no dependencies; run before merging):
+```bash
+bash tests/run.sh          # all tests
+bash tests/run.sh zsh      # only tests whose name contains "zsh"
+bash tests/run.sh -v       # also show output of passing tests
+```
+Module functions run against stubbed `sudo`/`dnf`/`rpm`/`brew` with a throwaway `$HOME`, so the suite is safe on a dev machine (macOS or Fedora). Use `run_module_fn <os> <module> <function>` to test a module function; add a `test_*` function and the runner picks it up.
 
 Static analysis (no CI enforces this, but useful):
 ```bash
