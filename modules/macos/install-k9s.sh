@@ -19,11 +19,7 @@ CONFIG_TEMPLATE="$SCRIPT_DIR/config/k9s-config.yaml"
 deps() { log "No additional dependencies."; }
 
 install() {
-  if brew list k9s &>/dev/null; then
-    log "k9s already installed."
-  else
-    brew install k9s
-  fi
+  brew_ensure k9s
   verify_binary k9s version
 }
 

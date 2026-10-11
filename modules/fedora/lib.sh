@@ -21,6 +21,7 @@
 #   normalize_arch              — x86_64→amd64, aarch64→arm64
 #   verify_binary <bin> [args...] — warns only, never aborts the module
 #   confirm <question>          — y/N prompt; "no" when there is no terminal
+#   dnf_ensure <pkg>...         — install missing, upgrade outdated, else skip
 
 # === Real user context ===
 # Resolves the invoking user even when the script runs under sudo.
@@ -150,6 +151,27 @@ verify_binary() {
     return 0
   fi
   log "$bin OK"
+}
+
+# === Install or update dnf packages ===
+#
+# Usage: dnf_ensure <pkg>...
+#
+# Installs the packages that are missing and upgrades the installed ones (a
+# no-op when they are already current). Plain `dnf install` leaves an
+# installed package at its old version, so `glimt update` would never update
+# anything.
+dnf_ensure() {
+  local missing=() present=() pkg
+  for pkg in "$@"; do
+    if rpm -q "$pkg" &>/dev/null; then present+=("$pkg"); else missing+=("$pkg"); fi
+  done
+  if (( ${#missing[@]} > 0 )); then
+    sudo dnf install -y "${missing[@]}"
+  fi
+  if (( ${#present[@]} > 0 )); then
+    sudo dnf upgrade -y "${present[@]}"
+  fi
 }
 
 # === Interactive y/N prompt that is safe without a terminal ===

@@ -22,17 +22,11 @@ FONT_CASKS=(
 deps() { log "No additional dependencies."; }
 
 install() {
-  log "Installing Nerd Fonts via Homebrew..."
+  local cask
   for cask in "${FONT_CASKS[@]}"; do
-    if brew list --cask "$cask" &>/dev/null; then
-      log "$cask already installed."
-    else
-      if brew install --cask "$cask"; then
-        log "$cask done"
-      else
-        warn "$cask install failed — font files may already exist outside Homebrew, skipping"
-      fi
-    fi
+    # A font file that already exists outside Homebrew makes the install fail
+    brew_ensure --cask "$cask" ||
+      warn "$cask install failed (font files may already exist outside Homebrew), skipping"
   done
 }
 

@@ -16,7 +16,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing Neovim, ripgrep, and fd via Homebrew..."
-  brew install neovim ripgrep fd
+  brew_ensure neovim ripgrep fd
   verify_binary nvim --version
 }
 

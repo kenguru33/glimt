@@ -23,7 +23,7 @@ EOF
 test_nerdfonts_macos_logs_success_when_install_works() {
   local out
   out="$(run_module_fn macos modules/macos/install-nerdfonts.sh install 2>&1)" || fail "$out"
-  assert_contains "$out" "font-hack-nerd-font done"
+  assert_contains "$(calls)" "brew install --cask font-hack-nerd-font"
   assert_not_contains "$out" "install failed"
 }
 
@@ -201,4 +201,33 @@ test_macos_extras_installed_query() {
   out="$(PATH="$SB/.stubs:$PATH" with_timeout 20 "$BASH" "$ROOT/setup-macos-extras.sh" installed zellij nosuch dotnet </dev/null 2>&1)" ||
     fail "$out"
   assert_eq "$(echo $out)" "zellij" "installed:"
+}
+
+# --- brew_ensure / mas_install: install missing, upgrade outdated, else skip
+test_brew_ensure_installs_upgrades_or_skips() {
+  local out
+  cat >"$SB/m.sh" <<'EOS'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+MODULE_NAME=t
+ACTION=none
+EOS
+  echo "source '$ROOT/modules/macos/lib.sh'" >>"$SB/m.sh"
+  printf 't_run() { brew_ensure bat fzf eza; brew_ensure --cask kitty; }\n' >>"$SB/m.sh"
+  out="$(BREW_INSTALLED="bat fzf kitty" GLIMT_BREW_OUTDATED="fzf" run_module_fn_abs macos "$SB/m.sh" t_run 2>&1)" || fail "$out"
+  assert_contains "$out" "bat is up to date"
+  assert_contains "$out" "kitty is up to date"
+  assert_contains "$(calls)" "brew upgrade --formula fzf"
+  assert_contains "$(calls)" "brew install --formula eza"
+  assert_not_contains "$(calls)" "brew install --formula bat"
+  assert_not_contains "$(calls)" "brew upgrade --formula bat"
+  assert_not_contains "$(calls)" "brew update" "no per-package auto update"
+}
+
+test_brew_cask_install_upgrades_outdated_cask() {
+  local out
+  out="$(BREW_INSTALLED="discord" GLIMT_BREW_OUTDATED="discord" run_module_fn macos modules/macos/extras/install-discord.sh install 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "brew upgrade --cask discord"
+  out="$(BREW_INSTALLED="discord" GLIMT_BREW_OUTDATED="" run_module_fn macos modules/macos/extras/install-discord.sh install 2>&1)" || fail "$out"
+  assert_contains "$out" "discord is up to date"
 }

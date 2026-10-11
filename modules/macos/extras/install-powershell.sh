@@ -20,12 +20,7 @@ deps() { log "No additional dependencies."; }
 # No version pin: install the cask if missing, otherwise upgrade it so every
 # run (including `glimt update`) lands on the latest release.
 install() {
-  if brew list --cask "$CASK" &>/dev/null; then
-    log "Upgrading $CASK to the latest release…"
-    brew upgrade --cask "$CASK" || warn "brew upgrade --cask $CASK failed (continuing)."
-  else
-    brew_cask_install "$CASK"
-  fi
+  brew_cask_install "$CASK"
   verify_binary pwsh --version || true
 }
 

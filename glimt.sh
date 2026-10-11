@@ -96,6 +96,8 @@ state_remove() {
 
 # === Progress bar + sudo (shared with the setup scripts) ===
 load_setup_lib() {
+  [[ -z "${GLIMT_SETUP_LIB_LOADED:-}" ]] || return 0
+  GLIMT_SETUP_LIB_LOADED=1
   if [[ -f "$REPO_DIR/setup-lib.sh" ]]; then
     # shellcheck source=setup-lib.sh
     source "$REPO_DIR/setup-lib.sh"
@@ -108,6 +110,8 @@ load_setup_lib() {
     progress_init() { PROGRESS_FAILED=(); }
     progress_run() { local t="$1"; shift; echo "==> $t"; "$@" || PROGRESS_FAILED+=("$t"); }
     progress_finish() { :; }
+    glimt_versions() { :; }
+    glimt_changes() { :; }
   fi
 }
 
@@ -146,6 +150,10 @@ run_modules() {
     esac
   done
   progress_finish
+  if [[ -n "${GLIMT_VERSIONS_BEFORE:-}" ]]; then
+    glimt_versions >"$GLIMT_LOG_DIR/versions-after.txt"
+    glimt_changes "$GLIMT_VERSIONS_BEFORE" "$GLIMT_LOG_DIR/versions-after.txt"
+  fi
   # exit (not return) so the ERR trap doesn't add a confusing second message
   if (( ${#PROGRESS_FAILED[@]} > 0 )); then exit 1; fi
 }
@@ -186,6 +194,9 @@ run_update() {
     $VERBOSE && verbose_flag=(--verbose)
     GLIMT_SKIP_PULL=1 exec bash "$REPO_DIR/glimt.sh" "${verbose_flag[@]+"${verbose_flag[@]}"}" update "$@"
   fi
+
+  load_setup_lib
+  prepare_update
 
   local maybe_module="${1:-}"
   [[ "$maybe_module" == "all" ]] && maybe_module=""
@@ -231,6 +242,27 @@ run_update() {
 
     run_modules update "${installers[@]+"${installers[@]}"}"
   fi
+}
+
+# Before an update: refresh package metadata once (so modules can tell what is
+# outdated without each one hitting the network) and record installed versions
+# for the summary at the end.
+prepare_update() {
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
+    if $VERBOSE; then
+      brew update
+    elif [[ -t 1 ]] && command -v gum >/dev/null 2>&1; then
+      gum spin --spinner dot --title "Checking for updates" -- brew update --quiet >/dev/null 2>&1 || true
+    else
+      brew update --quiet >/dev/null 2>&1 || true
+    fi
+    export HOMEBREW_NO_AUTO_UPDATE=1
+    GLIMT_BREW_OUTDATED="$(brew outdated --quiet 2>/dev/null | tr '\n' ' ')" || GLIMT_BREW_OUTDATED=""
+    export GLIMT_BREW_OUTDATED
+  fi
+  mkdir -p "$GLIMT_LOG_DIR"
+  GLIMT_VERSIONS_BEFORE="$GLIMT_LOG_DIR/versions-before.txt"
+  glimt_versions >"$GLIMT_VERSIONS_BEFORE"
 }
 
 run_install() {

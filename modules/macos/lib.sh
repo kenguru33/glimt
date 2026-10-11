@@ -15,6 +15,7 @@
 #   prune_backups <dest>        — keep newest $GLIMT_BACKUP_RETENTION backups
 #   verify_binary <bin> [args...] — warns only, never aborts the module
 #   normalize_arch
+#   brew_ensure [--cask] <name>... — install missing, upgrade outdated, else skip
 #   brew_cask_install <cask> [app_path]
 #   mas_install <id> / mas_uninstall <id>
 
@@ -140,37 +141,72 @@ normalize_arch() {
   esac
 }
 
-# === Install a brew cask, skipping if already installed or app exists ===
+# === Homebrew: install if missing, upgrade if outdated, otherwise skip ===
+#
+# Usage: brew_ensure [--cask] <name>...
+#
+# `glimt update` runs `brew update` once, then exports GLIMT_BREW_OUTDATED
+# (outdated formulae and casks) and HOMEBREW_NO_AUTO_UPDATE=1, so this needs
+# no network round-trip per package. Run standalone, it asks brew directly.
+# Casks that update themselves (auto_updates) are never reported outdated.
+brew_ensure() {
+  local kind=--formula pkg
+  if [[ "${1:-}" == --cask ]]; then kind=--cask; shift; fi
+  for pkg in "$@"; do
+    if ! brew list "$kind" "$pkg" &>/dev/null; then
+      brew install "$kind" "$pkg"
+    elif _brew_outdated "$kind" "$pkg"; then
+      log "Upgrading $pkg..."
+      brew upgrade "$kind" "$pkg"
+    else
+      log "$pkg is up to date."
+    fi
+  done
+}
+
+_brew_outdated() {
+  local kind="$1" pkg="$2"
+  if [[ -n "${GLIMT_BREW_OUTDATED+x}" ]]; then
+    [[ " $GLIMT_BREW_OUTDATED " == *" $pkg "* ]]
+  else
+    [[ -n "$(brew outdated "$kind" --quiet "$pkg" 2>/dev/null)" ]]
+  fi
+}
+
+# === Install or update a brew cask ===
 #
 # Usage: brew_cask_install <cask> [/Applications/App.app]
-# Checks brew registration and optional app path before installing.
+# An app that exists at app_path but wasn't installed by brew is left alone.
 brew_cask_install() {
   local cask="$1"
   local app_path="${2:-}"
   if brew list --cask "$cask" &>/dev/null; then
-    log "$cask already managed by brew."
+    brew_ensure --cask "$cask"
   elif [[ -n "$app_path" && -e "$app_path" ]]; then
-    log "$cask already installed at $app_path."
+    log "$cask already installed at $app_path (not managed by Homebrew)."
   else
     brew install --cask --force "$cask"
   fi
 }
 
-# === Install an app from the Mac App Store via mas ===
+# === Install or update an app from the Mac App Store via mas ===
 #
 # Usage: mas_install <apple_id> <app_name>
-# Installs mas if missing, then installs the app if not already present.
+# Installs mas if missing, then installs the app, or upgrades it if outdated.
 mas_install() {
   local apple_id="$1"
   local app_name="${2:-App $1}"
   if ! command -v mas &>/dev/null; then
     brew install mas
   fi
-  if mas list 2>/dev/null | grep -q "^${apple_id} "; then
-    log "$app_name already installed from App Store."
-  else
-    # mas 7+ requires root privileges to install apps.
+  # mas 7+ requires root privileges to install and upgrade apps
+  if ! mas list 2>/dev/null | grep -q "^ *${apple_id} "; then
     sudo mas install "$apple_id"
+  elif mas outdated 2>/dev/null | grep -q "^ *${apple_id} "; then
+    log "Upgrading $app_name..."
+    sudo mas upgrade "$apple_id"
+  else
+    log "$app_name is up to date."
   fi
 }
 

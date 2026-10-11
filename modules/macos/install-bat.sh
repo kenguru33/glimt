@@ -17,7 +17,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing bat via Homebrew..."
-  brew install bat
+  brew_ensure bat
   verify_binary bat --version
 }
 

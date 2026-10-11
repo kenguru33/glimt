@@ -15,11 +15,7 @@ ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 deps() { log "No additional dependencies."; }
 
 install() {
-  if brew list kubectl &>/dev/null; then
-    log "kubectl already installed."
-  else
-    brew install kubectl
-  fi
+  brew_ensure kubectl
   verify_binary kubectl version --client
 }
 

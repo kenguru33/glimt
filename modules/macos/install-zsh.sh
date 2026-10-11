@@ -32,7 +32,7 @@ write_zsh_config() {
 
 deps() {
   log "Installing Zsh and git via Homebrew..."
-  brew install zsh git
+  brew_ensure zsh git
   mkdir -p "$HOME_DIR/.local/bin"
 }
 

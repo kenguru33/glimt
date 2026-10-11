@@ -16,6 +16,10 @@
 #                            failures are collected and shown by progress_finish
 #   progress_finish        — print the final bar and a failure summary
 #   glimt_banner [subtitle] — clear the screen and print the glimt header
+#   glimt_versions         — print "name<TAB>version" for everything installed
+#   glimt_changes <before> <after>
+#                          — print what was updated/installed/removed between
+#                            two glimt_versions snapshots
 
 # === sudo: ask once, keep the credential warm for the whole run ===
 # Module output is hidden behind the progress bar, so a sudo prompt that
@@ -86,6 +90,74 @@ glimt_require_sudo() {
     sudo -v -p "[glimt] password for %u: " || { echo "glimt: sudo authentication failed" >&2; exit 1; }
   fi
   glimt_sudo_keepalive
+}
+
+# === What changed: version snapshots before and after a run ===
+# Package managers report versions; binaries glimt downloads into ~/.local/bin
+# have no common way to ask, so a checksum stands in ("#..." = changed build).
+glimt_versions() {
+  {
+    if [[ "${GLIMT_OS:-$(uname -s)}" == "Darwin" ]]; then
+      if command -v brew >/dev/null 2>&1; then
+        brew list --formula --versions 2>/dev/null | awk '{print $1"\t"$NF}'
+        brew list --cask --versions 2>/dev/null | awk '{print $1"\t"$NF}'
+      fi
+      if command -v mas >/dev/null 2>&1; then
+        # "937984704  Amphetamine  (5.3.2)" → "Amphetamine<TAB>5.3.2"
+        mas list 2>/dev/null | sed -E 's/^ *[0-9]+ +(.*[^ ]) +\(([^)]*)\) *$/\1	\2/' | grep "$(printf '\t')"
+      fi
+    else
+      if command -v rpm >/dev/null 2>&1; then
+        rpm -qa --qf '%{NAME}\t%{VERSION}-%{RELEASE}\n' 2>/dev/null
+      fi
+      if command -v flatpak >/dev/null 2>&1; then
+        flatpak list --app --columns=name,version 2>/dev/null | awk -F'\t' 'NF {print $1"\t"($2 == "" ? "-" : $2)}'
+      fi
+    fi
+    local f
+    for f in "$HOME/.local/bin"/*; do
+      if [[ -f "$f" && -x "$f" ]]; then
+        printf '%s\t#%s\n' "${f##*/}" "$(cksum <"$f" | cut -d' ' -f1)"
+      fi
+    done
+  } | awk -F'\t' 'NF == 2 { v[$1] = ($1 in v) ? v[$1] "," $2 : $2 } END { for (k in v) print k "\t" v[k] }' | sort
+  return 0
+}
+
+# glimt_changes <before> <after> — lines "U<TAB>name<TAB>old<TAB>new",
+# "A<TAB>name<TAB>new", "R<TAB>name<TAB>old"
+_glimt_diff_versions() {
+  awk -F'\t' 'NR == FNR { a[$1] = $2; next } { b[$1] = $2 }
+    END {
+      for (k in b) if (!(k in a)) print "A\t" k "\t" b[k]; else if (a[k] != b[k]) print "U\t" k "\t" a[k] "\t" b[k]
+      for (k in a) if (!(k in b)) print "R\t" k "\t" a[k]
+    }' "$1" "$2" | sort -t "$(printf '\t')" -k1,1 -k2,2
+}
+
+# Print a short summary; the full list goes to $GLIMT_LOG_DIR/changes.txt
+glimt_changes() {
+  local diff max=12
+  diff="$(_glimt_diff_versions "$1" "$2")"
+  echo
+  if [[ -z "$diff" ]]; then
+    echo "Everything is up to date."
+    return 0
+  fi
+  mkdir -p "$GLIMT_LOG_DIR"
+  printf '%s\n' "$diff" >"$GLIMT_LOG_DIR/changes.txt"
+  local kind title n
+  for kind in U A R; do
+    case "$kind" in U) title="Updated" ;; A) title="Installed" ;; R) title="Removed" ;; esac
+    n="$(printf '%s\n' "$diff" | grep -c "^$kind")" || true
+    (( n > 0 )) || continue
+    if command -v gum >/dev/null 2>&1; then gum style --bold "$title"; else echo "$title"; fi
+    printf '%s\n' "$diff" | grep "^$kind" | head -n "$max" | awk -F'\t' '
+      function v(x) { return (x ~ /^#/) ? "new build" : x }
+      $1 == "U" { if ($3 ~ /^#/) printf "  %-28s new build\n", $2; else printf "  %-28s %s → %s\n", $2, $3, $4 }
+      $1 == "A" { printf "  %-28s %s\n", $2, v($3) }
+      $1 == "R" { printf "  %s\n", $2 }'
+    if (( n > max )); then echo "  … and $(( n - max )) more ($GLIMT_LOG_DIR/changes.txt)"; fi
+  done
 }
 
 # === Header ===

@@ -81,6 +81,7 @@ After sourcing, available globals and functions:
 - `prune_backups <dest>` — keeps only the newest `$GLIMT_BACKUP_RETENTION` (default 3) `<dest>.bak.<timestamp>` files. Called by `deploy_config`; set `GLIMT_BACKUP_RETENTION=N` to override, `0` to keep none
 - `verify_binary <bin> [args]` — warns (does not abort) if a binary isn't functional after install
 - `confirm <question>` — y/N prompt for optional steps (e.g. "also remove the package?" in `clean`). Answers "no" when there's no terminal (modules usually run behind the progress bar); `GLIMT_ASSUME_YES=1` answers "yes". Never use a bare `read -rp` in a module
+- `dnf_ensure <pkg>...` — installs missing packages and upgrades installed ones. Use it instead of `sudo dnf install -y` for package lists: plain `dnf install` leaves an installed package at its old version, so `glimt update` would never update it
 - `normalize_arch()` — maps `uname -m` to Go/Kubernetes naming (`x86_64`→`amd64`, `aarch64`→`arm64`); dies on unsupported arch. Use in any module that downloads architecture-specific binaries.
 
 ### Pinned versions — `versions.env`
@@ -122,6 +123,8 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 source "$GLIMT_LIB"
 ```
 
+`glimt update` snapshots installed versions (brew/mas, rpm/flatpak, checksums of `~/.local/bin`) before and after the run and prints what was updated, installed or removed (`glimt_versions` / `glimt_changes` in `setup-lib.sh`). Modules should therefore skip work when the installed version is already current — no re-download, no reinstall.
+
 Rules enforced across the codebase:
 - `set -Eeuo pipefail` on every module — no exceptions. The orchestrators `setup.sh` and `setup-macos.sh` deliberately use `set -Euo pipefail` (no `-e`) so one failing module can't stop the whole run; modules are run through `progress_run` (in `setup-lib.sh`), which records failures and always returns 0
 - `deploy_config` instead of bare `cp` for any config template deployment
@@ -158,6 +161,7 @@ After setup, `glimt.sh` is installed to `~/.local/bin/glimt` for ongoing managem
 `setup-macos.sh` is the macOS orchestrator. It installs terminal tooling only (no GNOME/desktop):
 - **Modules live in** `modules/macos/` with a matching `modules/macos/lib.sh`
 - **Key differences from Fedora lib.sh**: uses `dscl` instead of `getent` for `HOME_DIR`; `run_as_user` is a no-op wrapper when not running as root (brew must not run as root); `normalize_arch` handles both `arm64` (Apple Silicon) and `x86_64`
+- **Installing with brew**: use `brew_ensure [--cask] <name>...` / `brew_cask_install` / `mas_install` from the macOS lib, never a bare `brew install` — they install what is missing, upgrade only what is outdated and skip the rest. `glimt update` runs `brew update` once and exports `GLIMT_BREW_OUTDATED` + `HOMEBREW_NO_AUTO_UPDATE=1` so this is fast
 - **Package manager**: Homebrew — no `sudo` needed for `brew install`. Casks (`brew_cask_install`, `brew uninstall --cask`) and `mas` may run `sudo` themselves, so the orchestrators ask for the password up front for those modules (`glimt_needs_sudo` in `setup-lib.sh`) and hand it to brew via `SUDO_ASKPASS`
 - **Nerd fonts**: installed via `brew install --cask font-*-nerd-font` (no wget/unzip)
 - **Terminal theme**: `install-iterm2-theme.sh` downloads Catppuccin Mocha `.itermcolors` and imports it into iTerm2 via `open`

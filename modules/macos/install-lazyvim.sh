@@ -19,7 +19,7 @@ NVIM_DIRS=(
 
 deps() {
   log "Installing Neovim dependencies via Homebrew..."
-  brew install neovim git curl ripgrep fd
+  brew_ensure neovim git curl ripgrep fd
 }
 
 install() {

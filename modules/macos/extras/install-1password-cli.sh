@@ -16,7 +16,7 @@ macos_guard() {
 deps() { log "No additional dependencies."; }
 
 install() {
-  brew install 1password-cli
+  brew_ensure --cask 1password-cli
   verify_binary op --version
 }
 

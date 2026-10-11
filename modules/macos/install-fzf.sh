@@ -17,7 +17,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing fzf and fd via Homebrew..."
-  brew install fzf fd
+  brew_ensure fzf fd
   verify_binary fzf --version
 
   log "Installing fzf-tab plugin..."

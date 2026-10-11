@@ -15,11 +15,7 @@ FASTFETCH_CONFIG_DIR="$HOME_DIR/.config/fastfetch"
 deps() { log "No additional dependencies."; }
 
 install() {
-  if brew list fastfetch &>/dev/null; then
-    log "fastfetch already installed."
-  else
-    brew install fastfetch
-  fi
+  brew_ensure fastfetch
   verify_binary fastfetch --version
 }
 

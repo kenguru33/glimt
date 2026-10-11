@@ -16,7 +16,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing Starship via Homebrew..."
-  brew install starship
+  brew_ensure starship
   verify_binary starship --version
 }
 

@@ -16,11 +16,19 @@ VOLTA_HOME="$HOME_DIR/.volta"
 deps() { log "No additional dependencies."; }
 
 install() {
+  local latest current=""
+  latest="$(curl -fsSL https://api.github.com/repos/volta-cli/volta/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1)" || latest=""
   if [[ -x "$VOLTA_HOME/bin/volta" ]]; then
-    log "Volta already installed."
-    return 0
+    current="$("$VOLTA_HOME/bin/volta" --version 2>/dev/null || true)"
+    if [[ -z "$latest" || "$current" == "$latest" ]]; then
+      log "Volta ${current:-} is up to date."
+      return 0
+    fi
+    log "Updating Volta $current → $latest..."
+  else
+    log "Installing Volta..."
   fi
-  log "Installing Volta..."
   # --skip-setup avoids modifying shell profile (we deploy volta.zsh ourselves)
   curl -fsSL https://get.volta.sh | bash -s -- --skip-setup
   export PATH="$VOLTA_HOME/bin:$PATH"

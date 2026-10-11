@@ -21,8 +21,7 @@ macos_guard() {
 deps() { log "No additional dependencies."; }
 
 install() {
-  log "Installing Zellij via Homebrew..."
-  brew install zellij
+  brew_ensure zellij
   verify_binary zellij --version
 }
 

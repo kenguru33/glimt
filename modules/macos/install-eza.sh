@@ -16,7 +16,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing eza via Homebrew..."
-  brew install eza
+  brew_ensure eza
   verify_binary eza --version
 }
 

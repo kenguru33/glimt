@@ -17,7 +17,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing btop via Homebrew..."
-  brew install btop
+  brew_ensure btop
   verify_binary btop --version
 }
 

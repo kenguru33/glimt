@@ -76,13 +76,17 @@ esac'
 stub dnf 'echo "dnf $*" >>"$CALLS"'
 stub brew '
 echo "brew $*" >>"$CALLS"
-if [[ "${1:-}" == list ]]; then exit "${BREW_HAS_RC:-1}"; fi'
+if [[ "${1:-}" == list ]]; then
+  if [[ -n "${BREW_INSTALLED:-}" ]]; then [[ " $BREW_INSTALLED " == *" ${@: -1} "* ]]; exit; fi
+  exit "${BREW_HAS_RC:-1}"
+fi'
 stub rpm '
 echo "rpm $*" >>"$CALLS"
 if [[ "${2:-}" == --qf ]]; then echo 7.6.6; exit 0; fi
 pkg="${@: -1}"
 [[ " ${RPM_INSTALLED:-} " == *" $pkg "* ]]'
 stub pwsh 'echo "PowerShell 7.6.6"'
+stub mas 'echo "mas $*" >>"$CALLS"'
 stub getent 'echo "${2:-user}:x:501:20::$GLIMT_TEST_HOME:/bin/bash"'
 stub dscl 'echo "NFSHomeDirectory: $GLIMT_TEST_HOME"'
 stub uname '
@@ -744,9 +748,13 @@ test_powershell_macos_installs_cask_when_missing() {
 test_powershell_macos_upgrades_cask_when_present() {
   [[ "$OS" == Darwin ]] || skip "macOS only"
   local out
-  out="$(BREW_HAS_RC=0 run_ps_macos install)" || fail "$out"
-  assert_contains "$(calls)" "brew upgrade --cask powershell" "re-runs must upgrade to latest"
+  out="$(BREW_HAS_RC=0 GLIMT_BREW_OUTDATED="powershell" run_ps_macos install)" || fail "$out"
+  assert_contains "$(calls)" "brew upgrade --cask powershell" "outdated: upgrade to latest"
   assert_not_contains "$(calls)" "brew install"
+  : >"$CALLS"
+  out="$(BREW_HAS_RC=0 GLIMT_BREW_OUTDATED="" run_ps_macos install)" || fail "$out"
+  assert_not_contains "$(calls)" "brew upgrade" "current: skip"
+  assert_contains "$out" "powershell is up to date"
 }
 
 test_powershell_macos_clean_uninstalls_cask() {
@@ -893,6 +901,33 @@ test_glimt_clean_and_install_update_extras_state() {
   assert_eq "$(sort "$SB/.config/glimt/optional-extras.selected" | tr '\n' ',')" "delta,epsilon," "after install delta (twice):"
   out="$(glimt_run install alpha)" || fail "$out"
   assert_not_contains "$(cat "$SB/.config/glimt/optional-extras.selected")" "alpha" "core modules are not extras"
+}
+
+test_glimt_update_prints_summary_of_changes() {
+  fake_repo
+  # alpha "updates" a downloaded binary; beta installs a new one
+  printf '#!/usr/bin/env bash\nmkdir -p "%s/.local/bin"\necho v2 >"%s/.local/bin/alpha-tool"\nchmod +x "%s/.local/bin/alpha-tool"\n' \
+    "$SB" "$SB" "$SB" >>"$SB/repo/modules/$GLIMT_OSDIR/install-alpha.sh"
+  printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\nmkdir -p "%s/.local/bin"\ntouch "%s/.local/bin/beta-tool"\nchmod +x "%s/.local/bin/beta-tool"\n' \
+    beta "$SB" "$SB" "$SB" "$SB" >"$SB/repo/modules/$GLIMT_OSDIR/install-beta.sh"
+  mkdir -p "$SB/.local/bin"
+  echo v1 >"$SB/.local/bin/alpha-tool"
+  chmod +x "$SB/.local/bin/alpha-tool"
+  local out
+  out="$(glimt_run update)" || fail "$out"
+  assert_contains "$out" "Updated"
+  assert_contains "$out" "alpha-tool"
+  assert_contains "$out" "Installed"
+  assert_contains "$out" "beta-tool"
+  out="$(glimt_run update)" || fail "$out"
+  assert_contains "$out" "Everything is up to date." "second run: same versions, nothing to report"
+}
+
+test_glimt_update_says_up_to_date_when_nothing_changed() {
+  fake_repo
+  local out
+  out="$(glimt_run update)" || fail "$out"
+  assert_contains "$out" "Everything is up to date."
 }
 
 test_glimt_update_continues_with_pulled_glimt() {

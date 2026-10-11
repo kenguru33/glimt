@@ -17,11 +17,7 @@ SESSIONS_DIR="$HOME_DIR/.local/share/kitty/sessions"
 deps() { log "No additional dependencies."; }
 
 install() {
-  if brew list --cask kitty &>/dev/null; then
-    log "Kitty already installed."
-  else
-    brew install --cask kitty
-  fi
+  brew_ensure --cask kitty
   verify_binary kitty --version
 }
 

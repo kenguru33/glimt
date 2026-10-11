@@ -17,7 +17,7 @@ deps() { log "No additional dependencies."; }
 
 install() {
   log "Installing GitHub CLI via Homebrew..."
-  brew install gh
+  brew_ensure gh
   verify_binary gh --version
 }
 

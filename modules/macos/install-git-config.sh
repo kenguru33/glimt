@@ -18,7 +18,7 @@ FALLBACK_COMPLETION="$PLUGIN_DIR/git-completion.zsh"
 
 deps() {
   log "Installing git via Homebrew..."
-  brew install git
+  brew_ensure git
 }
 
 install() {

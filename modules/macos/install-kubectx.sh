@@ -15,11 +15,7 @@ ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 deps() { log "No additional dependencies."; }
 
 install() {
-  if brew list kubectx &>/dev/null; then
-    log "kubectx already installed."
-  else
-    brew install kubectx
-  fi
+  brew_ensure kubectx
   verify_binary kubectx
   verify_binary kubens
 }
