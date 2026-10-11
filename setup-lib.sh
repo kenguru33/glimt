@@ -288,16 +288,13 @@ progress_run() {
 # Modules skip downloads/upgrades when the installed version is current and
 # say so with "<name> [version] is up to date" (log/echo). On a terminal the
 # bar's text is replaced in place with those messages (no newline; the next
-# step overwrites it); without one, each is printed on its own line.
+# step overwrites it); without one they stay in the log only.
 PROGRESS_INLINE=0
 _progress_up_to_date() {
   local skips text cols
+  _progress_tty || return 0
   skips="$(sed -nE 's/^\[[^]]*\] //; s/\.$//; / is up to date$/p' "$1" 2>/dev/null)" || true
   [[ -n "$skips" ]] || return 0
-  if ! _progress_tty; then
-    printf '%s\n' "$skips" | sed 's/^/  ✓ /; s/$/, skipped/'
-    return 0
-  fi
   text="$(_progress_bar "$PROGRESS_DONE" "$PROGRESS_TOTAL")  ✓ $(printf '%s\n' "$skips" | paste -sd ',' - | sed 's/,/, /g')"
   # Stay on one row: a wrapped line can't be cleared with \r.
   cols="$(tput cols 2>/dev/null || echo 80)"

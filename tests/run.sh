@@ -291,7 +291,7 @@ EOF
   done
 }
 
-test_progress_run_shows_up_to_date_skips() {
+test_progress_run_hides_up_to_date_skips_without_tty() {
   local b out
   for b in "${LIB_BASHES[@]}"; do
     out="$(GLIMT_LOG_DIR="$SB/logs" run_lib_script "$b" 2>&1 <<'EOF'
@@ -302,11 +302,8 @@ progress_run "Updating k9s" bash -c 'echo "k9s v0.32.4 is up to date"; exit 1'
 progress_finish
 EOF
 )" || fail "[$b] $out"
-    assert_contains "$out" "✓ helm v3.15.0 is up to date, skipped" "[$b] module prefix stripped:"
-    assert_contains "$out" "✓ bat is up to date, skipped" "[$b] trailing period stripped:"
+    assert_not_contains "$out" "✓" "[$b] skips stay in the log without a terminal"
     assert_not_contains "$out" "hidden-detail" "[$b] other output stays in the log"
-    assert_not_contains "$out" "Already up to date" "[$b] only '<x> is up to date' lines"
-    assert_not_contains "$out" "✓ k9s" "[$b] failed modules show the log tail, not skips"
   done
 }
 
