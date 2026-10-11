@@ -41,11 +41,19 @@ fi
 # === Step: deps ===
 install_dependencies() {
   echo "Installing dependencies..."
-  sudo dnf install -y curl tar gzip
+  dnf_ensure curl tar gzip
 }
 
 # === Step: install ===
 install_k9s() {
+  # `k9s version -s` prints "Version  v0.32.4" among other lines
+  local current
+  current="$("$HOME_DIR/.local/bin/k9s" version -s 2>/dev/null | awk '$1 == "Version" {print $2}' || true)"
+  if [[ "$current" == "$K9S_VERSION" ]]; then
+    echo "k9s $K9S_VERSION is up to date"
+    return
+  fi
+
   echo "Installing K9s $K9S_VERSION to ~/.local/bin..."
 
   local norm_arch url

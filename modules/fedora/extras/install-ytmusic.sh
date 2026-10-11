@@ -53,7 +53,7 @@ ICON_SRC_SVG="https://upload.wikimedia.org/wikipedia/commons/6/6a/Youtube_Music_
 # -------------------------------
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf install -y curl wget xdg-utils desktop-file-utils librsvg2-tools
+  dnf_ensure curl wget xdg-utils desktop-file-utils librsvg2-tools
 }
 
 # -------------------------------

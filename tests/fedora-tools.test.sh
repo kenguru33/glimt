@@ -215,3 +215,67 @@ test_nerdfonts_clean_succeeds_when_nothing_installed() {
   out="$(NERDFONTS_VERSION=vtest run_module_fn fedora modules/fedora/install-nerdfonts.sh clean_fonts 2>&1)" ||
     fail "clean must succeed with no fonts installed: $out"
 }
+
+# =====================================================================
+# Pinned binaries: same version -> no download, other version -> install
+# =====================================================================
+ft_fake_bin() { # <name> <shell body>
+  mkdir -p "$SB/.local/bin"
+  printf '#!/bin/sh\n%s\n' "$2" >"$SB/.local/bin/$1"
+  chmod +x "$SB/.local/bin/$1"
+}
+
+test_helm_same_version_skips_download() {
+  ft_stubs
+  ft_fake_bin helm 'echo v3.15.0'
+  local out
+  out="$(HELM_VERSION=v3.15.0 FAKE_UNAME_M=x86_64 \
+    run_module_fn fedora modules/fedora/install-helm.sh install_helm 2>&1)" || fail "$out"
+  assert_contains "$out" "helm v3.15.0 is up to date"
+  assert_not_contains "$(calls)" "curl" "no download when current"
+  assert_not_contains "$(calls)" "sudo install" "binary must be left alone"
+}
+
+test_helm_other_version_downloads() {
+  ft_stubs
+  ft_fake_bin helm 'echo v3.14.0'
+  mkdir -p "$SB/fixture/linux-amd64"
+  printf '#!/bin/sh\necho v3.15.0\n' >"$SB/fixture/linux-amd64/helm"
+  tar -czf "$SB/helm.tar.gz" -C "$SB/fixture" linux-amd64
+  local out
+  out="$(HELM_VERSION=v3.15.0 FT_CURL_FILE="$SB/helm.tar.gz" FAKE_UNAME_M=x86_64 \
+    run_module_fn fedora modules/fedora/install-helm.sh install_helm 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "get.helm.sh/helm-v3.15.0-linux-amd64.tar.gz"
+  assert_contains "$out" "replacing v3.14.0"
+}
+
+test_k9s_same_version_skips_download() {
+  ft_stubs
+  ft_fake_bin k9s 'printf "Version              v0.32.4\nCommit               abc\n"'
+  local out
+  out="$(K9S_VERSION=v0.32.4 FAKE_UNAME_M=x86_64 \
+    run_module_fn fedora modules/fedora/install-k9s.sh install_k9s 2>&1)" || fail "$out"
+  assert_contains "$out" "k9s v0.32.4 is up to date"
+  assert_not_contains "$(calls)" "curl" "no download when current"
+}
+
+test_kubectx_same_version_skips_download() {
+  ft_stubs
+  ft_fake_bin kubectx 'echo 0.9.5'
+  ft_fake_bin kubens 'echo 0.9.5'
+  local out
+  out="$(KUBECTX_VERSION=v0.9.5 FAKE_UNAME_M=x86_64 \
+    run_module_fn fedora modules/fedora/install-kubectx.sh install 2>&1)" || fail "$out"
+  assert_contains "$out" "kubectx v0.9.5 is up to date"
+  assert_not_contains "$(calls)" "curl" "no download when current"
+}
+
+test_kubectl_same_version_skips_download() {
+  ft_stubs
+  ft_fake_bin kubectl 'echo "Client Version: v1.31.0"'
+  local out
+  out="$(FAKE_UNAME_M=x86_64 run_module_fn fedora modules/fedora/install-kubectl.sh do_install 2>&1)" || fail "$out"
+  assert_contains "$out" "kubectl v1.31.0 is up to date"
+  assert_contains "$(calls)" "stable.txt" "latest version is resolved"
+  assert_not_contains "$(calls)" "bin/linux/amd64/kubectl" "no download when current"
+}

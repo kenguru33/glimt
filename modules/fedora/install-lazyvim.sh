@@ -34,7 +34,7 @@ fi
 # === Step: deps ===
 install_dependencies() {
   echo "Installing Neovim and related tools..."
-  sudo dnf install -y neovim git curl unzip ripgrep fd-find fzf gcc gcc-c++ make
+  dnf_ensure neovim git curl unzip ripgrep fd-find fzf gcc gcc-c++ make
   echo "Dependencies installed."
 }
 

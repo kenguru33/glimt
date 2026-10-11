@@ -39,7 +39,7 @@ require_x86_64() {
 deps() {
   require_x86_64
   log "Installing dependencies…"
-  sudo dnf install -y ca-certificates curl dnf-plugins-core
+  dnf_ensure ca-certificates curl dnf-plugins-core
 }
 
 install_repo() {
@@ -62,7 +62,7 @@ remove_repo() {
 
 install_pkg() {
   log "Installing google-chrome-stable…"
-  sudo dnf install -y google-chrome-stable
+  dnf_ensure google-chrome-stable
 }
 
 config() {

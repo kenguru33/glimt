@@ -26,7 +26,7 @@ declare -A PLUGINS=(
 # === Step: deps ===
 deps() {
   echo "Installing Zsh dependencies..."
-  sudo dnf install -y zsh git
+  dnf_ensure zsh git
 
   echo "Ensuring $LOCAL_BIN exists..."
   run_as_user mkdir -p "$LOCAL_BIN"

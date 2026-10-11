@@ -69,7 +69,7 @@ CARD_RADIUS="${CHATGPT_ICON_RADIUS:-36}"
 # -------------------------------
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf install -y curl wget xdg-utils desktop-file-utils librsvg2-tools ImageMagick
+  dnf_ensure curl wget xdg-utils desktop-file-utils librsvg2-tools ImageMagick
 }
 
 # -------------------------------

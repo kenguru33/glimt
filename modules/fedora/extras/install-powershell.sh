@@ -52,7 +52,7 @@ deps() {
   echo "[$MODULE_NAME] Installing dependencies and Microsoft repo…"
   arch_supported || return 0
 
-  sudo dnf install -y curl
+  dnf_ensure curl
 
   if [[ -f "$MS_PROD_REPO" ]]; then
     echo "ℹ️  Microsoft prod repo already configured ($MS_PROD_REPO)."
@@ -85,13 +85,8 @@ EOF
 install_pkg() {
   arch_supported || return 0
 
-  if rpm -q powershell &>/dev/null; then
-    echo "⬆️  [$MODULE_NAME] Upgrading PowerShell to the latest release…"
-    sudo dnf upgrade -y powershell
-  else
-    echo "[$MODULE_NAME] Installing PowerShell…"
-    sudo dnf install -y powershell
-  fi
+  echo "[$MODULE_NAME] Installing or updating PowerShell…"
+  dnf_ensure powershell
 
   verify_binary pwsh --version || true
   echo "PowerShell $(rpm -q --qf '%{VERSION}' powershell 2>/dev/null || echo '?') installed."

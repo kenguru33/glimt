@@ -32,7 +32,7 @@ fi
 # === Step: deps ===
 install_deps() {
   echo "Installing bat and wget..."
-  sudo dnf install -y bat wget
+  dnf_ensure bat wget
 }
 
 # === Step: install ===

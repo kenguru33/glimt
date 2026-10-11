@@ -33,7 +33,7 @@ fi
 # === Dependencies ===
 install_dependencies() {
   echo "Installing dependencies..."
-  sudo dnf install -y curl
+  dnf_ensure curl
   # Check if gum is available, install if not
   if ! command -v gum &>/dev/null; then
     if sudo dnf install -y gum 2>/dev/null; then

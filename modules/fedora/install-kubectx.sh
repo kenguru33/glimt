@@ -44,16 +44,26 @@ normalize_arch_kubectx() {
 deps() {
   log "Checking dependencies..."
   if ! command -v curl >/dev/null 2>&1; then
-    sudo dnf install -y curl
+    dnf_ensure curl
   fi
 }
 
 # === install ===
 install() {
-  echo "Installing kubectx and kubens from GitHub releases..."
+  BIN_DIR="$HOME_DIR/.local/bin"
+
+  # `kubectx --version` prints the bare version ("0.9.5"); kubens ships in the
+  # same release, so both must be present and at the pinned version
+  local current
+  current="$("$BIN_DIR/kubectx" --version 2>/dev/null || true)"
+  if [[ -x "$BIN_DIR/kubens" && "${current#v}" == "${KUBECTX_VERSION#v}" ]]; then
+    log "kubectx $KUBECTX_VERSION is up to date"
+    return
+  fi
+
+  echo "Installing kubectx and kubens $KUBECTX_VERSION from GitHub releases..."
 
   ARCH_NORM="$(normalize_arch_kubectx)"
-  BIN_DIR="$HOME_DIR/.local/bin"
   sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
 
   # kubectx

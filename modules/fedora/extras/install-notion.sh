@@ -42,7 +42,7 @@ LEGACY_LAUNCHERS=(Notion.desktop)
 # --- Deps ---
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf install -y curl wget xdg-utils desktop-file-utils
+  dnf_ensure curl wget xdg-utils desktop-file-utils
 }
 
 detect_chrome() {

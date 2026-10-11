@@ -40,7 +40,7 @@ DEPS_CMDS=(gsettings)
 # === Dependency Installer ===
 install_dependencies() {
   echo "Ensuring required dependencies..."
-  sudo dnf install -y "${DEPS_PKGS[@]}"
+  dnf_ensure "${DEPS_PKGS[@]}"
 
   # Verify commands exist
   for cmd in "${DEPS_CMDS[@]}"; do

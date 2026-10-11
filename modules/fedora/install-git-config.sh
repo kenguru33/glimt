@@ -46,12 +46,7 @@ DEPS=(
 
 install_dependencies() {
   log "Installing dependencies…"
-  for pkg in "${DEPS[@]}"; do
-    if ! rpm -q "$pkg" &>/dev/null; then
-      log "Installing $pkg"
-      sudo dnf install -y "$pkg"
-    fi
-  done
+  dnf_ensure "${DEPS[@]}"
 }
 
 # ---------------------------------------------------------------------

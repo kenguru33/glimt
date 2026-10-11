@@ -19,6 +19,15 @@ PAPIRUS_VARIANTS=(Papirus Papirus-Dark Papirus-Light ePapirus ePapirus-Dark)
 # Upstream installer — always installs the latest release (not pinned)
 INSTALLER_URL="https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-icon-theme/master/install.sh"
 
+# Latest release tag, recorded after each install (removed with Papirus/)
+VERSION_MARKER="$PAPIRUS_DIR/.glimt-version"
+
+# Latest release tag, e.g. "20250501" (empty when unreachable)
+latest_release_version() {
+  curl -fsSL https://api.github.com/repos/PapirusDevelopmentTeam/papirus-icon-theme/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1 || true
+}
+
 require_user() {
   if [[ "$EUID" -eq 0 ]]; then
     echo "Error: Do not run this module as root." >&2
@@ -28,7 +37,7 @@ require_user() {
 
 deps() {
   log "Installing dependencies..."
-  sudo dnf install -y curl tar
+  dnf_ensure curl tar
 }
 
 install() {
@@ -36,13 +45,21 @@ install() {
 
   log "Installing papirus-icon-theme from git..."
 
+  # The installer always fetches master; the latest release tag recorded in
+  # $VERSION_MARKER tells whether a re-run would bring anything new. Skip when
+  # it matches (or when the latest can't be resolved and a theme is present).
+  local latest current=""
+  latest="$(latest_release_version)"
+  [[ -f "$VERSION_MARKER" ]] && current="$(cat "$VERSION_MARKER")"
   if [[ -d "$PAPIRUS_DIR" ]]; then
-    log "papirus-icon-theme already installed at $PAPIRUS_DIR"
-    log "ℹ️  To update, run 'clean' first, then 'install' again"
-    return
+    if [[ -z "$latest" || "$current" == "$latest" ]]; then
+      log "papirus-icon-theme ${current:-} is up to date"
+      return
+    fi
+    log "Updating papirus-icon-theme ${current:-(unknown)} to $latest..."
   fi
 
-  log "⬇️  Downloading and installing papirus-icon-theme..."
+  log "Downloading and installing papirus-icon-theme..."
   mkdir -p "$ICONS_DIR"
 
   command -v curl &>/dev/null || die "curl not found — run 'deps' first"
@@ -51,6 +68,7 @@ install() {
   DESTDIR="$ICONS_DIR" sh -c "$installer"
 
   if [[ -d "$PAPIRUS_DIR" ]]; then
+    [[ -z "$latest" ]] || printf '%s\n' "$latest" >"$VERSION_MARKER"
     log "papirus-icon-theme installed successfully to $PAPIRUS_DIR"
   else
     log "papirus-icon-theme installation failed"

@@ -15,7 +15,7 @@ BTOP_CONFIG_FILE="$BTOP_CONFIG_DIR/btop.conf"
 
 deps() {
   log "Installing btop..."
-  sudo dnf install -y btop
+  dnf_ensure btop
 }
 
 install() {

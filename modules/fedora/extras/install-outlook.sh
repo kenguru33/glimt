@@ -59,7 +59,7 @@ OFFICIAL_SVG_ALT="https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft_
 # -------------------------------
 install_deps(){
   log "Installing dependencies..."
-  sudo dnf install -y curl wget xdg-utils desktop-file-utils librsvg2-tools
+  dnf_ensure curl wget xdg-utils desktop-file-utils librsvg2-tools
 }
 
 # -------------------------------

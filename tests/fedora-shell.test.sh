@@ -242,3 +242,75 @@ test_zsh_clean_warns_when_zsh_is_login_shell() {
   out="$(run_module_fn fedora modules/fedora/install-zsh.sh clean 2>&1)" || fail "$out"
   assert_not_contains "$out" "still the login shell" "bash login shell: no warning"
 }
+
+# =====================================================================
+# dnf_ensure: install what is missing, upgrade what is there
+# =====================================================================
+test_dnf_ensure_installs_missing_and_upgrades_present() {
+  local out
+  out="$(RPM_INSTALLED="bat curl" run_module_fn fedora modules/fedora/install-fzf.sh deps 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf install -y fzf fd-find unzip"
+  assert_contains "$(calls)" "sudo dnf upgrade -y bat curl" "installed packages must be upgraded"
+}
+
+test_dnf_ensure_skips_upgrade_when_nothing_installed() {
+  local out
+  out="$(RPM_INSTALLED="" run_module_fn fedora modules/fedora/install-fzf.sh deps 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf install -y fzf bat fd-find curl unzip"
+  assert_not_contains "$(calls)" "dnf upgrade"
+}
+
+test_dnf_ensure_only_upgrades_when_all_installed() {
+  local out
+  out="$(RPM_INSTALLED="fzf bat fd-find curl unzip" run_module_fn fedora modules/fedora/install-fzf.sh deps 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf upgrade -y fzf bat fd-find curl unzip"
+  assert_not_contains "$(calls)" "dnf install"
+}
+
+test_eza_upgrades_when_installed_from_repo() {
+  local out
+  out="$(RPM_INSTALLED="eza" run_module_fn fedora modules/fedora/install-eza.sh deps 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf upgrade -y eza"
+  assert_not_contains "$(calls)" "dnf install"
+  assert_not_contains "$(calls)" "copr"
+}
+
+# =====================================================================
+# starship: tracks the latest release, skips when already current
+# =====================================================================
+fs_release_curl() { # <tag> — curl stub that also answers the GitHub releases API
+  local d="$SB/.stubs"
+  mkdir -p "$d"
+  {
+    printf '#!/usr/bin/env bash\ntrap "" PIPE\necho "curl $*" >>"$CALLS"\n'
+    printf '[[ "$*" == *api.github.com* ]] && echo %q\n' "  \"tag_name\": \"$1\","
+    printf 'exit 0\n'
+  } >"$d/curl"
+  chmod +x "$d/curl"
+}
+
+fs_fake_starship() { # <version line>
+  mkdir -p "$SB/.local/bin"
+  printf '#!/bin/sh\necho "%s"\necho "branch:"\n' "$1" >"$SB/.local/bin/starship"
+  chmod +x "$SB/.local/bin/starship"
+}
+
+test_starship_same_version_skips_installer() {
+  fs_stubs
+  fs_release_curl v1.20.1
+  fs_fake_starship "starship 1.20.1"
+  local out
+  out="$(run_module_fn fedora modules/fedora/install-starship.sh install 2>&1)" || fail "$out"
+  assert_contains "$out" "starship 1.20.1 is up to date"
+  assert_not_contains "$(calls)" "starship.rs/install.sh" "no reinstall when current"
+}
+
+test_starship_newer_version_runs_installer() {
+  fs_stubs
+  fs_release_curl v1.21.0
+  fs_fake_starship "starship 1.20.1"
+  local out
+  out="$(run_module_fn fedora modules/fedora/install-starship.sh install 2>&1)" || fail "$out"
+  assert_contains "$out" "Updating starship 1.20.1 to 1.21.0"
+  assert_contains "$(calls)" "curl -fsSL https://starship.rs/install.sh"
+}

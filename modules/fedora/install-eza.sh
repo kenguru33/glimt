@@ -18,7 +18,14 @@ TARGET_FILE="$CONFIG_DIR/eza.zsh"
 deps() {
   echo "Installing eza..."
   
-  # Check if eza is already installed
+  # Already installed from a repo: upgrade it (no-op when current)
+  if rpm -q eza &>/dev/null; then
+    echo "eza is already installed, checking for updates..."
+    sudo dnf upgrade -y eza
+    return
+  fi
+
+  # Installed some other way (cargo, manual binary): leave it alone
   if command -v eza &>/dev/null; then
     echo "eza is already installed."
     return
@@ -34,10 +41,7 @@ deps() {
   echo "Warning: eza not available in Fedora repos. Enabling COPR repository..."
   
   # Install dnf-plugins-core if not present (needed for copr)
-  if ! rpm -q dnf-plugins-core &>/dev/null; then
-    echo "Installing dnf-plugins-core..."
-    sudo dnf install -y dnf-plugins-core
-  fi
+  dnf_ensure dnf-plugins-core
   
   # Enable dturner/eza COPR repository
   echo "Enabling dturner/eza COPR repository..."

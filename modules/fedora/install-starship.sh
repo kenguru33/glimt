@@ -20,21 +20,35 @@ deps() {
   echo "Checking dependencies for Starship..."
   if ! command -v curl >/dev/null; then
     echo "Installing curl..."
-    sudo dnf install -y curl
+    dnf_ensure curl
   fi
+}
+
+# Latest release version without the leading "v" (empty when unreachable)
+latest_release_version() {
+  curl -fsSL https://api.github.com/repos/starship/starship/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1 || true
 }
 
 # === Step: install ===
 install() {
   echo "Installing Starship..."
   run_as_user mkdir -p "$LOCAL_BIN"
-  if [[ ! -x "$LOCAL_BIN/starship" ]]; then
+  # Tracks the latest release: skip when the installed binary already is it
+  # (or when the latest version can't be resolved and one is installed)
+  local latest current=""
+  latest="$(latest_release_version)"
+  if [[ -x "$LOCAL_BIN/starship" ]]; then
+    current="$("$LOCAL_BIN/starship" --version 2>/dev/null | awk 'NR == 1 {print $2}' || true)"
+  fi
+  if [[ -n "$current" && ( -z "$latest" || "$current" == "$latest" ) ]]; then
+    echo "starship $current is up to date"
+  else
+    [[ -n "$current" ]] && echo "Updating starship $current to $latest..."
     # Download as the caller, but run the installer as the user so the binary
     # in ~/.local/bin is owned by them (always tracks the latest release)
     curl -fsSL https://starship.rs/install.sh | run_as_user sh -s -- -y --bin-dir "$LOCAL_BIN"
     echo "Starship installed to $LOCAL_BIN"
-  else
-    echo "⏭️  Starship already installed"
   fi
   verify_binary starship --version
 }

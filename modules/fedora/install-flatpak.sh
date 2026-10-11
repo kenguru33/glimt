@@ -31,7 +31,7 @@ has_remote() {
 
 install_deps() {
   log "Installing Flatpak..."
-  sudo dnf install -y flatpak
+  dnf_ensure flatpak
 }
 
 install_flatpak() {

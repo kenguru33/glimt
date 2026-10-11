@@ -35,11 +35,18 @@ LOCAL_BIN="$HOME_DIR/.local/bin"
 
 install_deps(){
   log "Installing dependencies (sudo): curl tar gzip"
-  sudo dnf install -y curl tar gzip
+  dnf_ensure curl tar gzip
 }
 
 install_helm(){
-  log "Installing helm from GitHub releases"
+  local current
+  current="$("$LOCAL_BIN/helm" version --template '{{.Version}}' 2>/dev/null || true)"
+  if [[ "$current" == "$HELM_VERSION" ]]; then
+    log "helm $HELM_VERSION is up to date"
+    return
+  fi
+
+  log "Installing helm $HELM_VERSION from GitHub releases${current:+ (replacing $current)}"
   
   ARCH_NORM="$(normalize_arch)"
   HELM_URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH_NORM}.tar.gz"

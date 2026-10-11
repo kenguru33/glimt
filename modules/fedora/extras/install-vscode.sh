@@ -29,7 +29,7 @@ fedora_guard() {
 deps() {
   echo "[$MODULE_NAME] Installing dependencies and VS Code repo…"
 
-  sudo dnf install -y curl
+  dnf_ensure curl
 
   if [[ ! -f "$REPO_FILE" ]]; then
     echo "Adding VS Code yum repo…"
@@ -54,7 +54,7 @@ EOF
 # ------------------------------------------------------------
 install_pkg() {
   echo "[$MODULE_NAME] Installing VS Code…"
-  sudo dnf install -y code
+  dnf_ensure code
   echo "VS Code installed."
   verify_binary code --version
 }

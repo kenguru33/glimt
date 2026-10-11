@@ -76,7 +76,7 @@ EOF
 deps() {
   log "Installing dependencies..."
   # curl + jq resolve and fetch the latest release, tar unpacks it
-  sudo dnf install -y curl jq tar
+  dnf_ensure curl jq tar
 }
 
 install_toolbox() {

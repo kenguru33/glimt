@@ -42,7 +42,7 @@ fedora_guard() {
 install_deps() {
   log "Installing dependencies"
   # curl for dotnet-install.sh; libicu is required by the .NET runtime
-  sudo dnf install -y curl libicu
+  dnf_ensure curl libicu
 }
 
 # ======================================================

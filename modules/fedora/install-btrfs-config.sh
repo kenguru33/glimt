@@ -62,7 +62,7 @@ disable_cow_dir() {
 deps() {
   fedora_guard
   log "Installing Btrfs and Snapper dependencies"
-  sudo dnf install -y \
+  dnf_ensure \
     btrfs-progs \
     btrfs-assistant \
     dnf-plugin-snapper
@@ -79,13 +79,8 @@ install() {
     return
   fi
 
-  if rpm -q snapper &>/dev/null; then
-    log "Snapper already installed"
-    return
-  fi
-
-  log "Installing Snapper (Btrfs root detected)"
-  sudo dnf install -y snapper
+  log "Installing or updating Snapper (Btrfs root detected)"
+  dnf_ensure snapper
 }
 
 # ---------------------------------------------------------

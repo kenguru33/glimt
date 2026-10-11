@@ -62,7 +62,7 @@ user_systemctl() { as_user_session systemctl --user "$@"; }
 # -------------------------------------------------------------------------
 deps() {
   log "Installing prerequisites…"
-  sudo dnf install -y \
+  dnf_ensure \
     dbus-daemon \
     slirp4netns \
     fuse-overlayfs \
@@ -71,7 +71,7 @@ deps() {
     jq
 
   if ! command -v newuidmap >/dev/null 2>&1; then
-    sudo dnf install -y shadow-utils-subid
+    dnf_ensure shadow-utils-subid
   fi
 }
 
@@ -204,7 +204,7 @@ install() {
   remove_conflicts
 
   log "Installing Docker CE rootless packages…"
-  sudo dnf install -y docker-ce docker-ce-cli docker-ce-rootless-extras
+  dnf_ensure docker-ce docker-ce-cli docker-ce-rootless-extras
 
   ensure_rootful_docker_off
   ensure_subids

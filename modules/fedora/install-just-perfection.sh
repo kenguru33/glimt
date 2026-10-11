@@ -23,7 +23,7 @@ require_gnome() {
 install_deps() {
   log "Installing dependencies"
   # gnome-extensions (the CLI) ships with gnome-shell itself
-  sudo dnf install -y curl jq
+  dnf_ensure curl jq
 }
 
 # Print a gsettings string list ("['a', 'b']" or "@as []") without <item>

@@ -35,20 +35,34 @@ deps() {
 
   if ! command -v curl >/dev/null; then
     echo "Installing curl via dnf..."
-    sudo dnf install -y curl
+    dnf_ensure curl
   fi
+}
+
+# Latest release version without the leading "v" (empty when unreachable)
+latest_release_version() {
+  curl -fsSL https://api.github.com/repos/volta-cli/volta/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1 || true
 }
 
 # === Step: install ===
 install() {
   echo "⬇️ Installing Volta for user $REAL_USER..."
 
-  if [[ ! -x "$VOLTA_BIN" ]]; then
+  # Tracks the latest release: skip when the installed binary already is it
+  # (or when the latest version can't be resolved and one is installed)
+  local latest current=""
+  latest="$(latest_release_version)"
+  if [[ -x "$VOLTA_BIN" ]]; then
+    current="$("$VOLTA_BIN" --version 2>/dev/null || true)"
+  fi
+  if [[ -n "$current" && ( -z "$latest" || "$current" == "$latest" ) ]]; then
+    echo "volta $current is up to date"
+  else
+    [[ -n "$current" ]] && echo "Updating volta $current to $latest..."
     # Run the installer itself as the user (not the caller) so ~/.volta is theirs
     curl -fsSL https://get.volta.sh | run_as_user env VOLTA_HOME="$VOLTA_HOME_DIR" bash -s -- --skip-setup
     echo "Volta installed to ~/.volta"
-  else
-    echo "⏭️  Volta already installed"
   fi
 
   verify_binary "$VOLTA_BIN" --version

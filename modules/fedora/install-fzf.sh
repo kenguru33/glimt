@@ -19,7 +19,7 @@ TARGET_FILE="$CONFIG_DIR/fzf.zsh"
 # === Step: deps ===
 deps() {
   echo "Installing fzf dependencies..."
-  sudo dnf install -y fzf bat fd-find curl unzip
+  dnf_ensure fzf bat fd-find curl unzip
 
   echo "Ensuring $LOCAL_BIN exists..."
   run_as_user mkdir -p "$LOCAL_BIN"

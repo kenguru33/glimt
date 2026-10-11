@@ -42,7 +42,7 @@ MS_REPO_PKG="https://packages.microsoft.com/config/fedora/${FEDORA_VER}/packages
 # === Deps ================================================================
 install_dependencies() {
   log "Installing dependencies…"
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
 }
 
 # === Repo + Install ======================================================
@@ -55,7 +55,7 @@ install_repo_and_package() {
   fi
 
   log "Installing azure-cli…"
-  sudo dnf install -y azure-cli
+  dnf_ensure azure-cli
   log "azure-cli installed."
 }
 

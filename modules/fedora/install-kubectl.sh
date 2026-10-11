@@ -43,7 +43,7 @@ deps() {
   echo "Checking dependencies..."
   if ! command -v curl >/dev/null 2>&1; then
     echo "Installing curl via dnf..."
-    sudo dnf install -y curl
+    dnf_ensure curl
   fi
 }
 
@@ -52,6 +52,14 @@ do_install() {
   ensure_dirs
 
   KVER="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+
+  # "Client Version: v1.31.0"
+  local current
+  current="$("$LOCAL_BIN/kubectl" version --client 2>/dev/null | sed -n 's/^Client Version: *//p' || true)"
+  if [[ -n "$KVER" && "$current" == "$KVER" ]]; then
+    echo "kubectl $KVER is up to date"
+    return
+  fi
   ARCH_NORM="$(normalize_arch)"
   KUBECTL_URL="https://dl.k8s.io/release/${KVER}/bin/linux/${ARCH_NORM}/kubectl"
 

@@ -19,7 +19,7 @@ TARGET_FILE="$ZSH_CONFIG_DIR/gh.zsh"
 # === Step: deps ===
 deps() {
   log "Installing gh..."
-  sudo dnf install -y gh
+  dnf_ensure gh
 }
 
 # === Step: install ===

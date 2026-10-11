@@ -27,7 +27,7 @@ DEPS=(wl-clipboard xclip)
 
 install_deps() {
   echo "Installing dependencies..."
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
 }
 
 install() {

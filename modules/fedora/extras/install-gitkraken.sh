@@ -31,7 +31,7 @@ DEPS=(curl)
 
 do_deps() {
   echo "→ [$MODULE_NAME] Installing dependencies..."
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
 }
 
 # ===== Helpers =====
@@ -48,9 +48,18 @@ download_rpm() {
   echo "→ Downloading GitKraken .rpm..."
   local tmp="$RPM_FILE.part"
   run_as_user rm -f "$tmp"
-  if ! sudo -u "$REAL_USER" curl -fL "$RPM_URL" -o "$tmp"; then
+  # With a cached RPM, only download when the server has a newer one (-z sends
+  # If-Modified-Since with the cache's mtime; -R stamps it with the remote one)
+  local since=()
+  [[ -s "$RPM_FILE" ]] && since=(-z "$RPM_FILE")
+  if ! sudo -u "$REAL_USER" curl -fL -R ${since[@]+"${since[@]}"} "$RPM_URL" -o "$tmp"; then
     echo "Error: Failed to download GitKraken RPM"
     exit 1
+  fi
+  if [[ ! -s "$tmp" ]]; then
+    run_as_user rm -f "$tmp"
+    echo "→ Cached GitKraken RPM is current, skipping download"
+    return 0
   fi
   
   # Verify it's actually an RPM file
@@ -101,7 +110,7 @@ install_pkg_file() {
     echo "→ Installing $PKG_NAME ($remote_ver)..."
     sudo dnf install -y "$RPM_FILE"
   else
-    echo "$PKG_NAME is up to date ($inst_ver). Skipping install."
+    echo "$PKG_NAME $inst_ver is up to date"
   fi
 }
 

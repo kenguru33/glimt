@@ -25,12 +25,18 @@ LENS_REPO="/etc/yum.repos.d/lens.repo"
 
 install_deps() {
   echo "Installing dependencies..."
-  sudo dnf install -y dnf-plugins-core curl
+  dnf_ensure dnf-plugins-core curl
 }
 
 install_lens() {
   echo "Installing Lens Desktop..."
 
+  # Already installed from the repo: upgrade it (no-op when current)
+  if rpm -q lens &>/dev/null; then
+    echo "Lens is already installed, checking for updates..."
+    dnf_ensure lens
+    return
+  fi
   if command -v lens-desktop &>/dev/null || command -v lens &>/dev/null; then
     echo "Lens is already installed."
     return
@@ -44,7 +50,7 @@ install_lens() {
   sudo dnf config-manager addrepo --from-repofile=https://downloads.k8slens.dev/rpm/lens.repo
 
   echo "⬇️ Installing Lens..."
-  sudo dnf install -y lens
+  dnf_ensure lens
 
   echo "Lens Desktop installed."
 }

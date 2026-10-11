@@ -27,7 +27,7 @@ fedora_guard() {
 deps() {
   log "Ensuring Flatpak is available"
   if ! command -v flatpak >/dev/null 2>&1; then
-    sudo dnf install -y flatpak
+    dnf_ensure flatpak
   fi
 }
 
@@ -39,8 +39,10 @@ flathub_configured() {
 install() {
   log "Installing Pika Backup via Flatpak"
 
+  # Already installed: update it instead (no-op when current)
   if flatpak info "$FLATPAK_ID" &>/dev/null; then
-    log "Pika Backup already installed (Flatpak)"
+    log "Pika Backup already installed (Flatpak), checking for updates"
+    flatpak update -y "$FLATPAK_ID" || warn "Pika Backup update failed"
     return
   fi
 

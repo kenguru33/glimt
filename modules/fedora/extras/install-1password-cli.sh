@@ -27,7 +27,7 @@ DEPS=(curl ca-certificates dnf-plugins-core)
 # === Dependencies ========================================================
 install_deps() {
   log "Installing dependencies…"
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
 }
 
 # === Repo ================================================================
@@ -57,7 +57,7 @@ remove_repo() {
 # === Install =============================================================
 install_cli() {
   log "Installing 1Password CLI…"
-  sudo dnf install -y 1password-cli
+  dnf_ensure 1password-cli
   log "1Password CLI installed."
   log "Tip: run 'op signin' to get started."
 }

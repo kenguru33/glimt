@@ -35,7 +35,13 @@ DEPS=(curl tar wl-clipboard)
 
 install_deps() {
   echo "Installing dependencies..."
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
+}
+
+# Latest release version without the leading "v" (empty when unreachable)
+latest_release_version() {
+  curl -fsSL https://api.github.com/repos/zellij-org/zellij/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1 || true
 }
 
 install() {
@@ -43,9 +49,17 @@ install() {
 
   run_as_user mkdir -p "$HOME_DIR/.local/bin"
 
+  # Tracks the latest release: skip when the installed binary already is it
+  # (or when the latest version can't be resolved and one is installed)
+  local latest current=""
+  latest="$(latest_release_version)"
   if [[ -x "$ZELLIJ_BIN" ]]; then
-    echo "Zellij already installed."
-    return
+    current="$("$ZELLIJ_BIN" --version 2>/dev/null | awk '{print $2}' || true)"
+    if [[ -z "$latest" || "$current" == "$latest" ]]; then
+      echo "zellij ${current:-} is up to date"
+      return
+    fi
+    echo "Updating zellij $current to $latest..."
   fi
 
   # Not normalize_arch: zellij release assets use the raw `uname -m` names

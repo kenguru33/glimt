@@ -62,7 +62,7 @@ map_arch() {
 
 deps() {
   echo "==> [$MODULE_NAME] deps"
-  sudo dnf install -y curl tar xz ca-certificates
+  dnf_ensure curl tar xz ca-certificates
 }
 
 _download_from_release() {
@@ -75,6 +75,14 @@ _download_from_release() {
     echo "Error: LAZYDOCKER_VERSION must look like v0.23.3 (got: $tag)"
     exit 1
   }
+
+  # `lazydocker --version` prints "Version: 0.23.3" among other lines
+  local current
+  current="$("$BIN_DIR/lazydocker" --version 2>/dev/null | sed -n 's/^Version: *//p' || true)"
+  if [[ "$current" == "${tag#v}" ]]; then
+    echo "lazydocker $tag is up to date"
+    return
+  fi
 
   local arch fname url tmpdir
   arch="$(map_arch)"

@@ -45,7 +45,7 @@ WEB_SEARCH="tiling-shell"
 deps() {
   log "Installing dependencies"
   # gnome-extensions (the CLI) ships with gnome-shell itself
-  sudo dnf install -y jq curl
+  dnf_ensure jq curl
 }
 
 # --------------------------------------------------
@@ -53,7 +53,7 @@ deps() {
 # --------------------------------------------------
 install() {
   log "Installing RPM-based GNOME extensions"
-  sudo dnf install -y "${RPM_PACKAGES[@]}"
+  dnf_ensure "${RPM_PACKAGES[@]}"
 
   if gnome-extensions list | grep -qx "$WEB_EXTENSION"; then
     log "Tiling Shell already installed"

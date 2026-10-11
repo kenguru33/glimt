@@ -23,7 +23,7 @@ require_gnome() {
 
 deps() {
   log "Installing $PKG…"
-  sudo dnf install -y "$PKG"
+  dnf_ensure "$PKG"
 }
 
 install() {

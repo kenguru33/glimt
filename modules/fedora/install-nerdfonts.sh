@@ -43,14 +43,7 @@ DEPS=("wget" "unzip" "fontconfig")
 
 install_deps() {
   echo "Installing required DNF packages..."
-  for dep in "${DEPS[@]}"; do
-    if ! rpm -q "$dep" &>/dev/null; then
-      echo "Installing $dep..."
-      sudo dnf install -y "$dep"
-    else
-      echo "$dep is already installed."
-    fi
-  done
+  dnf_ensure "${DEPS[@]}"
 }
 
 install_fonts() {
@@ -62,10 +55,18 @@ install_fonts() {
   tmp_dir="$(run_as_user mktemp -d)"
   [[ -d "$tmp_dir" ]] || die "Could not create a temporary download directory"
 
+  local marker
   for name in "${!FONTS[@]}"; do
+    # Each family dir records the release it was unzipped from
+    marker="$NERDFONTS_DIR/$name/.glimt-version"
+    if [[ -f "$marker" && "$(cat "$marker")" == "$NERDFONTS_VERSION" ]]; then
+      echo "$name Nerd Font $NERDFONTS_VERSION is up to date"
+      continue
+    fi
+    # Installed some other way (system package, by hand): leave it alone.
     # grep -q would exit early and SIGPIPE fc-list, failing the pipe under pipefail
-    if fc-list | grep -i "$name Nerd Font" >/dev/null; then
-      echo "$name Nerd Font already installed. Skipping."
+    if [[ ! -d "$NERDFONTS_DIR/$name" ]] && fc-list | grep -i "$name Nerd Font" >/dev/null; then
+      echo "$name Nerd Font already installed outside glimt. Skipping."
       continue
     fi
 
@@ -77,9 +78,12 @@ install_fonts() {
     fi
 
     echo "Extracting $name..."
+    # Start from an empty dir so files dropped by a newer release don't linger
+    run_as_user rm -rf "${NERDFONTS_DIR:?}/$name"
     run_as_user mkdir -p "$NERDFONTS_DIR/$name"
     run_as_user unzip -o "$zip_path" -d "$NERDFONTS_DIR/$name" >/dev/null
     run_as_user rm -f "$zip_path"
+    run_as_user sh -c 'printf "%s\n" "$1" > "$2"' _ "$NERDFONTS_VERSION" "$marker"
   done
   run_as_user rm -rf "$tmp_dir"
 

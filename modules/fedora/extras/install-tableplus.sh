@@ -27,7 +27,7 @@ TABLEPLUS_REPOFILE_URL="https://yum.tableplus.com/rpm/x86_64/tableplus.repo"
 
 install_deps() {
   echo "Installing dependencies..."
-  sudo dnf install -y dnf-plugins-core
+  dnf_ensure dnf-plugins-core
 }
 
 install_tableplus() {
@@ -41,7 +41,13 @@ install_tableplus() {
     exit 0
   fi
 
-  if command -v tableplus &>/dev/null || rpm -q tableplus &>/dev/null; then
+  # Already installed from the repo: upgrade it (no-op when current)
+  if rpm -q tableplus &>/dev/null; then
+    echo "TablePlus is already installed, checking for updates..."
+    dnf_ensure tableplus
+    return
+  fi
+  if command -v tableplus &>/dev/null; then
     echo "TablePlus is already installed."
     return
   fi
@@ -59,7 +65,7 @@ install_tableplus() {
   sudo dnf config-manager addrepo --from-repofile="$TABLEPLUS_REPOFILE_URL"
 
   echo "⬇️  Installing TablePlus..."
-  sudo dnf install -y tableplus
+  dnf_ensure tableplus
 
   echo "TablePlus installed."
 }

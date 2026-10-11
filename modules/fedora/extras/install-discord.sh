@@ -25,16 +25,17 @@ FLATPAK_APP_ID="com.discordapp.Discord"
 FLATHUB_REMOTE="flathub"
 FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
 
-flatpak_app_installed() { # $1 = app id
+# Prints "user" or "system" for where the app is installed; fails if absent.
+flatpak_app_scope() { # $1 = app id
   command -v flatpak &>/dev/null || return 1
-  flatpak info --user "$1" &>/dev/null && return 0
-  flatpak info --system "$1" &>/dev/null && return 0
+  if flatpak info --user "$1" &>/dev/null; then echo user; return 0; fi
+  if flatpak info --system "$1" &>/dev/null; then echo system; return 0; fi
   return 1
 }
 
 install_deps() {
   log "Installing Flatpak dependencies (dnf)…"
-  sudo dnf install -y flatpak
+  dnf_ensure flatpak
 }
 
 ensure_flathub() {
@@ -57,8 +58,15 @@ install_discord() {
   ensure_flathub
 
   # Check if Discord is installed via Flatpak (user or system)
-  if flatpak_app_installed "$FLATPAK_APP_ID"; then
-    log "Discord already installed (Flatpak)"
+  # Already installed: update it in the same scope (no-op when current)
+  local scope
+  if scope="$(flatpak_app_scope "$FLATPAK_APP_ID")"; then
+    log "Discord already installed (Flatpak, $scope), checking for updates"
+    if [[ "$scope" == user ]]; then
+      run_as_user flatpak update -y --user "$FLATPAK_APP_ID" || warn "Discord update failed"
+    else
+      sudo flatpak update -y --system "$FLATPAK_APP_ID" || warn "Discord update failed"
+    fi
     return
   fi
 

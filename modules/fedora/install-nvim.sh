@@ -17,7 +17,7 @@ TARGET_FILE="$CONFIG_DIR/nvim.zsh"
 # === Step: deps ===
 deps() {
   echo "Installing Neovim via dnf..."
-  sudo dnf install -y neovim
+  dnf_ensure neovim
   verify_binary nvim --version
 }
 

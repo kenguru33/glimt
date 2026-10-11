@@ -338,3 +338,90 @@ test_zellij_clean_keeps_user_layouts_and_edited_config() {
   out="$(fx_run_fn install-zellij.sh clean 2>&1)" || fail "$out"
   assert_missing "$SB/.config/zellij"
 }
+
+# =====================================================================
+# Flatpak apps: update when installed, install when missing
+# =====================================================================
+fx_flatpak_with_app() { # <scope where the app is installed: user|system|none>
+  mkdir -p "$SB/bin"
+  cat >"$SB/bin/flatpak" <<EOF
+#!/usr/bin/env bash
+echo "flatpak \$*" >>"\$CALLS"
+case "\$1" in
+  remote-list|remotes) echo flathub ;;
+  info) [[ "$1" == any && "\$2" != --* ]] && exit 0
+        [[ "\$2" == --$1 ]] && exit 0
+        exit 1 ;;
+esac
+exit 0
+EOF
+  chmod +x "$SB/bin/flatpak"
+}
+
+test_spotify_updates_installed_flatpak_in_its_scope() {
+  fx_flatpak_with_app system
+  local out
+  out="$(PATH="$SB/bin:$PATH" fx_run_fn install-spotify.sh install_spotify 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "flatpak update -y --system com.spotify.Client"
+  assert_not_contains "$(calls)" "flatpak install"
+}
+
+test_spotify_installs_missing_flatpak() {
+  fx_flatpak_with_app none
+  local out
+  out="$(PATH="$SB/bin:$PATH" fx_run_fn install-spotify.sh install_spotify 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "flatpak install -y flathub com.spotify.Client"
+  assert_not_contains "$(calls)" "flatpak update"
+}
+
+test_discord_updates_user_flatpak_as_user() {
+  fx_flatpak_with_app user
+  local out
+  out="$(PATH="$SB/bin:$PATH" fx_run_fn install-discord.sh install_discord 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "run_as_user flatpak update -y --user com.discordapp.Discord"
+  assert_not_contains "$(calls)" "flatpak install"
+}
+
+test_discord_updates_system_flatpak_with_sudo() {
+  fx_flatpak_with_app system
+  local out
+  out="$(PATH="$SB/bin:$PATH" fx_run_fn install-discord.sh install_discord 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo flatpak update -y --system com.discordapp.Discord"
+  assert_not_contains "$(calls)" "flatpak install"
+}
+
+test_pika_updates_installed_flatpak() {
+  fx_flatpak_with_app any
+  local out
+  out="$(PATH="$SB/bin:$PATH" fx_run_fn install-pika.sh install 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "flatpak update -y org.gnome.World.PikaBackup"
+  assert_not_contains "$(calls)" "flatpak install"
+}
+
+# =====================================================================
+# lazydocker: pinned version already installed -> no download
+# =====================================================================
+test_lazydocker_same_version_skips_download() {
+  mkdir -p "$SB/.local/bin" "$SB/bin"
+  printf '#!/bin/sh\nprintf "Version: 0.23.3\\nDate: x\\n"\n' >"$SB/.local/bin/lazydocker"
+  printf '#!/usr/bin/env bash\necho "curl $*" >>"$CALLS"\n' >"$SB/bin/curl"
+  chmod +x "$SB/.local/bin/lazydocker" "$SB/bin/curl"
+  local out
+  out="$(PATH="$SB/bin:$PATH" LAZYDOCKER_VERSION=v0.23.3 fx_run_fn install-lazydocker.sh _download_from_release 2>&1)" || fail "$out"
+  assert_contains "$out" "lazydocker v0.23.3 is up to date"
+  assert_not_contains "$(calls)" "curl" "no download when current"
+}
+
+# =====================================================================
+# Repo packages that used to stop at "already installed" now upgrade
+# =====================================================================
+test_tableplus_and_lens_upgrade_when_installed() {
+  local out
+  out="$(FAKE_UNAME_M=x86_64 RPM_INSTALLED="tableplus" fx_run_fn install-tableplus.sh install_tableplus 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf upgrade -y tableplus"
+  assert_not_contains "$(calls)" "addrepo" "repo setup only on first install"
+  : >"$CALLS"
+  out="$(RPM_INSTALLED="lens" fx_run_fn install-lens.sh install_lens 2>&1)" || fail "$out"
+  assert_contains "$(calls)" "sudo dnf upgrade -y lens"
+  assert_not_contains "$(calls)" "addrepo" "repo setup only on first install"
+}

@@ -28,7 +28,7 @@ DEPS=(curl ca-certificates dnf-plugins-core)
 # === Dependencies ========================================================
 install_deps() {
   log "Installing dependencies…"
-  sudo dnf install -y "${DEPS[@]}"
+  dnf_ensure "${DEPS[@]}"
 }
 
 # === Repo ================================================================
@@ -58,7 +58,7 @@ remove_repo() {
 # === Install =============================================================
 install_1password() {
   log "Installing 1Password…"
-  sudo dnf install -y 1password
+  dnf_ensure 1password
   log "1Password installed."
 }
 
