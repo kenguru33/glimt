@@ -695,6 +695,108 @@ test_powershell_macos_clean_uninstalls_cask() {
 }
 
 # =====================================================================
+# Tests: glimt CLI (update / install / clean) — runs against a throwaway repo
+# =====================================================================
+GLIMT_OSDIR=fedora
+[[ "$OS" == Darwin ]] && GLIMT_OSDIR=macos
+
+# fake_repo — $SB/repo with the real glimt.sh + setup-lib.sh and tiny modules
+# that log how they were called to $SB/ran.
+fake_repo() {
+  local m="$SB/repo/modules/$GLIMT_OSDIR"
+  mkdir -p "$m/extras"
+  cp "$ROOT/glimt.sh" "$ROOT/setup-lib.sh" "$SB/repo/"
+  printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\necho %s-output\n' alpha "$SB" alpha >"$m/install-alpha.sh"
+  # mentions sudo, so glimt must ask for the password up front
+  printf '#!/usr/bin/env bash\nsudo true\necho "%s $1" >>"%s/ran"\n' beta "$SB" >"$m/install-beta.sh"
+  printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\necho gamma-boom; exit 5\n' gamma "$SB" >"$m/extras/install-gamma.sh"
+  printf '#!/usr/bin/env bash\necho "%s $1" >>"%s/ran"\n' delta "$SB" >"$m/extras/install-delta.sh"
+  chmod +x "$m"/install-*.sh "$m"/extras/install-*.sh
+}
+
+glimt_run() {
+  REPO_DIR="$SB/repo" GLIMT_LOCK_FILE="$SB/glimt.lock" GLIMT_SKIP_PULL="${GLIMT_SKIP_PULL:-1}" \
+    with_timeout 30 "$BASH" "$SB/repo/glimt.sh" "$@" </dev/null 2>&1
+}
+
+test_glimt_install_uses_progress_bar() {
+  fake_repo
+  local out
+  out="$(glimt_run install alpha)" || fail "$out"
+  assert_not_contains "$out" "alpha-output" "module output must go to the log"
+  assert_contains "$out" "100% (1/1)"
+  assert_eq "$(cat "$SB/ran")" "alpha all" "module call:"
+  assert_not_contains "$(calls)" "sudo" "module without sudo must not prompt"
+}
+
+test_glimt_verbose_shows_module_output() {
+  fake_repo
+  local out
+  out="$(glimt_run -v install alpha)" || fail "$out"
+  assert_contains "$out" "alpha-output"
+  assert_not_contains "$out" "░"
+  out="$(glimt_run install alpha --verbose)" || fail "$out"
+  assert_contains "$out" "alpha-output" "--verbose after the action"
+}
+
+test_glimt_asks_sudo_up_front_when_needed() {
+  fake_repo
+  local out
+  out="$(SUDO_CACHED_RC=1 SUDO_AUTH_RC=0 glimt_run install beta)" || fail "$out"
+  assert_contains "$out" "Enter your password once"
+  assert_eq "$(grep -n '' "$CALLS" | grep -m1 'sudo -v' | cut -d: -f1)" "2" "sudo -v must come right after the cache check, before the module:"
+  assert_contains "$(sed -n 1p "$CALLS")" "sudo -n true"
+}
+
+test_glimt_clean_runs_clean_action() {
+  fake_repo
+  local out
+  out="$(glimt_run clean alpha)" || fail "$out"
+  assert_contains "$out" "Removing install-alpha.sh"
+  assert_eq "$(cat "$SB/ran")" "alpha clean" "module call:"
+}
+
+test_glimt_install_failure_exits_nonzero() {
+  fake_repo
+  local out rc=0
+  out="$(glimt_run install gamma)" || rc=$?
+  assert_eq "$rc" "1" "exit code:"
+  assert_contains "$out" "install-gamma.sh failed (exit 5)"
+  assert_contains "$out" "gamma-boom" "log tail"
+  assert_not_contains "$out" "An error occurred" "no duplicate ERR-trap message"
+}
+
+test_glimt_update_runs_core_and_selected_extras_in_one_bar() {
+  fake_repo
+  mkdir -p "$SB/.config/glimt"
+  printf 'delta\n' >"$SB/.config/glimt/optional-extras.selected"
+  local out
+  out="$(glimt_run update)" || fail "$out"
+  assert_contains "$out" "Running 3 modules"
+  assert_contains "$out" "100% (3/3)"
+  assert_eq "$(sort "$SB/ran" | tr '\n' ',')" "alpha all,beta all,delta all," "modules run:"
+}
+
+test_glimt_update_continues_with_pulled_glimt() {
+  fake_repo
+  # make the fake repo a clone of a local origin so `git pull` really runs
+  git -C "$SB/repo" init -q -b main && git -C "$SB/repo" add -A &&
+    git -C "$SB/repo" -c user.name=t -c user.email=t@t commit -qm init &&
+    git clone -q --bare "$SB/repo" "$SB/origin.git" &&
+    git -C "$SB/repo" remote add origin "$SB/origin.git" &&
+    git -C "$SB/repo" fetch -q origin && git -C "$SB/repo" branch -q -u origin/main || fail "git setup failed"
+  # a change that only exists in the pulled version of glimt.sh
+  git clone -q "$SB/origin.git" "$SB/work"
+  sed -i.bak 's/echo "🚀 Running \${#installers\[@\]} modules..."/echo "PULLED-GLIMT"; &/' "$SB/work/glimt.sh"
+  git -C "$SB/work" -c user.name=t -c user.email=t@t commit -qam change && git -C "$SB/work" push -q origin main
+  local out
+  out="$(GLIMT_SKIP_PULL=0 glimt_run update)" || fail "$out"
+  assert_contains "$out" "PULLED-GLIMT" "update must continue with the freshly pulled glimt.sh"
+  assert_eq "$(grep -c 'Updating repository' <<<"$out")" "1" "pull count:"
+  assert_not_contains "$out" "already running" "re-exec must reuse its own lock"
+}
+
+# =====================================================================
 # Runner
 # =====================================================================
 pass=0 failed=0 skipped=0 failed_names=()
