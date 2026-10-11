@@ -62,7 +62,7 @@ esac
 [[ $# -gt 0 ]] || exit 0
 case "$1" in
   dnf|rpm|brew|git|true) exec "$@" ;;
-  rm|mkdir|touch)
+  rm|rmdir|mkdir|touch)
     for a in "${@:2}"; do
       [[ "$a" == /* && "$a" != "$GLIMT_TEST_HOME"* ]] && exit 0
     done
@@ -138,6 +138,7 @@ set -Eeuo pipefail
 trap 'echo "ERR trap: line \$LINENO: \$BASH_COMMAND" >&2' ERR
 MODULE_NAME=test
 source "$ROOT/modules/$os/lib.sh"
+source "$ROOT/tests/trace-run-as-user.bash"
 if [[ "\$HOME_DIR" != "$SB" ]]; then
   echo "SAFETY ABORT: HOME_DIR=\$HOME_DIR is not the test sandbox" >&2
   exit 99
@@ -480,6 +481,7 @@ run_module_fn_abs() {
 set -Eeuo pipefail
 MODULE_NAME=test
 source "$ROOT/modules/$os/lib.sh"
+source "$ROOT/tests/trace-run-as-user.bash"
 [[ "\$HOME_DIR" == "$SB" ]] || { echo "SAFETY ABORT: HOME_DIR=\$HOME_DIR" >&2; exit 99; }
 source "$loaded"
 $fn
@@ -493,15 +495,17 @@ EOF
 # =====================================================================
 test_zellij_clean_succeeds_when_nothing_installed() {
   local out
-  out="$(run_module_fn fedora modules/fedora/extras/install-zellij.sh clean 2>&1)" ||
+  out="$(fx_run_fn install-zellij.sh clean 2>&1)" ||
     fail "clean must succeed when files are already gone (it aborted setup-extras): $out"
 }
 
 test_zellij_clean_removes_its_files_only() {
   mkdir -p "$SB/.local/bin" "$SB/.config/zellij" "$SB/.zsh/config"
-  touch "$SB/.local/bin/zellij" "$SB/.config/zellij/config.kdl" "$SB/.zsh/config/zellij.zsh" "$SB/.zsh/config/fzf.zsh"
+  touch "$SB/.local/bin/zellij" "$SB/.zsh/config/zellij.zsh" "$SB/.zsh/config/fzf.zsh"
+  # unedited config as deployed by glimt
+  cp "$ROOT/modules/fedora/config/zellij.kdl" "$SB/.config/zellij/config.kdl"
   local out
-  out="$(run_module_fn fedora modules/fedora/extras/install-zellij.sh clean 2>&1)" || fail "$out"
+  out="$(fx_run_fn install-zellij.sh clean 2>&1)" || fail "$out"
   assert_missing "$SB/.local/bin/zellij"
   assert_missing "$SB/.config/zellij"
   assert_missing "$SB/.zsh/config/zellij.zsh"
@@ -812,6 +816,12 @@ test_glimt_update_verbose_shows_git_output() {
   assert_contains "$out" "Updating repository"
   assert_contains "$out" "glimt is up to date"
 }
+
+# Additional test files: tests/*.test.sh define more test_* functions and
+# can use every helper above (run_module_fn, assertions, stubs, ...).
+for f in "$ROOT"/tests/*.test.sh; do
+  [[ -f "$f" ]] && source "$f"
+done
 
 # =====================================================================
 # Runner

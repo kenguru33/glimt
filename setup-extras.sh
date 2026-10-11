@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
 trap 'echo "❌ Optional extras setup failed." >&2' ERR
 
@@ -145,6 +145,11 @@ run_module() {
 # Main
 # -----------------------------
 main() {
+  if ! command -v gum >/dev/null 2>&1; then
+    echo "❌ gum is required for the extras picker (sudo dnf install -y gum)." >&2
+    exit 1
+  fi
+
   declare -A PREV=()
   if [[ -f "$STATE_FILE" ]]; then
     while read -r m; do

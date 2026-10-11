@@ -11,9 +11,12 @@
 #   HOME_DIR    — that user's home directory
 #   log/warn/die
 #   run_as_user — runs as REAL_USER; no-op wrapper when already that user
-#   deploy_config <src> <dest>
-#   verify_binary <bin> [args...]
+#   deploy_config <src> <dest>  — backs up a differing dest, then copies
+#   prune_backups <dest>        — keep newest $GLIMT_BACKUP_RETENTION backups
+#   verify_binary <bin> [args...] — warns only, never aborts the module
 #   normalize_arch
+#   brew_cask_install <cask> [app_path]
+#   mas_install <id> / mas_uninstall <id>
 
 # === Real user context ===
 REAL_USER="${SUDO_USER:-$USER}"
@@ -117,6 +120,11 @@ deploy_config() {
   fi
   cp "$src" "$dest"
   chmod 644 "$dest"
+  # Under sudo the copy is root-owned; hand it back to the user (macOS
+  # primary group is staff, not a per-user group)
+  if [[ $EUID -eq 0 ]]; then
+    chown "$REAL_USER:staff" "$dest"
+  fi
   log "Deployed $(basename "$dest")"
 }
 
@@ -182,13 +190,15 @@ mas_uninstall() {
 # Warns (does not exit) on failure so setup can continue.
 verify_binary() {
   local bin="$1"; shift
+  # Always return 0: modules run under set -e, so a non-zero return would
+  # abort the module (skipping config) instead of just warning.
   if ! command -v "$bin" >/dev/null 2>&1; then
     warn "$bin not found in PATH after install"
-    return 1
+    return 0
   fi
   if [[ $# -gt 0 ]] && ! "$bin" "$@" >/dev/null 2>&1; then
     warn "$bin found but '$bin $*' failed"
-    return 1
+    return 0
   fi
   log "✅ $bin OK"
 }

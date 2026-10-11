@@ -16,8 +16,10 @@
 #   HOME_DIR    — that user's home directory (via getent, never /root)
 #   log/warn/die
 #   run_as_user
-#   deploy_config <src> <dest>
-#   verify_binary <bin> [args...]
+#   deploy_config <src> <dest>  — backs up a differing dest, then copies
+#   prune_backups <dest>        — keep newest $GLIMT_BACKUP_RETENTION backups
+#   normalize_arch              — x86_64→amd64, aarch64→arm64
+#   verify_binary <bin> [args...] — warns only, never aborts the module
 #   confirm <question>          — y/N prompt; "no" when there is no terminal
 
 # === Real user context ===
@@ -35,7 +37,15 @@ warn() { printf "⚠️  [%s] %s\n" "${MODULE_NAME:-glimt}" "$*" >&2; }
 die()  { printf "❌ [%s] %s\n"  "${MODULE_NAME:-glimt}" "$*" >&2; exit 1; }
 
 # === Run a command as the real (non-root) user ===
-run_as_user() { sudo -u "$REAL_USER" "$@"; }
+# Skips sudo when already that user: modules normally run as the user, and an
+# unneeded sudo could prompt for a password hidden behind the progress bar.
+run_as_user() {
+  if [[ $EUID -ne 0 && "$(id -un)" == "$REAL_USER" ]]; then
+    "$@"
+  else
+    sudo -u "$REAL_USER" "$@"
+  fi
+}
 
 # === Backup retention ===
 #
@@ -88,7 +98,13 @@ prune_backups() {
 deploy_config() {
   local src="$1" dest="$2"
   [[ -f "$src" ]] || die "Template not found: $src"
-  mkdir -p "$(dirname "$dest")"
+  # Under sudo, create missing parent dirs (e.g. ~/.zsh/config) as the user,
+  # not root
+  if [[ $EUID -eq 0 ]]; then
+    command install -d -o "$REAL_USER" -g "$REAL_USER" "$(dirname "$dest")"
+  else
+    mkdir -p "$(dirname "$dest")"
+  fi
   # Only back up when the content actually differs. Re-running a module with an
   # unchanged template would otherwise leave an identical copy behind each time.
   # The copy below still runs unconditionally, so ownership and mode are always
@@ -123,13 +139,15 @@ normalize_arch() {
 # Prints a warning (does not exit) on failure so setup can continue.
 verify_binary() {
   local bin="$1"; shift
+  # Always return 0: modules run under set -e, so a non-zero return would
+  # abort the module (skipping config) instead of just warning.
   if ! command -v "$bin" >/dev/null 2>&1; then
     warn "$bin not found in PATH after install"
-    return 1
+    return 0
   fi
   if [[ $# -gt 0 ]] && ! "$bin" "$@" >/dev/null 2>&1; then
     warn "$bin found but '$bin $*' failed"
-    return 1
+    return 0
   fi
   log "✅ $bin OK"
 }

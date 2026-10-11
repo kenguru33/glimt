@@ -123,11 +123,13 @@ source "$GLIMT_LIB"
 ```
 
 Rules enforced across the codebase:
-- `set -Eeuo pipefail` on every script — no exceptions
+- `set -Eeuo pipefail` on every module — no exceptions. The orchestrators `setup.sh` and `setup-macos.sh` deliberately use `set -Euo pipefail` (no `-e`) so one failing module can't stop the whole run; modules are run through `progress_run` (in `setup-lib.sh`), which records failures and always returns 0
 - `deploy_config` instead of bare `cp` for any config template deployment
 - `sudo dnf makecache -y` only in `setup.sh`, never in modules
 - Use `run_as_user` / `sudo -u "$REAL_USER"` for any file operations in user home — never write to `$HOME` directly when running under sudo
 - Post-install: call `verify_binary` for any binary the module downloads
+- Prompts (e.g. "also remove the package?" in `clean`) go through `confirm`, never a bare `read`: modules usually run behind the progress bar with no terminal
+- Versions: only the binaries in `versions.env` are pinned. Everything else (kubectl, starship, zellij, Node, papirus, PowerShell, dnf/brew packages) deliberately tracks the latest release so `glimt update` keeps it current
 - Extras modules must include a `fedora_guard` call at the top (copy the pattern from `modules/fedora/extras/install-spotify.sh`) to abort gracefully on non-Fedora systems
 
 ### Creating new modules
