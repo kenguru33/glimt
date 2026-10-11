@@ -13,7 +13,9 @@
 #   progress_run <title> <cmd...>
 #                          — run one step: progress bar by default, full
 #                            output when VERBOSE=true. Never aborts the caller;
-#                            failures are collected and shown by progress_finish
+#                            failures are collected and shown by progress_finish.
+#                            "<x> is up to date" lines from the module are
+#                            shown, so skipped work is visible behind the bar
 #   progress_finish        — print the final bar and a failure summary
 #   glimt_banner [subtitle] — clear the screen and print the glimt header
 #   glimt_versions         — print "name<TAB>version" for everything installed
@@ -237,6 +239,9 @@ progress_run() {
   fi
 
   PROGRESS_DONE=$(( PROGRESS_DONE + 1 ))
+  if (( rc == 0 )) && [[ "${VERBOSE:-false}" != "true" ]]; then
+    _progress_up_to_date "$log"
+  fi
   if (( rc != 0 )); then
     PROGRESS_FAILED+=("$title")
     if [[ "${VERBOSE:-false}" != "true" ]]; then
@@ -245,6 +250,13 @@ progress_run() {
     fi
   fi
   return 0
+}
+
+# Modules skip downloads/upgrades when the installed version is current and
+# say so with "<name> [version] is up to date" (log/echo). Show those lines,
+# without the "[module] " prefix, so the user sees what was skipped.
+_progress_up_to_date() {
+  sed -nE 's/^\[[^]]*\] //; s/\.$//; / is up to date$/s/.*/  ✓ &, skipped/p' "$1" 2>/dev/null || true
 }
 
 progress_finish() {
