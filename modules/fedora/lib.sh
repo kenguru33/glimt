@@ -18,6 +18,7 @@
 #   run_as_user
 #   deploy_config <src> <dest>
 #   verify_binary <bin> [args...]
+#   confirm <question>          — y/N prompt; "no" when there is no terminal
 
 # === Real user context ===
 # Resolves the invoking user even when the script runs under sudo.
@@ -131,4 +132,22 @@ verify_binary() {
     return 1
   fi
   log "✅ $bin OK"
+}
+
+# === Interactive y/N prompt that is safe without a terminal ===
+# setup-extras / glimt clean run modules behind a progress bar with output
+# going to a log file, where a `read` prompt would be invisible and hang (or
+# fail under set -e). Without a terminal, answer "no" — unless
+# GLIMT_ASSUME_YES=1 is set.
+confirm() {
+  local question="$1" reply=""
+  if [[ "${GLIMT_ASSUME_YES:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    log "$question → no (non-interactive)"
+    return 1
+  fi
+  read -rp "$question [y/N]: " reply || return 1
+  [[ "$reply" =~ ^[Yy]$ ]]
 }

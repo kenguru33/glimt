@@ -97,8 +97,7 @@ clean_lazyvim() {
   echo "✅ LazyVim configuration removed."
 
   echo "📦 Optionally remove Neovim and tools..."
-  read -rp "Uninstall Neovim and related tools? [y/N]: " confirm
-  if [[ "$confirm" =~ ^[Yy]$ ]]; then
+  if confirm "Uninstall Neovim and related tools?"; then
     sudo dnf remove -y neovim ripgrep fd fzf
     echo "✅ Packages removed."
   fi

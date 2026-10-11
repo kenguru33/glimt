@@ -63,9 +63,9 @@ clean() {
   log "Removing Claude Code..."
   rm -f "$HOME_DIR/.local/bin/claude"
   rm -rf "$HOME_DIR/.local/share/claude"
-  rm -rf "$HOME_DIR/.claude"
-  rm -f "$HOME_DIR/.claude.json"
-  log "Claude Code removed."
+  # ~/.claude and ~/.claude.json hold the user's settings, credentials and
+  # memory — never delete them just because the module was deselected.
+  log "Claude Code removed (kept ~/.claude and ~/.claude.json)."
 }
 
 # ------------------------------------------------------------

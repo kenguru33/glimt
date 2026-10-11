@@ -44,8 +44,7 @@ clean() {
   rm -f "$TARGET_FILE"
   rm -rf "$COMPLETION_DIR"
 
-  read -rp "Uninstall gh package as well? [y/N]: " confirm
-  if [[ "$confirm" =~ ^[Yy]$ ]]; then
+  if confirm "Uninstall gh package as well?"; then
     sudo dnf remove -y gh
     log "gh package removed."
   fi

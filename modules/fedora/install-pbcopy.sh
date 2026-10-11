@@ -86,8 +86,7 @@ clean() {
     sudo dnf remove -y wl-clipboard || true
   fi
   if rpm -q xclip >/dev/null 2>&1; then
-    read -rp "Remove xclip as well? [y/N]: " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    if confirm "Remove xclip as well?"; then
       sudo dnf remove -y xclip || true
     fi
   fi

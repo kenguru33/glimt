@@ -103,11 +103,17 @@ config() {
 clean() {
   echo "🧹 Cleaning Zsh setup..."
 
+  # Only remove what this module created — other modules (fzf, gh, kubectl,
+  # eza, ...) also keep their plugins and configs under ~/.zsh.
   echo "❌ Removing plugins from $PLUGIN_DIR"
-  rm -rf "$PLUGIN_DIR"
+  for name in "${!PLUGINS[@]}"; do
+    rm -rf "${PLUGIN_DIR:?}/$name"
+  done
 
   echo "❌ Removing Zsh config files"
-  rm -rf "$CONFIG_DIR"
+  rm -f "$CONFIG_DIR/autosuggestions.zsh" \
+        "$CONFIG_DIR/syntax-highlighting.zsh" \
+        "$CONFIG_DIR/greeting.zsh"
 
   echo "❌ Removing .zshrc"
   rm -f "$ZSHRC_FILE"

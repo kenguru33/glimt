@@ -79,8 +79,7 @@ clean() {
   echo "❌ Removing eza.zsh config"
   rm -f "$TARGET_FILE"
 
-  read -rp "Uninstall eza package as well? [y/N]: " confirm
-  if [[ "$confirm" =~ ^[Yy]$ ]]; then
+  if confirm "Uninstall eza package as well?"; then
     sudo dnf remove -y eza
     echo "✅ eza package removed."
   fi

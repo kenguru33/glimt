@@ -189,7 +189,10 @@ clean_git_config() {
   sudo -u "$REAL_USER" git config --global --unset user.name || true
   sudo -u "$REAL_USER" git config --global --unset user.email || true
   sudo -u "$REAL_USER" git config --global --unset credential.helper || true
-  sudo -u "$REAL_USER" git config --global --remove-section alias || true
+  # Only the aliases glimt sets — keep any aliases the user added themselves
+  for a in st co br cm hist; do
+    sudo -u "$REAL_USER" git config --global --unset "alias.$a" || true
+  done
 
   rm -f "$ZSH_TARGET_FILE"
   rm -rf "$PLUGIN_DIR"

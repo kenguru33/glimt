@@ -96,7 +96,16 @@ config() {
 
 clean() {
   log "Cleaning Zsh setup..."
-  rm -rf "$PLUGIN_DIR" "$CONFIG_DIR" "$ZSHRC_FILE" "$HOME_DIR/.hushlogin"
+  # Only remove what this module created — other modules (fzf, gh, kubectl,
+  # eza, ...) also keep their plugins and configs under ~/.zsh.
+  local entry
+  for entry in "${PLUGINS[@]}"; do
+    rm -rf "${PLUGIN_DIR:?}/${entry%%|*}"
+  done
+  rm -f "$CONFIG_DIR/autosuggestions.zsh" \
+        "$CONFIG_DIR/syntax-highlighting.zsh" \
+        "$CONFIG_DIR/greeting.zsh" \
+        "$ZSHRC_FILE" "$HOME_DIR/.hushlogin"
   log "Clean complete."
 }
 

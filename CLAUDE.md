@@ -72,6 +72,7 @@ After sourcing, available globals and functions:
 - `deploy_config <src> <dest>` — copies a template to dest, **automatically backs up** any existing file with a timestamp before overwriting, then prunes old backups. Skips the backup when dest is already identical to src (the copy still runs, so mode/ownership are re-applied)
 - `prune_backups <dest>` — keeps only the newest `$GLIMT_BACKUP_RETENTION` (default 3) `<dest>.bak.<timestamp>` files. Called by `deploy_config`; set `GLIMT_BACKUP_RETENTION=N` to override, `0` to keep none
 - `verify_binary <bin> [args]` — warns (does not abort) if a binary isn't functional after install
+- `confirm <question>` — y/N prompt for optional steps (e.g. "also remove the package?" in `clean`). Answers "no" when there's no terminal (modules usually run behind the progress bar); `GLIMT_ASSUME_YES=1` answers "yes". Never use a bare `read -rp` in a module
 - `normalize_arch()` — maps `uname -m` to Go/Kubernetes naming (`x86_64`→`amd64`, `aarch64`→`arm64`); dies on unsupported arch. Use in any module that downloads architecture-specific binaries.
 
 ### Pinned versions — `versions.env`

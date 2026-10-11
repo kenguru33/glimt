@@ -128,7 +128,10 @@ clean() {
   run_as_user git config --global --unset color.ui        || true
   run_as_user git config --global --unset core.autocrlf   || true
   run_as_user git config --global --unset credential.helper || true
-  run_as_user git config --global --remove-section alias  || true
+  # Only the aliases glimt sets — keep any aliases the user added themselves
+  for a in st co br cm hist; do
+    run_as_user git config --global --unset "alias.$a" || true
+  done
   rm -f "$ZSH_CONFIG_DIR/git.zsh"
   rm -rf "$PLUGIN_DIR"
   rm -f "$CONFIG_FILE"

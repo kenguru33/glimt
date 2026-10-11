@@ -115,9 +115,20 @@ EOF
 clean() {
   echo "🧹 Cleaning Zellij install..."
 
-  [[ -f "$ZELLIJ_BIN" ]] && rm -f "$ZELLIJ_BIN" && echo "🗑️ Removed binary: $ZELLIJ_BIN"
-  [[ -d "$ZELLIJ_CONFIG_DIR" ]] && rm -rf "$ZELLIJ_CONFIG_DIR" && echo "🗑️ Removed config: $ZELLIJ_CONFIG_DIR"
-  [[ -f "$ZSH_TARGET_CONFIG" ]] && rm -f "$ZSH_TARGET_CONFIG" && echo "🗑️ Removed Zsh config: $ZSH_TARGET_CONFIG"
+  # Use if-blocks, not `[[ ]] && rm`: a false test as the last statement would
+  # return 1 and abort the caller under set -e when the file is already gone.
+  if [[ -f "$ZELLIJ_BIN" ]]; then
+    rm -f "$ZELLIJ_BIN"
+    echo "🗑️ Removed binary: $ZELLIJ_BIN"
+  fi
+  if [[ -d "$ZELLIJ_CONFIG_DIR" ]]; then
+    rm -rf "$ZELLIJ_CONFIG_DIR"
+    echo "🗑️ Removed config: $ZELLIJ_CONFIG_DIR"
+  fi
+  if [[ -f "$ZSH_TARGET_CONFIG" ]]; then
+    rm -f "$ZSH_TARGET_CONFIG"
+    echo "🗑️ Removed Zsh config: $ZSH_TARGET_CONFIG"
+  fi
 }
 
 # === Entrypoint ===
