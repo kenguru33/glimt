@@ -792,8 +792,25 @@ test_glimt_update_continues_with_pulled_glimt() {
   local out
   out="$(GLIMT_SKIP_PULL=0 glimt_run update)" || fail "$out"
   assert_contains "$out" "PULLED-GLIMT" "update must continue with the freshly pulled glimt.sh"
-  assert_eq "$(grep -c 'Updating repository' <<<"$out")" "1" "pull count:"
+  assert_eq "$(grep -c 'glimt updated' <<<"$out")" "1" "pull count:"
   assert_not_contains "$out" "already running" "re-exec must reuse its own lock"
+  # default mode: one summary line instead of git's fetch/pull/diffstat output
+  assert_not_contains "$out" "glimt.sh |" "git diffstat must be hidden by default"
+  assert_not_contains "$out" "Fast-forward"
+  assert_not_contains "$out" "Updating repository"
+}
+
+test_glimt_update_verbose_shows_git_output() {
+  fake_repo
+  git -C "$SB/repo" init -q -b main && git -C "$SB/repo" add -A &&
+    git -C "$SB/repo" -c user.name=t -c user.email=t@t commit -qm init &&
+    git clone -q --bare "$SB/repo" "$SB/origin.git" &&
+    git -C "$SB/repo" remote add origin "$SB/origin.git" &&
+    git -C "$SB/repo" fetch -q origin && git -C "$SB/repo" branch -q -u origin/main || fail "git setup failed"
+  local out
+  out="$(GLIMT_SKIP_PULL=0 glimt_run -v update)" || fail "$out"
+  assert_contains "$out" "Updating repository"
+  assert_contains "$out" "glimt is up to date"
 }
 
 # =====================================================================

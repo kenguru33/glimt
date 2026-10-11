@@ -131,15 +131,29 @@ run_update() {
   export GLIMT_ROOT="$REPO_DIR"
 
   if [[ "${GLIMT_SKIP_PULL:-0}" != "1" ]]; then
-    echo "🔄 Updating repository in $REPO_DIR..."
-    git -C "$REPO_DIR" fetch --all --prune
-    git -C "$REPO_DIR" pull --rebase --stat
+    local before after
+    before="$(git -C "$REPO_DIR" rev-parse --short HEAD)"
+    if $VERBOSE; then
+      echo "🔄 Updating repository in $REPO_DIR..."
+      git -C "$REPO_DIR" fetch --all --prune
+      git -C "$REPO_DIR" pull --rebase --stat
+    else
+      # Quiet by default; git's own error output still shows if the pull fails
+      git -C "$REPO_DIR" fetch --all --prune --quiet
+      git -C "$REPO_DIR" pull --rebase --quiet
+    fi
+    after="$(git -C "$REPO_DIR" rev-parse --short HEAD)"
+    if [[ "$before" == "$after" ]]; then
+      echo "✅ glimt is up to date ($after)"
+    else
+      echo "✅ glimt updated $before → $after"
+    fi
 
     local bin_target="$HOME/.local/bin/glimt"
     if [[ -f "$bin_target" ]]; then
       cp "$REPO_DIR/glimt.sh" "$bin_target"
       chmod +x "$bin_target"
-      echo "✅ glimt binary updated"
+      $VERBOSE && echo "✅ glimt binary updated"
     fi
 
     # Continue with the freshly pulled glimt, so changes to this script take
