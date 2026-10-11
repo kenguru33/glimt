@@ -14,8 +14,8 @@
 #                          — run one step: progress bar by default, full
 #                            output when VERBOSE=true. Never aborts the caller;
 #                            failures are collected and shown by progress_finish.
-#                            "<x> is up to date" lines from the module are
-#                            shown, so skipped work is visible behind the bar
+#                            "<x> is up to date" lines from the module replace
+#                            the bar's text in place (one line, not a list)
 #   progress_finish        — print the final bar and a failure summary
 #   glimt_banner [subtitle] — clear the screen and print the glimt header
 #   glimt_versions         — print "name<TAB>version" for everything installed
@@ -257,9 +257,11 @@ progress_run() {
     "$@" || rc=$?
     if (( rc != 0 )); then echo "✗ $title failed (exit $rc)" >&2; fi
   elif _progress_tty && command -v gum >/dev/null 2>&1; then
+    _progress_clear_inline
     gum spin --spinner dot --title "$(_progress_bar "$PROGRESS_DONE" "$PROGRESS_TOTAL")  $title" -- \
       bash -c 'log=$1; shift; "$@" >"$log" 2>&1' _ "$log" "$@" || rc=$?
   elif _progress_tty; then
+    PROGRESS_INLINE=0
     printf '\r\033[K%s  %s' "$(_progress_bar "$PROGRESS_DONE" "$PROGRESS_TOTAL")" "$title"
     "$@" >"$log" 2>&1 || rc=$?
     printf '\r\033[K'
@@ -275,6 +277,7 @@ progress_run() {
   if (( rc != 0 )); then
     PROGRESS_FAILED+=("$title")
     if [[ "${VERBOSE:-false}" != "true" ]]; then
+      _progress_clear_inline
       echo "✗ $title failed (exit $rc)" >&2
       tail -n 15 "$log" 2>/dev/null | sed 's/^/  │ /' >&2
     fi
@@ -283,13 +286,33 @@ progress_run() {
 }
 
 # Modules skip downloads/upgrades when the installed version is current and
-# say so with "<name> [version] is up to date" (log/echo). Show those lines,
-# without the "[module] " prefix, so the user sees what was skipped.
+# say so with "<name> [version] is up to date" (log/echo). On a terminal the
+# bar's text is replaced in place with those messages (no newline; the next
+# step overwrites it); without one, each is printed on its own line.
+PROGRESS_INLINE=0
 _progress_up_to_date() {
-  sed -nE 's/^\[[^]]*\] //; s/\.$//; / is up to date$/s/.*/  ✓ &, skipped/p' "$1" 2>/dev/null || true
+  local skips text cols
+  skips="$(sed -nE 's/^\[[^]]*\] //; s/\.$//; / is up to date$/p' "$1" 2>/dev/null)" || true
+  [[ -n "$skips" ]] || return 0
+  if ! _progress_tty; then
+    printf '%s\n' "$skips" | sed 's/^/  ✓ /; s/$/, skipped/'
+    return 0
+  fi
+  text="$(_progress_bar "$PROGRESS_DONE" "$PROGRESS_TOTAL")  ✓ $(printf '%s\n' "$skips" | paste -sd ',' - | sed 's/,/, /g')"
+  # Stay on one row: a wrapped line can't be cleared with \r.
+  cols="$(tput cols 2>/dev/null || echo 80)"
+  (( ${#text} < cols )) || text="${text:0:cols-2}…"
+  printf '\r\033[K%s' "$text"
+  PROGRESS_INLINE=1
+}
+
+# Wipe the in-place skip text before printing anything else.
+_progress_clear_inline() {
+  if (( PROGRESS_INLINE )); then printf '\r\033[K'; PROGRESS_INLINE=0; fi
 }
 
 progress_finish() {
+  _progress_clear_inline
   local secs=$(( SECONDS - ${PROGRESS_START:-$SECONDS} )) took
   if (( secs >= 60 )); then took="$(( secs / 60 ))m $(( secs % 60 ))s"; else took="${secs}s"; fi
   if (( ${#PROGRESS_FAILED[@]} > 0 )); then
