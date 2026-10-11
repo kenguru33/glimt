@@ -22,7 +22,6 @@ unset _glimt_brew_prefix
 
 # === Git aliases ===
 alias g='git'
-alias gs='git status'
 alias gl='git log --oneline --graph --decorate'
 alias gp='git pull --rebase'
 alias gP='git push'

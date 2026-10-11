@@ -141,9 +141,24 @@ test_macos_git_zsh_uses_homebrew_prefix_completion() {
   mkdir -p "$p/share/zsh/site-functions"
   printf '#compdef git\n' >"$p/share/zsh/site-functions/_git"
   local out
-  out="$(HOMEBREW_PREFIX="$p" zsh -f -c "source '$ROOT/modules/macos/config/git.zsh'; print -l \$fpath; whence gs; (( \${+_glimt_brew_prefix} )) && echo LEAKED; true" 2>&1)" ||
+  out="$(HOMEBREW_PREFIX="$p" zsh -f -c "source '$ROOT/modules/macos/config/git.zsh'; print -l \$fpath; whence gl; (( \${+_glimt_brew_prefix} )) && echo LEAKED; true" 2>&1)" ||
     fail "$out"
   assert_contains "$out" "$p/share/zsh/site-functions"
-  assert_contains "$out" "git status"
+  assert_contains "$out" "git log --oneline"
   assert_not_contains "$out" "LEAKED"
+}
+
+# k9s on macOS defaults to ~/Library/Application Support/k9s, which would
+# ignore the config and skin glimt deploys to ~/.config/k9s
+test_k9s_macos_zsh_points_k9s_at_xdg_config() {
+  assert_contains "$(cat "$ROOT/modules/macos/config/k9s.zsh")" \
+    'export K9S_CONFIG_DIR="$HOME/.config/k9s"' "k9s.zsh"
+}
+
+# `gs` would shadow Ghostscript
+test_git_zsh_has_no_gs_alias() {
+  local f
+  for f in "$ROOT/modules/fedora/config/git.zsh" "$ROOT/modules/macos/config/git.zsh"; do
+    if grep -qE "^alias gs=" "$f"; then fail "${f#"$ROOT"/} defines alias gs"; fi
+  done
 }
