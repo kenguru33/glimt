@@ -488,6 +488,20 @@ EOF
   assert_not_contains "$out" "SHOULD-NOT-GET-HERE"
 }
 
+test_require_sudo_macos_without_terminal_fails_fast() {
+  local out rc=0
+  out="$(GLIMT_OS=Darwin GLIMT_TTY="$SB/no-such-tty" run_lib_script "$BASH" 2>&1 <<'EOF'
+glimt_require_sudo
+echo SHOULD-NOT-GET-HERE
+EOF
+)" || rc=$?
+  assert_eq "$rc" "1" "exit code:"
+  assert_contains "$out" "no terminal to ask for the sudo password"
+  assert_not_contains "$out" "password for" "must not prompt without a terminal"
+  assert_not_contains "$(cat "$CALLS" 2>/dev/null)" "sudo -S" "must not try to authenticate"
+  assert_not_contains "$out" "SHOULD-NOT-GET-HERE"
+}
+
 test_needs_sudo_detects_indirect_sudo() {
   local out
   printf 'brew_cask_install foo /Applications/Foo.app\n' >"$SB/a.sh"

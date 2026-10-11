@@ -64,7 +64,13 @@ glimt_cleanup() {
 # glimt's macOS lib runs `sudo -A`, and Homebrew uses -A when SUDO_ASKPASS is set.
 _glimt_askpass_setup() {
   if [[ -n "${SUDO_ASKPASS:-}" && -x "${SUDO_ASKPASS:-}" ]]; then return 0; fi
-  local pw_file askpass pw tries=0
+  local pw_file askpass pw tries=0 tty="${GLIMT_TTY:-/dev/tty}"
+  # No terminal (e.g. run from an IDE or agent): fail now instead of three
+  # empty attempts that end in a misleading "authentication failed"
+  if ! { : <"$tty"; } 2>/dev/null; then
+    echo "glimt: no terminal to ask for the sudo password; run glimt from a terminal" >&2
+    exit 1
+  fi
   pw_file="$(mktemp -t glimt-sudo)"
   askpass="$(mktemp -t glimt-askpass)"
   GLIMT_CLEANUP_FILES+=("$pw_file" "$askpass")
@@ -73,7 +79,7 @@ _glimt_askpass_setup() {
   printf '#!/bin/sh\ncat %q\n' "$pw_file" >"$askpass"
   while true; do
     printf '[glimt] password for %s: ' "$(id -un)" >&2
-    IFS= read -rs pw <"${GLIMT_TTY:-/dev/tty}" || pw=""
+    IFS= read -rs pw <"$tty" || pw=""
     echo >&2
     printf '%s\n' "$pw" >"$pw_file"
     pw=""
