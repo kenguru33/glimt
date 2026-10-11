@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Glimt module: papirus-icon-theme
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ papirus-icon-theme module failed." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="papirus-icon-theme"
 ACTION="${1:-all}"
@@ -14,6 +14,10 @@ source "$GLIMT_LIB"
 
 ICONS_DIR="$HOME_DIR/.local/share/icons"
 PAPIRUS_DIR="$ICONS_DIR/Papirus"
+# Every theme directory the upstream installer creates
+PAPIRUS_VARIANTS=(Papirus Papirus-Dark Papirus-Light ePapirus ePapirus-Dark)
+# Upstream installer — always installs the latest release (not pinned)
+INSTALLER_URL="https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-icon-theme/master/install.sh"
 
 require_user() {
   if [[ "$EUID" -eq 0 ]]; then
@@ -23,14 +27,8 @@ require_user() {
 }
 
 deps() {
-  log "📦 Checking dependencies..."
-  
-  if ! command -v wget &>/dev/null 2>&1 && ! command -v curl &>/dev/null 2>&1; then
-    log "❌ Neither wget nor curl found. Please install one of them first."
-    exit 1
-  fi
-  
-  log "✅ Dependencies available"
+  log "📦 Installing dependencies..."
+  sudo dnf install -y curl tar
 }
 
 install() {
@@ -47,14 +45,10 @@ install() {
   log "⬇️  Downloading and installing papirus-icon-theme..."
   mkdir -p "$ICONS_DIR"
 
-  if command -v wget &>/dev/null 2>&1; then
-    wget -qO- https://git.io/papirus-icon-theme-install | DESTDIR="$ICONS_DIR" sh
-  elif command -v curl &>/dev/null 2>&1; then
-    curl -fsSL https://git.io/papirus-icon-theme-install | DESTDIR="$ICONS_DIR" sh
-  else
-    log "❌ Neither wget nor curl available"
-    exit 1
-  fi
+  command -v curl &>/dev/null || die "curl not found — run 'deps' first"
+  local installer
+  installer="$(curl -fsSL "$INSTALLER_URL")" || die "Could not download $INSTALLER_URL"
+  DESTDIR="$ICONS_DIR" sh -c "$installer"
 
   if [[ -d "$PAPIRUS_DIR" ]]; then
     log "✅ papirus-icon-theme installed successfully to $PAPIRUS_DIR"
@@ -91,21 +85,25 @@ clean() {
 
   log "🧹 Removing papirus-icon-theme..."
 
-  if [[ -d "$PAPIRUS_DIR" ]]; then
-    log "🔄 Removing papirus-icon-theme from $PAPIRUS_DIR..."
-    rm -rf "$PAPIRUS_DIR"
-    
-    # Also remove other Papirus variants if they exist
-    for variant in Papirus-Dark Papirus-Light; do
-      if [[ -d "$ICONS_DIR/$variant" ]]; then
-        rm -rf "$ICONS_DIR/$variant"
-        log "🔄 Removed $variant"
-      fi
-    done
-    
-    log "✅ papirus-icon-theme removed"
-  else
-    log "ℹ️  papirus-icon-theme not installed"
+  local variant removed=0
+  for variant in "${PAPIRUS_VARIANTS[@]}"; do
+    if [[ -d "$ICONS_DIR/$variant" ]]; then
+      rm -rf "${ICONS_DIR:?}/$variant"
+      log "🔄 Removed $variant"
+      removed=1
+    fi
+  done
+  (( removed )) || log "ℹ️  papirus-icon-theme not installed"
+
+  # config set Papirus as the icon theme — reset it, unless the user has
+  # switched to another theme since
+  if command -v gsettings &>/dev/null; then
+    local current
+    current="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)"
+    if [[ "$current" == "'Papirus"* || "$current" == "'ePapirus"* ]]; then
+      gsettings reset org.gnome.desktop.interface icon-theme || true
+      log "🔄 Reset icon theme to the GNOME default"
+    fi
   fi
 
   log "✅ Clean complete"
@@ -122,7 +120,6 @@ all)
   config
   ;;
 *)
-  echo "Usage: $0 {all|deps|install|config|clean}"
-  exit 1
+  die "Unknown action: $ACTION (use: all | deps | install | config | clean)"
   ;;
 esac

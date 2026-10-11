@@ -4,7 +4,7 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ gnome-caffeine failed at line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gnome-caffeine"
 ACTION="${1:-all}"

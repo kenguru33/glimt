@@ -1,19 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Bat install failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="bat"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
-
 BAT_THEME_NAME="Catppuccin Mocha"
 BAT_BIN="bat"  # On Fedora, bat is already called "bat" (not "batcat")
 THEME_VARIANTS=(Latte Frappe Macchiato Mocha)
 THEME_REPO_BASE="https://github.com/catppuccin/bat/raw/main/themes"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BAT_CONFIG_TEMPLATE="$SCRIPT_DIR/config/bat.config"  # sets --theme="Catppuccin Mocha"
 
 # === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
@@ -89,8 +90,7 @@ config_bat() {
   }
 
   echo "⚙️ Setting default theme: $BAT_THEME_NAME"
-  sudo -u "$REAL_USER" sh -c "echo '--theme=\"$BAT_THEME_NAME\"' > '$BAT_CONFIG_FILE'"
-  chown -R "$REAL_USER:$REAL_USER" "$BAT_CONFIG_DIR"
+  deploy_config "$BAT_CONFIG_TEMPLATE" "$BAT_CONFIG_FILE"
   
   echo "✅ Catppuccin themes installed successfully"
 }

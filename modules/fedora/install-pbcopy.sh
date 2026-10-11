@@ -1,15 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ wl-copy module failed at: $BASH_COMMAND" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
-# === Metadata ===
-MODULE_NAME="wl-copy"
+MODULE_NAME="pbcopy"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
-
-ACTION="${1:-all}"
 
 # === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
@@ -33,18 +31,25 @@ install_deps() {
 }
 
 install() {
-  echo "✅ Ensuring wl-clipboard and xclip are installed..."
-  sudo dnf install -y wl-clipboard xclip
+  # Packages come from deps; only (re)install them here if they are missing
+  local missing=()
+  for pkg in "${DEPS[@]}"; do
+    rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+  done
+  if (( ${#missing[@]} > 0 )); then
+    install_deps
+  else
+    echo "✅ wl-clipboard and xclip are installed"
+  fi
 }
 
 config() {
   echo "⚙️  Creating pbcopy/pbpaste wrappers in $HOME_DIR/.local/bin ..."
   BIN_DIR="$HOME_DIR/.local/bin"
-  sudo -u "$REAL_USER" mkdir -p "$BIN_DIR"
-  chown -R "$REAL_USER":"$REAL_USER" "$BIN_DIR"
+  run_as_user mkdir -p "$BIN_DIR"
 
   # pbcopy -> wl-copy (Wayland) or xclip (X11 fallback)
-  cat > "$BIN_DIR/pbcopy" <<'EOF'
+  run_as_user tee "$BIN_DIR/pbcopy" >/dev/null <<'EOF'
 #!/usr/bin/env bash
 # macOS-like pbcopy using wl-copy (Wayland) or xclip (X11)
 if command -v wl-copy >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
@@ -58,7 +63,7 @@ fi
 EOF
 
   # pbpaste -> wl-paste (Wayland) or xclip (X11 fallback)
-  cat > "$BIN_DIR/pbpaste" <<'EOF'
+  run_as_user tee "$BIN_DIR/pbpaste" >/dev/null <<'EOF'
 #!/usr/bin/env bash
 # macOS-like pbpaste using wl-paste (Wayland) or xclip (X11)
 if command -v wl-paste >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
@@ -71,8 +76,7 @@ else
 fi
 EOF
 
-  chmod +x "$BIN_DIR/pbcopy" "$BIN_DIR/pbpaste"
-  chown "$REAL_USER":"$REAL_USER" "$BIN_DIR/pbcopy" "$BIN_DIR/pbpaste"
+  run_as_user chmod +x "$BIN_DIR/pbcopy" "$BIN_DIR/pbpaste"
 
   echo "ℹ️  Make sure ~/.local/bin is in PATH (it usually is)."
 }
@@ -81,9 +85,12 @@ clean() {
   echo "🧹 Removing pbcopy/pbpaste wrappers..."
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/pbcopy" "$HOME_DIR/.local/bin/pbpaste" || true
 
-  echo "🧽 Optionally removing wl-clipboard and xclip..."
+  # wl-clipboard/xclip may predate glimt and other tools rely on them, so
+  # only remove them with explicit consent (confirm says no without a terminal)
   if rpm -q wl-clipboard >/dev/null 2>&1; then
-    sudo dnf remove -y wl-clipboard || true
+    if confirm "Remove wl-clipboard as well?"; then
+      sudo dnf remove -y wl-clipboard || true
+    fi
   fi
   if rpm -q xclip >/dev/null 2>&1; then
     if confirm "Remove xclip as well?"; then

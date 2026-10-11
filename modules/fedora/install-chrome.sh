@@ -24,14 +24,26 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
+# Google only publishes Chrome for Linux on x86_64 — skip cleanly elsewhere
+# (exit 0 so setup continues). clean does not call this, so a previous
+# install can still be removed.
+require_x86_64() {
+  if [[ "$(uname -m)" != "x86_64" ]]; then
+    warn "Google Chrome is only published for x86_64 (this is $(uname -m)) — skipping"
+    exit 0
+  fi
+}
+
 # === Actions ==============================================================
 
 deps() {
+  require_x86_64
   log "Installing dependencies…"
   sudo dnf install -y ca-certificates curl dnf-plugins-core
 }
 
 install_repo() {
+  require_x86_64
   log "Adding Google Chrome DNF repository (official .repo)…"
 
   if [[ ! -f "$REPO_FILE" ]]; then
@@ -54,6 +66,7 @@ install_pkg() {
 }
 
 config() {
+  require_x86_64
   log "Configuring desktop launcher (StartupNotify=false)…"
 
   SRC_DESKTOP="/usr/share/applications/google-chrome.desktop"
@@ -65,7 +78,7 @@ config() {
   if [[ -f "$SRC_DESKTOP" ]]; then
     sudo -u "$REAL_USER" cp -f "$SRC_DESKTOP" "$DEST_DESKTOP"
   else
-    sudo -u "$REAL_USER" sh -c "cat >\"$DEST_DESKTOP\" <<'EOF'
+    run_as_user tee "$DEST_DESKTOP" >/dev/null <<'EOF'
 [Desktop Entry]
 Version=1.0
 Name=Google Chrome
@@ -77,7 +90,7 @@ Icon=google-chrome
 Type=Application
 Categories=Network;WebBrowser;
 StartupWMClass=Google-chrome
-EOF"
+EOF
   fi
 
   if sudo -u "$REAL_USER" grep -q '^StartupNotify=' "$DEST_DESKTOP"; then
@@ -98,6 +111,13 @@ clean() {
   log "Removing Chrome and repository…"
   sudo dnf remove -y google-chrome-stable || true
   remove_repo || true
+
+  local dest_dir="$HOME_DIR/.local/share/applications"
+  if [[ -f "$dest_dir/google-chrome.desktop" ]]; then
+    run_as_user rm -f "$dest_dir/google-chrome.desktop"
+    run_as_user update-desktop-database "$dest_dir" >/dev/null 2>&1 || true
+    log "Removed desktop override $dest_dir/google-chrome.desktop"
+  fi
   log "Chrome removed."
 }
 

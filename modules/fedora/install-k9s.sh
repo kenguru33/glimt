@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ An error occurred in K9s installer. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="k9s"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
@@ -12,10 +13,17 @@ GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env
 # shellcheck source=../../versions.env
 source "$GLIMT_VERSIONS"
 
-ACTION="${1:-all}"
 CONFIG_TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
 TARGET_CONFIG_DIR="$HOME_DIR/.zsh/config"
 TARGET_CONFIG_FILE="$TARGET_CONFIG_DIR/k9s.zsh"
+K9S_CONFIG_DIR="$HOME_DIR/.config/k9s"
+SKIN_DIR="$K9S_CONFIG_DIR/skins"
+SKIN_FILE="catppuccin-mocha.yaml"
+K9S_CONFIG_TEMPLATE="$CONFIG_TEMPLATE_DIR/k9s-config.yaml"
+# Older versions of this module appended exactly this line to ~/.zshrc. The
+# zshrc template (install-zsh.sh) already puts ~/.local/bin on PATH.
+# shellcheck disable=SC2016  # literal line, not expanded
+LEGACY_PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
 
 # === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
@@ -29,14 +37,6 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   echo "❌ This module supports Fedora/RHEL-based systems only."
   exit 1
 fi
-
-# === Ensure ~/.local/bin is in PATH in .zshrc ===
-ensure_local_bin_path() {
-  if ! grep -q 'export PATH=.*\.local/bin' "$HOME_DIR/.zshrc" 2>/dev/null; then
-    sudo -u "$REAL_USER" sh -c "echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> '$HOME_DIR/.zshrc'"
-    echo "✅ Added ~/.local/bin to PATH in ~/.zshrc"
-  fi
-}
 
 # === Step: deps ===
 install_dependencies() {
@@ -52,21 +52,22 @@ install_k9s() {
   norm_arch="$(normalize_arch)"
   url="https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_${norm_arch}.tar.gz"
 
-  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.local/bin"
-  TMP_TAR="$(mktemp)"
-  TMP_DIR="$(mktemp -d)"
-  
-  curl -fsSL "$url" -o "$TMP_TAR"
-  sudo -u "$REAL_USER" tar -xzf "$TMP_TAR" -C "$TMP_DIR"
+  run_as_user mkdir -p "$HOME_DIR/.local/bin"
 
-  sudo -u "$REAL_USER" mv "$TMP_DIR/k9s" "$HOME_DIR/.local/bin/k9s"
-  sudo -u "$REAL_USER" chmod +x "$HOME_DIR/.local/bin/k9s"
-  rm -f "$TMP_TAR"
-  rm -rf "$TMP_DIR"
+  # Download and extract as the caller (the temp dir is only readable by
+  # them), then install the binary owned by the real user.
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  if ! curl -fsSL "$url" -o "$tmp_dir/k9s.tar.gz" ||
+     ! tar -xzf "$tmp_dir/k9s.tar.gz" -C "$tmp_dir"; then
+    rm -rf "$tmp_dir"
+    die "Failed to download/extract $url"
+  fi
+  sudo install -o "$REAL_USER" -g "$REAL_USER" -m 0755 "$tmp_dir/k9s" "$HOME_DIR/.local/bin/k9s"
+  rm -rf "$tmp_dir"
 
   echo "✅ K9s installed at ~/.local/bin/k9s"
-  ensure_local_bin_path
-  verify_binary k9s version
+  verify_binary "$HOME_DIR/.local/bin/k9s" version
 }
 
 # === Step: config ===
@@ -74,8 +75,7 @@ config_k9s() {
   echo "🧠 Installing K9s config and theme..."
 
   if [[ ! -x "$HOME_DIR/.local/bin/k9s" ]]; then
-    echo "⚠️  K9s binary not found. Run 'install' first."
-    exit 1
+    die "K9s binary not found. Run 'install' first."
   fi
 
   # Shell completion loader config
@@ -84,32 +84,23 @@ config_k9s() {
     echo "✅ Installed Zsh completion config: $TARGET_CONFIG_FILE"
   fi
 
-  # Bash completion
-  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.local/share/bash-completion/completions"
-  sudo -u "$REAL_USER" "$HOME_DIR/.local/bin/k9s" completion bash > "$HOME_DIR/.local/share/bash-completion/completions/k9s" || true
-
-  # Fish completion
-  sudo -u "$REAL_USER" mkdir -p "$HOME_DIR/.config/fish/completions"
-  sudo -u "$REAL_USER" "$HOME_DIR/.local/bin/k9s" completion fish > "$HOME_DIR/.config/fish/completions/k9s.fish" || true
+  # Bash/fish completions — the redirect runs in the user's shell so the
+  # files are user-owned (a redirect in this shell would run as root)
+  run_as_user mkdir -p "$HOME_DIR/.local/share/bash-completion/completions" "$HOME_DIR/.config/fish/completions"
+  run_as_user sh -c '"$1" completion bash > "$2"' _ \
+    "$HOME_DIR/.local/bin/k9s" "$HOME_DIR/.local/share/bash-completion/completions/k9s" || true
+  run_as_user sh -c '"$1" completion fish > "$2"' _ \
+    "$HOME_DIR/.local/bin/k9s" "$HOME_DIR/.config/fish/completions/k9s.fish" || true
 
   # Catppuccin theme
-  local SKIN_DIR="$HOME_DIR/.config/k9s/skins"
-  sudo -u "$REAL_USER" mkdir -p "$SKIN_DIR"
-  sudo -u "$REAL_USER" curl -fsSL https://raw.githubusercontent.com/catppuccin/k9s/main/dist/catppuccin-mocha.yaml \
-    -o "$SKIN_DIR/catppuccin-mocha.yaml"
-  echo "✅ Theme saved to $SKIN_DIR/catppuccin-mocha.yaml"
+  run_as_user mkdir -p "$SKIN_DIR"
+  run_as_user curl -fsSL "https://raw.githubusercontent.com/catppuccin/k9s/main/dist/$SKIN_FILE" \
+    -o "$SKIN_DIR/$SKIN_FILE"
+  echo "✅ Theme saved to $SKIN_DIR/$SKIN_FILE"
 
-  # config.yaml
-  local CONFIG_FILE="$HOME_DIR/.config/k9s/config.yaml"
-  sudo -u "$REAL_USER" mkdir -p "$(dirname "$CONFIG_FILE")"
-  sudo -u "$REAL_USER" cat <<EOF > "$CONFIG_FILE"
-k9s:
-  ui:
-    skin: catppuccin-mocha
-EOF
-
-  chown -R "$REAL_USER:$REAL_USER" "$HOME_DIR/.config/k9s"
-  echo "✅ config.yaml written with Catppuccin Mocha"
+  # config.yaml (an existing one is backed up by deploy_config)
+  deploy_config "$K9S_CONFIG_TEMPLATE" "$K9S_CONFIG_DIR/config.yaml"
+  echo "✅ config.yaml set to Catppuccin Mocha"
 }
 
 # === Step: clean ===
@@ -119,8 +110,31 @@ clean_k9s() {
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/bin/k9s"
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.local/share/bash-completion/completions/k9s"
   sudo -u "$REAL_USER" rm -f "$HOME_DIR/.config/fish/completions/k9s.fish"
-  sudo -u "$REAL_USER" rm -rf "$HOME_DIR/.config/k9s"
   sudo -u "$REAL_USER" rm -f "$TARGET_CONFIG_FILE"
+
+  # ~/.config/k9s: only what config_k9s deployed — keep other skins, plugins,
+  # aliases, clusters, etc.
+  run_as_user rm -f "${SKIN_DIR:?}/${SKIN_FILE:?}"
+  # config.yaml: remove only while it is still glimt's template; a copy the
+  # user has edited since is left in place
+  if [[ -f "$K9S_CONFIG_DIR/config.yaml" ]]; then
+    if cmp -s "$K9S_CONFIG_TEMPLATE" "$K9S_CONFIG_DIR/config.yaml"; then
+      run_as_user rm -f "${K9S_CONFIG_DIR:?}/config.yaml"
+    else
+      warn "Keeping $K9S_CONFIG_DIR/config.yaml (modified since glimt deployed it)"
+    fi
+  fi
+  # Drop the directories only if nothing else lives there
+  run_as_user rmdir "$SKIN_DIR" 2>/dev/null || true
+  run_as_user rmdir "$K9S_CONFIG_DIR" 2>/dev/null || true
+
+  # Legacy: older versions appended the PATH line at the end of ~/.zshrc. Only
+  # an exact match on the *last* line is removed — the zshrc template carries
+  # the same line near the top and that one must stay.
+  if [[ -f "$HOME_DIR/.zshrc" && "$(tail -n 1 "$HOME_DIR/.zshrc")" == "$LEGACY_PATH_LINE" ]]; then
+    run_as_user sed -i '$d' "$HOME_DIR/.zshrc"
+    echo "✅ Removed legacy PATH line appended to ~/.zshrc"
+  fi
 
   echo "✅ All K9s files removed."
 }

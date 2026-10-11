@@ -1,14 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ kubectl install failed (line $LINENO)." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="kubectl"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
-
-ACTION="${1:-all}"
 
 LOCAL_BIN="$HOME_DIR/.local/bin"
 PLUGIN_DIR="$HOME_DIR/.zsh/plugins/kubectl"
@@ -32,12 +31,12 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
-# === Normalize Architecture ===
 umask 022
 
+# Created as the user, so no chown is needed; every file written below is
+# user-owned too (install -o, run_as_user, deploy_config).
 ensure_dirs() {
-  sudo -u "$REAL_USER" mkdir -p "$LOCAL_BIN" "$PLUGIN_DIR" "$CONFIG_DIR"
-  chown -R "$REAL_USER:$REAL_USER" "$HOME_DIR/.local" "$HOME_DIR/.zsh" 2>/dev/null || true
+  run_as_user mkdir -p "$LOCAL_BIN" "$PLUGIN_DIR" "$CONFIG_DIR"
 }
 
 deps() {
@@ -56,25 +55,23 @@ do_install() {
   ARCH_NORM="$(normalize_arch)"
   KUBECTL_URL="https://dl.k8s.io/release/${KVER}/bin/linux/${ARCH_NORM}/kubectl"
 
+  local tmp
   tmp="$(mktemp)"
-  trap 'rm -f "$tmp"' RETURN
 
   echo "→ Downloading $KUBECTL_URL"
-  curl -fL --retry 3 --retry-delay 2 -o "$tmp" "$KUBECTL_URL"
+  if ! curl -fL --retry 3 --retry-delay 2 -o "$tmp" "$KUBECTL_URL"; then
+    rm -f "$tmp"
+    die "Download failed: $KUBECTL_URL"
+  fi
 
   sudo install -o "$REAL_USER" -g "$REAL_USER" -m 0755 "$tmp" "$LOCAL_BIN/kubectl"
+  rm -f "$tmp"
 
-  echo "→ Verifying kubectl binary"
-  sudo -u "$REAL_USER" "$LOCAL_BIN/kubectl" version --client --output=yaml >/dev/null 2>&1 || {
-    echo "❌ kubectl failed to execute after install"
-    exit 1
-  }
+  verify_binary "$LOCAL_BIN/kubectl" version --client
 
   echo "📄 Generating zsh completion"
-  tmpc="$(mktemp)"
-  sudo -u "$REAL_USER" "$LOCAL_BIN/kubectl" completion zsh > "$tmpc"
-  install -o "$REAL_USER" -g "$REAL_USER" -m 0644 "$tmpc" "$COMPLETION_FILE"
-  rm -f "$tmpc"
+  # The redirect runs inside the user's shell, so the file is user-owned
+  run_as_user sh -c '"$1" completion zsh > "$2"' _ "$LOCAL_BIN/kubectl" "$COMPLETION_FILE"
 
   echo "✅ kubectl installed at $LOCAL_BIN/kubectl"
   echo "✅ Completion at $COMPLETION_FILE"

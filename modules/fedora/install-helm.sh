@@ -3,6 +3,7 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="helm"
 ACTION="${1:-all}"
@@ -43,36 +44,38 @@ install_helm(){
   ARCH_NORM="$(normalize_arch)"
   HELM_URL="https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH_NORM}.tar.gz"
   
-  sudo -u "$REAL_USER" mkdir -p "$LOCAL_BIN"
-  TMP_DIR="$(mktemp -d)"
-  TMP_TAR="$(mktemp)"
-  
+  run_as_user mkdir -p "$LOCAL_BIN"
+
+  # Download and extract as the caller (the temp dir is only readable by
+  # them), then install the binary owned by the real user.
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
   log "Downloading helm from $HELM_URL"
-  curl -fsSL "$HELM_URL" -o "$TMP_TAR"
-  
-  sudo -u "$REAL_USER" tar -xzf "$TMP_TAR" -C "$TMP_DIR"
-  sudo -u "$REAL_USER" mv "$TMP_DIR/linux-${ARCH_NORM}/helm" "$LOCAL_BIN/helm"
-  sudo -u "$REAL_USER" chmod +x "$LOCAL_BIN/helm"
-  
-  rm -f "$TMP_TAR"
-  rm -rf "$TMP_DIR"
-  
-  log "Installed: $(helm version --short 2>/dev/null || echo 'helm')"
+  if ! curl -fsSL "$HELM_URL" -o "$tmp_dir/helm.tar.gz" ||
+     ! tar -xzf "$tmp_dir/helm.tar.gz" -C "$tmp_dir"; then
+    rm -rf "$tmp_dir"
+    die "Failed to download/extract $HELM_URL"
+  fi
+
+  sudo install -o "$REAL_USER" -g "$REAL_USER" -m 0755 \
+    "$tmp_dir/linux-${ARCH_NORM}/helm" "$LOCAL_BIN/helm"
+  rm -rf "$tmp_dir"
+
+  verify_binary "$LOCAL_BIN/helm" version --short
 }
 
 configure_helm(){
-  if ! command -v helm >/dev/null 2>&1; then
-    log "helm not found in PATH; skipping completions."
+  if [[ ! -x "$LOCAL_BIN/helm" ]]; then
+    log "helm not found at $LOCAL_BIN/helm; skipping completions."
     return 0
   fi
 
   log "Generating Zsh completion → $ZSH_COMP_DIR/_helm"
-  sudo -u "$REAL_USER" mkdir -p "$ZSH_COMP_DIR"
+  run_as_user mkdir -p "$ZSH_COMP_DIR"
   # Generate completion as the real user to avoid root-owned files
-  if sudo -u "$REAL_USER" bash -lc "helm completion zsh > '$ZSH_COMP_DIR/_helm'"; then
-    chmod 755 "$HOME_DIR/.zsh" "$ZSH_COMP_DIR" 2>/dev/null || true
-    chmod 644 "$ZSH_COMP_DIR/_helm" || true
-    chown -R "$REAL_USER":"$REAL_USER" "$HOME_DIR/.zsh" 2>/dev/null || true
+  if run_as_user sh -c '"$1" completion zsh > "$2"' _ "$LOCAL_BIN/helm" "$ZSH_COMP_DIR/_helm"; then
+    run_as_user chmod 644 "$ZSH_COMP_DIR/_helm" || true
     log "Completions written: $ZSH_COMP_DIR/_helm"
   else
     die "Failed to generate Helm Zsh completion"
@@ -101,7 +104,7 @@ clean_helm(){
 fedora_guard
 case "$ACTION" in
   deps)    install_deps ;;
-  install) install_deps; install_helm ;;
+  install) install_helm ;;
   config)  configure_helm ;;
   clean)   clean_helm ;;
   all)     install_deps; install_helm; configure_helm ;;

@@ -1,36 +1,27 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Zsh env setup failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
-MODULE_NAME="zsh-env"
+MODULE_NAME="zsh"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
 PLUGIN_DIR="$HOME_DIR/.zsh/plugins"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 ZSHRC_FILE="$HOME_DIR/.zshrc"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZSHRC_TEMPLATE="$SCRIPT_DIR/config/zshrc"
+# Templates in config/ deployed to ~/.zsh/config/<name>.zsh (and removed by clean)
+CONFIG_TEMPLATES=(autosuggestions syntax-highlighting greeting)
 
 declare -A PLUGINS=(
   ["zsh-autosuggestions"]="https://github.com/zsh-users/zsh-autosuggestions.git"
   ["zsh-syntax-highlighting"]="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 )
-
-# === Helper: write config ===
-write_zsh_config() {
-  local name="$1"
-  local content="$2"
-  local file="$CONFIG_DIR/$name.zsh"
-  mkdir -p "$CONFIG_DIR"
-  echo "$content" > "$file"
-  chown "$REAL_USER:$REAL_USER" "$file"
-  echo "✅ Wrote $file"
-}
 
 # === Step: deps ===
 deps() {
@@ -44,7 +35,7 @@ deps() {
 # === Step: install ===
 install() {
   echo "🔌 Installing or updating Zsh plugins..."
-  mkdir -p "$PLUGIN_DIR"
+  run_as_user mkdir -p "$PLUGIN_DIR"
 
   for name in "${!PLUGINS[@]}"; do
     repo="${PLUGINS[$name]}"
@@ -52,15 +43,14 @@ install() {
 
     if [[ -d "$dir/.git" ]]; then
       echo "🔄 Updating $name..."
-      git -C "$dir" pull --quiet --rebase
+      run_as_user git -C "$dir" pull --quiet --rebase
       echo "✅ Updated $name"
     else
       echo "⬇️  Installing $name..."
       rm -rf "$dir"
-      git clone --depth=1 "$repo" "$dir"
+      run_as_user git clone --depth=1 "$repo" "$dir"
       echo "✅ Installed $name"
     fi
-    chown -R "$REAL_USER:$REAL_USER" "$dir"
   done
 
   echo "🛠 Ensuring Zsh is default shell for $REAL_USER..."
@@ -74,28 +64,13 @@ install() {
 
 # === Step: config ===
 config() {
-  echo "🔧 Writing Zsh plugin configs..."
-
-  mkdir -p "$CONFIG_DIR"
-
-  write_zsh_config "autosuggestions" \
-'[[ -f ~/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source ~/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh'
-
-  write_zsh_config "syntax-highlighting" \
-'[[ -f ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh'
-
-  deploy_config "$SCRIPT_DIR/config/greeting.zsh" "$CONFIG_DIR/greeting.zsh"
+  echo "🔧 Installing Zsh plugin configs..."
+  for name in "${CONFIG_TEMPLATES[@]}"; do
+    deploy_config "$SCRIPT_DIR/config/$name.zsh" "$CONFIG_DIR/$name.zsh"
+  done
 
   echo "🔧 Installing .zshrc template..."
-
-  if [[ -f "$ZSHRC_FILE" ]]; then
-    backup="$ZSHRC_FILE.backup.$(date +%Y%m%d%H%M%S)"
-    cp "$ZSHRC_FILE" "$backup"
-    echo "💾 Backed up existing .zshrc to $backup"
-  fi
-
-  cp "$ZSHRC_TEMPLATE" "$ZSHRC_FILE"
-  chown "$REAL_USER:$REAL_USER" "$ZSHRC_FILE"
+  deploy_config "$ZSHRC_TEMPLATE" "$ZSHRC_FILE"
   echo "✅ Installed new .zshrc"
 }
 
@@ -111,12 +86,21 @@ clean() {
   done
 
   echo "❌ Removing Zsh config files"
-  rm -f "$CONFIG_DIR/autosuggestions.zsh" \
-        "$CONFIG_DIR/syntax-highlighting.zsh" \
-        "$CONFIG_DIR/greeting.zsh"
+  for name in "${CONFIG_TEMPLATES[@]}"; do
+    rm -f "$CONFIG_DIR/$name.zsh"
+  done
 
   echo "❌ Removing .zshrc"
   rm -f "$ZSHRC_FILE"
+
+  # Changing the login shell back is left to the user (we can't know which
+  # shell they want), but make sure they know zsh is still set.
+  local login_shell
+  login_shell="$(getent passwd "$REAL_USER" | cut -d: -f7)"
+  if [[ "$(basename "${login_shell:-}")" == "zsh" ]]; then
+    warn "zsh is still the login shell for $REAL_USER ($login_shell)."
+    warn "Change it back with: sudo chsh -s /bin/bash $REAL_USER"
+  fi
 
   echo "✅ Clean complete."
 }

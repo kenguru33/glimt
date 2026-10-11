@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="nerdfonts"
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
@@ -12,14 +13,13 @@ GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env
 # shellcheck source=../../versions.env
 source "$GLIMT_VERSIONS"
 
-ACTION="${1:-all}"
 FONT_DIR="$HOME_DIR/.local/share/fonts"
-TMP_DIR="/tmp/nerdfonts"
-FONT_CACHE_LOG="/tmp/fc-cache.log"
+# Each font family is unzipped into its own directory below this one, so
+# clean can remove exactly what was installed (incl. README/LICENSE files)
+NERDFONTS_DIR="$FONT_DIR/NerdFonts"
 
 # === Font definitions ===
-declare -A FONTS
-FONTS=(
+declare -A FONTS=(
   ["Hack"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/Hack.zip"
   ["FiraCode"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/FiraCode.zip"
   ["JetBrainsMono"]="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/JetBrainsMono.zip"
@@ -54,26 +54,37 @@ install_deps() {
 }
 
 install_fonts() {
-  echo "🔤 Installing Nerd Fonts to $FONT_DIR..."
-  run_as_user mkdir -p "$FONT_DIR" "$TMP_DIR"
+  echo "🔤 Installing Nerd Fonts to $NERDFONTS_DIR..."
+  run_as_user mkdir -p "$NERDFONTS_DIR"
+
+  # Private, user-owned download dir (downloads and unzip run as the user)
+  local tmp_dir
+  tmp_dir="$(run_as_user mktemp -d)"
+  [[ -d "$tmp_dir" ]] || die "Could not create a temporary download directory"
 
   for name in "${!FONTS[@]}"; do
-    if fc-list | grep -qi "$name Nerd Font"; then
+    # grep -q would exit early and SIGPIPE fc-list, failing the pipe under pipefail
+    if fc-list | grep -i "$name Nerd Font" >/dev/null; then
       echo "✅ $name Nerd Font already installed. Skipping."
       continue
     fi
 
-    zip_path="$TMP_DIR/${name}.zip"
+    zip_path="$tmp_dir/${name}.zip"
     echo "⬇️  Downloading $name Nerd Font..."
-    wget -q -O "$zip_path" "${FONTS[$name]}"
+    if ! run_as_user wget -q -O "$zip_path" "${FONTS[$name]}"; then
+      run_as_user rm -rf "$tmp_dir"
+      die "Download failed: ${FONTS[$name]}"
+    fi
 
     echo "📦 Extracting $name..."
-    run_as_user unzip -o "$zip_path" -d "$FONT_DIR" >/dev/null
-    rm -f "$zip_path"
+    run_as_user mkdir -p "$NERDFONTS_DIR/$name"
+    run_as_user unzip -o "$zip_path" -d "$NERDFONTS_DIR/$name" >/dev/null
+    run_as_user rm -f "$zip_path"
   done
+  run_as_user rm -rf "$tmp_dir"
 
   echo "🔄 Rebuilding font cache..."
-  run_as_user fc-cache -fv > "$FONT_CACHE_LOG"
+  run_as_user fc-cache -f >/dev/null
   echo "✅ Font cache rebuilt."
   verify_binary fc-list
 }
@@ -85,12 +96,25 @@ configure_fonts() {
 clean_fonts() {
   echo "🧹 Removing installed Nerd Fonts..."
 
+  local name f legacy
   for name in "${!FONTS[@]}"; do
-    rm -f "$FONT_DIR"/*"$name"*
+    run_as_user rm -rf "${NERDFONTS_DIR:?}/${name:?}"
+
+    # Legacy layout: older versions unzipped straight into $FONT_DIR. Only
+    # the font files themselves are recognisable (<name>NerdFont*, plus the
+    # JetBrainsMono "NL" variant); loose README/LICENSE files are left alone.
+    legacy=()
+    for f in "$FONT_DIR/${name}NerdFont"* "$FONT_DIR/${name}NLNerdFont"*; do
+      [[ -f "$f" ]] && legacy+=("$f")
+    done
+    if (( ${#legacy[@]} )); then
+      run_as_user rm -f "${legacy[@]}"
+    fi
   done
+  run_as_user rmdir "$NERDFONTS_DIR" 2>/dev/null || true
 
   echo "🔄 Rebuilding font cache..."
-  fc-cache -fv > "$FONT_CACHE_LOG"
+  run_as_user fc-cache -f >/dev/null 2>&1 || true
   echo "✅ Clean complete."
 }
 

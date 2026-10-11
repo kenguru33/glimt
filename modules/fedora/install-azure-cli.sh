@@ -75,7 +75,7 @@ clean_all() {
   # sudo dnf remove -y packages-microsoft-prod || true
 
   log "Removing Zsh config…"
-  rm -f "$HOME_DIR/.zsh/config/azure-cli.zsh" 2>/dev/null || true
+  run_as_user rm -f "$HOME_DIR/.zsh/config/azure-cli.zsh" 2>/dev/null || true
   log "Clean completed."
 }
 

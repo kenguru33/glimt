@@ -1,14 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ FZF install failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="fzf"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 PLUGIN_DIR="$HOME_DIR/.zsh/plugins/fzf-tab"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
@@ -31,16 +31,15 @@ install() {
 
   if [[ -d "$PLUGIN_DIR/.git" ]]; then
     echo "🔄 Updating fzf-tab..."
-    git -C "$PLUGIN_DIR" pull --quiet --rebase
+    run_as_user git -C "$PLUGIN_DIR" pull --quiet --rebase
     echo "✅ Updated fzf-tab"
   else
     echo "⬇️  Installing fzf-tab..."
     rm -rf "$PLUGIN_DIR"
-    git clone --depth=1 https://github.com/Aloxaf/fzf-tab.git "$PLUGIN_DIR"
+    run_as_user mkdir -p "$(dirname "$PLUGIN_DIR")"
+    run_as_user git clone --depth=1 https://github.com/Aloxaf/fzf-tab.git "$PLUGIN_DIR"
     echo "✅ Installed fzf-tab"
   fi
-
-  chown -R "$REAL_USER:$REAL_USER" "$PLUGIN_DIR"
 }
 
 # === Step: config ===

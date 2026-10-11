@@ -1,4 +1,3 @@
-# kubectx.zsh
-
-# Ensure vendor completions are loaded (for Debian package)
-fpath+=("/usr/share/zsh/vendor-completions")
+# === kubectx / kubens aliases ===
+alias kctx='kubectx'
+alias kns='kubens'

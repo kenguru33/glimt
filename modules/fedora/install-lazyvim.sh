@@ -1,14 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ An error occurred. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="lazyvim"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CATPPUCCIN_TEMPLATE="$SCRIPT_DIR/config/lazyvim-catppuccin.lua"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
 NVIM_DIRS=(
   "$HOME_DIR/.config/nvim"
@@ -32,7 +34,7 @@ fi
 # === Step: deps ===
 install_dependencies() {
   echo "📦 Installing Neovim and related tools..."
-  sudo dnf install -y neovim git curl unzip ripgrep fd fzf gcc gcc-c++ make
+  sudo dnf install -y neovim git curl unzip ripgrep fd-find fzf gcc gcc-c++ make
   echo "✅ Dependencies installed."
 }
 
@@ -60,28 +62,7 @@ config_lazyvim() {
   echo "🎨 Adding Catppuccin theme plugin..."
   PLUGIN_DIR="$HOME_DIR/.config/nvim/lua/plugins"
   sudo -u "$REAL_USER" mkdir -p "$PLUGIN_DIR"
-  cat <<'EOF' | sudo -u "$REAL_USER" tee "$PLUGIN_DIR/catppuccin.lua" > /dev/null
-return {
-  -- Catppuccin Mocha — same palette as the kitty theme in config/kitty.conf.
-  {
-    "catppuccin/nvim",
-    name = "catppuccin",
-    priority = 1000,
-    opts = {
-      flavour = "mocha",
-      background = { light = "latte", dark = "mocha" },
-    },
-  },
-  -- LazyVim applies its own colorscheme (default: tokyonight) after plugins
-  -- load, so a vim.cmd.colorscheme() call inside the plugin config above gets
-  -- overridden. Setting LazyVim's opts.colorscheme is what actually sticks.
-  {
-    "LazyVim/LazyVim",
-    opts = { colorscheme = "catppuccin-mocha" },
-  },
-}
-EOF
-  chown "$REAL_USER:$REAL_USER" "$PLUGIN_DIR/catppuccin.lua"
+  deploy_config "$CATPPUCCIN_TEMPLATE" "$PLUGIN_DIR/catppuccin.lua"
   echo "✅ Catppuccin plugin added and set as default colorscheme."
 }
 
@@ -96,10 +77,11 @@ clean_lazyvim() {
   done
   echo "✅ LazyVim configuration removed."
 
-  echo "📦 Optionally remove Neovim and tools..."
-  if confirm "Uninstall Neovim and related tools?"; then
-    sudo dnf remove -y neovim ripgrep fd fzf
-    echo "✅ Packages removed."
+  # neovim belongs to install-nvim.sh and fzf/fd to install-fzf.sh; gcc/make
+  # are a shared toolchain. ripgrep is the only package installed for LazyVim alone.
+  if confirm "Uninstall ripgrep (installed for LazyVim)?"; then
+    sudo dnf remove -y ripgrep
+    echo "✅ ripgrep removed."
   fi
 }
 
@@ -107,7 +89,12 @@ clean_lazyvim() {
 restore_backup() {
   echo "📂 Searching for latest backup to restore..."
   for dir in "${NVIM_DIRS[@]}"; do
-    latest_backup=$(ls -d "${dir}.bak-"* 2>/dev/null | sort | tail -n1)
+    # Globs expand sorted, and the timestamp suffix sorts chronologically
+    local backups=() b latest_backup=""
+    for b in "${dir}.bak-"*; do
+      [[ -e "$b" ]] && backups+=("$b")
+    done
+    (( ${#backups[@]} )) && latest_backup="${backups[${#backups[@]}-1]}"
     if [[ -n "$latest_backup" ]]; then
       echo "🔁 Restoring $latest_backup → $dir"
       if [[ -e "$dir" ]]; then

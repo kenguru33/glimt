@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Git config setup failed at line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="git-config"
 ACTION="${1:-all}"
@@ -80,9 +80,23 @@ enable_gnome_keyring_socket() {
 # ---------------------------------------------------------------------
 # Prompt user (gum)
 # ---------------------------------------------------------------------
-prompt_git_config() {
-  mkdir -p "$CONFIG_DIR"
+# setup.sh collects these values up front (before the progress bar hides the
+# terminal) and saves them to $CONFIG_FILE; the module only prompts itself on
+# `reconfigure` or when run by hand without a saved config.
+is_interactive() { [[ -t 0 && -t 1 ]]; }
 
+save_git_config() {
+  run_as_user mkdir -p "$CONFIG_DIR"
+  run_as_user tee "$CONFIG_FILE" >/dev/null <<EOF
+name="$name"
+email="$email"
+editor="$editor"
+branch="$branch"
+rebase="$rebase"
+EOF
+}
+
+prompt_git_config() {
   while true; do
     name=$(gum input --prompt "📝 Full name: ")
     [[ -n "$name" ]] && break
@@ -113,21 +127,31 @@ EOF
 
   gum confirm "Save configuration?" || die "Aborted"
 
-  cat >"$CONFIG_FILE" <<EOF
-name="$name"
-email="$email"
-editor="$editor"
-branch="$branch"
-rebase="$rebase"
-EOF
+  save_git_config
 }
 
 load_git_config() {
-  if [[ "$ACTION" == "reconfigure" || ! -f "$CONFIG_FILE" ]]; then
-    prompt_git_config
+  name="" email="" editor="nvim" branch="main" rebase="false"
+
+  if [[ "$ACTION" != "reconfigure" && -f "$CONFIG_FILE" ]]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+    return 0
   fi
-  # shellcheck source=/dev/null
-  source "$CONFIG_FILE"
+
+  if is_interactive && command -v gum >/dev/null 2>&1; then
+    prompt_git_config
+    return 0
+  fi
+
+  [[ "$ACTION" == "reconfigure" ]] && die "reconfigure needs a terminal (and gum)"
+
+  # No terminal and nothing saved: keep whatever identity git already has
+  # rather than hanging on a prompt nobody can answer.
+  warn "No saved git info ($CONFIG_FILE) and no terminal — not prompting."
+  warn "Run '$0 reconfigure' in a terminal to set your git identity."
+  name="$(run_as_user git config --global user.name 2>/dev/null || true)"
+  email="$(run_as_user git config --global user.email 2>/dev/null || true)"
 }
 
 # ---------------------------------------------------------------------
@@ -136,29 +160,33 @@ load_git_config() {
 configure_git() {
   log "Applying git configuration"
 
-  sudo -u "$REAL_USER" git config --global user.name "$name"
-  sudo -u "$REAL_USER" git config --global user.email "$email"
-  sudo -u "$REAL_USER" git config --global init.defaultBranch "$branch"
-  sudo -u "$REAL_USER" git config --global core.editor "$editor"
-  sudo -u "$REAL_USER" git config --global pull.rebase "$rebase"
-  sudo -u "$REAL_USER" git config --global color.ui auto
-  sudo -u "$REAL_USER" git config --global core.autocrlf input
+  if [[ -n "$name" ]]; then
+    run_as_user git config --global user.name "$name"
+  fi
+  if [[ -n "$email" ]]; then
+    run_as_user git config --global user.email "$email"
+  fi
+  run_as_user git config --global init.defaultBranch "$branch"
+  run_as_user git config --global core.editor "$editor"
+  run_as_user git config --global pull.rebase "$rebase"
+  run_as_user git config --global color.ui auto
+  run_as_user git config --global core.autocrlf input
 
   # Fedora-native credential storage
   if command -v git-credential-libsecret >/dev/null 2>&1; then
     enable_gnome_keyring_socket
-    sudo -u "$REAL_USER" git config --global credential.helper libsecret
+    run_as_user git config --global credential.helper libsecret
     log "Using Fedora-native credential helper (libsecret + GNOME Keyring)"
   else
-    sudo -u "$REAL_USER" git config --global credential.helper 'cache --timeout=3600'
+    run_as_user git config --global credential.helper 'cache --timeout=3600'
     log "libsecret missing — using in-memory cache (1h)"
   fi
 
-  sudo -u "$REAL_USER" git config --global alias.st status
-  sudo -u "$REAL_USER" git config --global alias.co checkout
-  sudo -u "$REAL_USER" git config --global alias.br branch
-  sudo -u "$REAL_USER" git config --global alias.cm "commit -m"
-  sudo -u "$REAL_USER" git config --global alias.hist "log --oneline --graph --decorate"
+  run_as_user git config --global alias.st status
+  run_as_user git config --global alias.co checkout
+  run_as_user git config --global alias.br branch
+  run_as_user git config --global alias.cm "commit -m"
+  run_as_user git config --global alias.hist "log --oneline --graph --decorate"
 
   log "Git configured for $name <$email>"
 }
@@ -168,11 +196,10 @@ configure_git() {
 # ---------------------------------------------------------------------
 install_git_completion_zsh() {
   if [[ ! -f "$FALLBACK_COMPLETION" ]]; then
-    mkdir -p "$PLUGIN_DIR"
-    curl -fsSL \
+    run_as_user mkdir -p "$PLUGIN_DIR"
+    run_as_user curl -fsSL \
       https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.zsh \
       -o "$FALLBACK_COMPLETION"
-    chown -R "$REAL_USER:$REAL_USER" "$PLUGIN_DIR"
   fi
 }
 
@@ -186,12 +213,15 @@ config_git_shell() {
 clean_git_config() {
   log "Cleaning git config"
 
-  sudo -u "$REAL_USER" git config --global --unset user.name || true
-  sudo -u "$REAL_USER" git config --global --unset user.email || true
-  sudo -u "$REAL_USER" git config --global --unset credential.helper || true
+  run_as_user git config --global --unset user.name || true
+  run_as_user git config --global --unset user.email || true
+  run_as_user git config --global --unset credential.helper || true
+  for key in init.defaultBranch core.editor pull.rebase color.ui core.autocrlf; do
+    run_as_user git config --global --unset "$key" || true
+  done
   # Only the aliases glimt sets — keep any aliases the user added themselves
   for a in st co br cm hist; do
-    sudo -u "$REAL_USER" git config --global --unset "alias.$a" || true
+    run_as_user git config --global --unset "alias.$a" || true
   done
 
   rm -f "$ZSH_TARGET_FILE"
@@ -205,13 +235,16 @@ clean_git_config() {
 case "$ACTION" in
 all)
   install_dependencies
+  install_git_completion_zsh
   load_git_config
   configure_git
-  install_git_completion_zsh
   config_git_shell
   ;;
 deps)
   install_dependencies
+  ;;
+install)
+  install_git_completion_zsh
   ;;
 config)
   load_git_config
@@ -220,7 +253,6 @@ config)
   config_git_shell
   ;;
 reconfigure)
-  ACTION=reconfigure
   load_git_config
   configure_git
   install_git_completion_zsh
@@ -230,7 +262,7 @@ clean)
   clean_git_config
   ;;
 *)
-  echo "Usage: $0 {all|deps|config|reconfigure|clean}"
+  echo "Usage: $0 {all|deps|install|config|reconfigure|clean}"
   exit 1
   ;;
 esac

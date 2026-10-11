@@ -32,8 +32,9 @@ install() {
 config() {
   log "Generating zsh completion..."
   run_as_user mkdir -p "$COMPLETION_DIR"
-  run_as_user gh completion -s zsh > "$COMPLETION_FILE"
-  chown "$REAL_USER:$REAL_USER" "$COMPLETION_FILE"
+  # The redirect must happen in the user's shell, not the caller's (root)
+  # shellcheck disable=SC2016  # $1 is expanded by the inner sh
+  run_as_user sh -c 'gh completion -s zsh > "$1"' _ "$COMPLETION_FILE"
 
   deploy_config "$TEMPLATE_FILE" "$TARGET_FILE"
 }

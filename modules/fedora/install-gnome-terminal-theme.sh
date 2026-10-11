@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
-MODULE_NAME="ptyxis-theme"
+MODULE_NAME="gnome-terminal-theme"
 ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"

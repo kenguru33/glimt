@@ -5,8 +5,9 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
-MODULE_NAME="snapper"
+MODULE_NAME="btrfs-config"
 ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -45,7 +46,8 @@ disable_cow_dir() {
     return
   fi
 
-  if lsattr -d "$dir" 2>/dev/null | grep -q 'C'; then
+  # Check only the attribute field — the path itself may contain a capital C
+  if lsattr -d "$dir" 2>/dev/null | awk '{print $1}' | grep -q 'C'; then
     log "COW already disabled: $dir"
     return
   fi
@@ -138,8 +140,8 @@ config() {
   # -----------------------------------------------------
   # Disable COW on VM images (performance + safety)
   # -----------------------------------------------------
-  disable_cow_dir "/home/*/.local/share/gnome-boxes/images"
-  disable_cow_dir "/home/*/.VirtualBox"
+  disable_cow_dir "$HOME_DIR/.local/share/gnome-boxes/images"
+  disable_cow_dir "$HOME_DIR/.VirtualBox"
 
   log "Snapper configured: root timeline, dnf snapshots, COW disabled for VM images"
 }
@@ -167,6 +169,16 @@ clean() {
     sudo dnf remove -y snapper dnf-plugin-snapper
   else
     log "Snapper not installed — nothing to clean"
+  fi
+
+  # btrfs-assistant is a GUI installed by deps; btrfs-progs is a system
+  # component on Btrfs installs and is left alone.
+  if rpm -q btrfs-assistant &>/dev/null; then
+    if confirm "Remove btrfs-assistant?"; then
+      sudo dnf remove -y btrfs-assistant
+    else
+      log "Keeping btrfs-assistant"
+    fi
   fi
 }
 

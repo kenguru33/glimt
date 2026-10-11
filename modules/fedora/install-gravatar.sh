@@ -1,14 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Avatar setup failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
-MODULE_NAME="set-user-avatar"
+MODULE_NAME="gravatar"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
-
-ACTION="${1:-all}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$HOME_DIR/.config/glimt"
@@ -46,7 +45,15 @@ install_dependencies() {
 }
 
 # === Prompt user for email ===
+# Returns 1 (without prompting) when there is no terminal to ask on — modules
+# run non-interactively behind the progress bar, where a prompt would hang.
 prompt_user_email() {
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    warn "No Gravatar email in $CONFIG_FILE and no terminal to ask on — skipping avatar"
+    warn "Run '$0 reconfigure' from a terminal to set it"
+    return 1
+  fi
+
   if command -v gum &>/dev/null; then
     gum format --theme=dark <<EOF
 # 🖼️ Set your GNOME/GDM Avatar
@@ -85,10 +92,10 @@ load_email() {
   if [[ "$ACTION" == "reconfigure" ]]; then
     prompt_user_email
   elif [[ -f "$CONFIG_FILE" ]]; then
+    local gravatar_email=""
+    # shellcheck disable=SC1090
     source "$CONFIG_FILE"
-    if [[ -n "$gravatar_email" ]]; then
-      EMAIL="$gravatar_email"
-    fi
+    EMAIL="${gravatar_email:-}"
     if [[ -z "$EMAIL" ]]; then
       prompt_user_email
     fi
@@ -99,13 +106,20 @@ load_email() {
 
 # === Set avatar ===
 config_avatar() {
-  load_email
+  load_email || return 0
 
   HASH=$(echo -n "$EMAIL" | tr '[:upper:]' '[:lower:]' | md5sum | cut -d' ' -f1)
   GRAVATAR_URL="https://www.gravatar.com/avatar/$HASH?s=$SIZE&d=identicon"
 
   echo "⬇️  Downloading Gravatar from: $GRAVATAR_URL"
-  sudo -u "$REAL_USER" curl -sL "$GRAVATAR_URL" -o "$FACE_IMAGE"
+  # -f: an HTTP error must not end up as ~/.face; download next to it first so
+  # a failed download leaves an existing avatar untouched
+  if ! sudo -u "$REAL_USER" curl -fsSL "$GRAVATAR_URL" -o "$FACE_IMAGE.tmp"; then
+    sudo -u "$REAL_USER" rm -f "$FACE_IMAGE.tmp"
+    warn "Could not download Gravatar — avatar left unchanged"
+    return 0
+  fi
+  sudo -u "$REAL_USER" mv -f "$FACE_IMAGE.tmp" "$FACE_IMAGE"
   chown "$REAL_USER:$REAL_USER" "$FACE_IMAGE"
   echo "🖼️  Saved avatar to $FACE_IMAGE"
 

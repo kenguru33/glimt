@@ -1,14 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Starship install failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="starship"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,14 +27,15 @@ deps() {
 # === Step: install ===
 install() {
   echo "🚀 Installing Starship..."
-  mkdir -p "$LOCAL_BIN"
+  run_as_user mkdir -p "$LOCAL_BIN"
   if [[ ! -x "$LOCAL_BIN/starship" ]]; then
-    curl -fsSL https://starship.rs/install.sh | sh -s -- -y --bin-dir "$LOCAL_BIN"
+    # Download as the caller, but run the installer as the user so the binary
+    # in ~/.local/bin is owned by them (always tracks the latest release)
+    curl -fsSL https://starship.rs/install.sh | run_as_user sh -s -- -y --bin-dir "$LOCAL_BIN"
     echo "✅ Starship installed to $LOCAL_BIN"
   else
     echo "⏭️  Starship already installed"
   fi
-  chown "$REAL_USER:$REAL_USER" "$LOCAL_BIN/starship"
   verify_binary starship --version
 }
 

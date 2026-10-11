@@ -1,20 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ Volta setup failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="volta"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-ACTION="${1:-all}"
 CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/config/volta.zsh"
 TARGET_FILE="$CONFIG_DIR/volta.zsh"
-VOLTA_BIN="$HOME_DIR/.volta/bin/volta"
-VOLTA_ENV="export VOLTA_HOME=\"$HOME_DIR/.volta\"; export PATH=\"\$VOLTA_HOME/bin:\$PATH\""
+VOLTA_HOME_DIR="$HOME_DIR/.volta"
+VOLTA_BIN="$VOLTA_HOME_DIR/bin/volta"
 
 # === OS Check (Fedora only) ===
 if [[ -f /etc/os-release ]]; then
@@ -44,14 +44,18 @@ install() {
   echo "⬇️ Installing Volta for user $REAL_USER..."
 
   if [[ ! -x "$VOLTA_BIN" ]]; then
-    sudo -u "$REAL_USER" curl https://get.volta.sh | bash -s -- --skip-setup
+    # Run the installer itself as the user (not the caller) so ~/.volta is theirs
+    curl -fsSL https://get.volta.sh | run_as_user env VOLTA_HOME="$VOLTA_HOME_DIR" bash -s -- --skip-setup
     echo "✅ Volta installed to ~/.volta"
   else
     echo "⏭️  Volta already installed"
   fi
 
+  verify_binary "$VOLTA_BIN" --version
+
   echo "⬇️ Installing latest Node.js via Volta..."
-  sudo -u "$REAL_USER" env "$VOLTA_ENV" "$VOLTA_BIN" install node
+  run_as_user env VOLTA_HOME="$VOLTA_HOME_DIR" PATH="$VOLTA_HOME_DIR/bin:$PATH" \
+    "$VOLTA_BIN" install node
   echo "✅ Node.js installed via Volta"
 }
 

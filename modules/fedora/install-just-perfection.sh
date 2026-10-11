@@ -21,11 +21,23 @@ require_gnome() {
 # deps
 # --------------------------------------------------
 install_deps() {
-  log "Checking dependencies"
-  command -v curl >/dev/null || die "curl missing"
-  command -v jq >/dev/null || die "jq missing"
-  command -v gnome-extensions >/dev/null || die "gnome-extensions CLI missing"
-  log "Dependencies OK"
+  log "Installing dependencies"
+  # gnome-extensions (the CLI) ships with gnome-shell itself
+  sudo dnf install -y curl jq
+}
+
+# Print a gsettings string list ("['a', 'b']" or "@as []") without <item>
+gsettings_list_without() {
+  local list="$1" item="$2" out="" e
+  local -a items=()
+  list="${list#@as }"; list="${list#[}"; list="${list%]}"
+  IFS=',' read -ra items <<<"$list"
+  for e in "${items[@]}"; do
+    e="${e#"${e%%[![:space:]]*}"}"; e="${e%"${e##*[![:space:]]}"}"
+    [[ -z "$e" || "$e" == "'$item'" ]] && continue
+    out+="${out:+, }$e"
+  done
+  printf '[%s]' "$out"
 }
 
 # --------------------------------------------------
@@ -83,7 +95,7 @@ config_just_perfection() {
     current="$(run_as_user gsettings get org.gnome.shell enabled-extensions)"
     if [[ "$current" == *"$EXT_UUID"* ]]; then
       log "Just Perfection already enabled"
-    elif [[ "$current" == "[]" ]]; then
+    elif [[ "$current" == "[]" || "$current" == "@as []" ]]; then
       run_as_user gsettings set org.gnome.shell enabled-extensions "['$EXT_UUID']"
       log "Just Perfection enabled"
     else
@@ -102,6 +114,17 @@ clean_just_perfection() {
   log "Removing Just Perfection"
   run_as_user gnome-extensions disable "$EXT_UUID" 2>/dev/null || true
   run_as_user gnome-extensions uninstall "$EXT_UUID" 2>/dev/null || true
+
+  # config added the UUID to enabled-extensions — take it out again
+  if command -v gsettings >/dev/null 2>&1; then
+    local current
+    current="$(run_as_user gsettings get org.gnome.shell enabled-extensions 2>/dev/null || true)"
+    if [[ "$current" == *"'$EXT_UUID'"* ]]; then
+      run_as_user gsettings set org.gnome.shell enabled-extensions \
+        "$(gsettings_list_without "$current" "$EXT_UUID")" || true
+      log "Removed $EXT_UUID from enabled-extensions"
+    fi
+  fi
   log "Just Perfection removed"
 }
 

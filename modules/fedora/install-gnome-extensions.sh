@@ -4,7 +4,7 @@
 # Actions: all | deps | install | config | clean
 
 set -Eeuo pipefail
-trap 'echo "❌ gnome-extensions failed at line $LINENO" >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="gnome-extensions"
 ACTION="${1:-all}"
@@ -39,21 +39,13 @@ RPM_EXTENSIONS=(
 WEB_EXTENSION="tilingshell@ferrarodomenico.com"
 WEB_SEARCH="tiling-shell"
 
-TMP_ZIP="$(mktemp)"
-GNOME_MAJOR="$(gnome-shell --version | awk '{print int($3)}')"
-
 # --------------------------------------------------
 # deps
 # --------------------------------------------------
 deps() {
-  log "Checking dependencies"
-
-  command -v dnf >/dev/null || die "dnf not found"
-  command -v gnome-extensions >/dev/null || die "gnome-extensions CLI missing"
-  command -v curl >/dev/null || die "curl missing"
-  command -v jq >/dev/null || die "jq missing"
-
-  log "Dependencies OK"
+  log "Installing dependencies"
+  # gnome-extensions (the CLI) ships with gnome-shell itself
+  sudo dnf install -y jq curl
 }
 
 # --------------------------------------------------
@@ -70,7 +62,10 @@ install() {
 
   log "Installing Tiling Shell from extensions.gnome.org"
 
-  local meta pk info dl
+  command -v gnome-shell >/dev/null || die "gnome-shell not found — cannot pick a compatible Tiling Shell version"
+
+  local gnome_major meta pk info dl tmp_zip
+  gnome_major="$(gnome-shell --version | awk '{print int($3)}')"
   meta="$(curl -fsSL \
     "https://extensions.gnome.org/extension-query/?search=${WEB_SEARCH}" |
     jq -r --arg u "$WEB_EXTENSION" '.extensions[] | select(.uuid==$u)')"
@@ -80,13 +75,19 @@ install() {
   pk="$(jq -r '.pk' <<<"$meta")"
 
   info="$(curl -fsSL \
-    "https://extensions.gnome.org/extension-info/?pk=${pk}&shell_version=${GNOME_MAJOR}")"
+    "https://extensions.gnome.org/extension-info/?pk=${pk}&shell_version=${gnome_major}")"
 
   dl="$(jq -r '.download_url' <<<"$info")"
-  [[ "$dl" != "null" ]] || die "No compatible Tiling Shell version for GNOME $GNOME_MAJOR"
+  [[ "$dl" != "null" ]] || die "No compatible Tiling Shell version for GNOME $gnome_major"
 
-  curl -fsSL "https://extensions.gnome.org${dl}" -o "$TMP_ZIP"
-  gnome-extensions install --force "$TMP_ZIP"
+  tmp_zip="$(mktemp --suffix=.zip)"
+  # remove the download even when curl/install fails (die/ERR exit the script)
+  # shellcheck disable=SC2064  # expand $tmp_zip now, it is local
+  trap "rm -f '$tmp_zip'" EXIT
+  curl -fsSL "https://extensions.gnome.org${dl}" -o "$tmp_zip"
+  gnome-extensions install --force "$tmp_zip"
+  rm -f "$tmp_zip"
+  trap - EXIT
 
   log "Tiling Shell installed"
 }
@@ -144,5 +145,3 @@ case "$ACTION" in
     die "Unknown action: $ACTION (use: all | deps | install | config | clean)"
     ;;
 esac
-
-rm -f "$TMP_ZIP"

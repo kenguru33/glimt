@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ kubectx module failed. Exiting." >&2' ERR
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="kubectx"
+ACTION="${1:-all}"
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
@@ -11,8 +12,6 @@ source "$GLIMT_LIB"
 GLIMT_VERSIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../versions.env"
 # shellcheck source=../../versions.env
 source "$GLIMT_VERSIONS"
-
-ACTION="${1:-all}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_SRC="$SCRIPT_DIR/config/kubectx.zsh"
@@ -31,8 +30,8 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
-# kubectx/kubens release tarballs use "x86_64" (not "amd64"), so we cannot
-# use the shared normalize_arch() from lib.sh which returns "amd64".
+# Intentionally not lib.sh's normalize_arch(): kubectx/kubens release tarballs
+# are named with "x86_64" (not "amd64") — only arm64 matches the Go naming.
 normalize_arch_kubectx() {
   case "$(uname -m)" in
     x86_64)  echo "x86_64" ;;

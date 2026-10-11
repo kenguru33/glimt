@@ -1,15 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
+trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 MODULE_NAME="flatpak"
 ACTION="${1:-all}"
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
 
 GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # shellcheck source=lib.sh
 source "$GLIMT_LIB"
 
-MODULE="flatpak"
 REMOTE_NAME="flathub"
 REMOTE_URL="https://flathub.org/repo/flathub.flatpakrepo"
 
@@ -26,61 +25,68 @@ if [[ "$ID" != "fedora" && "$ID_LIKE" != *"fedora"* && "$ID" != "rhel" ]]; then
   exit 1
 fi
 
+has_remote() {
+  flatpak remote-list --columns=name 2>/dev/null | grep -qx "$REMOTE_NAME"
+}
+
 install_deps() {
-	echo "📦 Installing Flatpak dependencies..."
-	sudo dnf install -y flatpak
+  log "📦 Installing Flatpak..."
+  sudo dnf install -y flatpak
 }
 
 install_flatpak() {
-	echo "🔧 Installing Flatpak (core setup)..."
-	sudo dnf install -y flatpak
-
-	if ! flatpak remote-list | grep -q "^${REMOTE_NAME}"; then
-		echo "🌐 Adding Flathub remote..."
-		sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
-	else
-		echo "✅ Flathub remote already added."
-	fi
+  log "🔧 Setting up Flathub remote..."
+  if ! has_remote; then
+    log "🌐 Adding Flathub remote..."
+    sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
+  else
+    log "✅ Flathub remote already added."
+  fi
 }
 
 config_flatpak() {
-	echo "⚙️  Ensuring Flathub is set up..."
-	if ! flatpak remote-list | grep -q "^${REMOTE_NAME}"; then
-		sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
-	fi
-	echo "✅ Flatpak is configured with Flathub."
+  log "⚙️  Ensuring Flathub is set up..."
+  if ! has_remote; then
+    sudo flatpak remote-add --if-not-exists "$REMOTE_NAME" "$REMOTE_URL"
+  fi
+  log "✅ Flatpak is configured with Flathub."
 }
 
+# Flatpak itself is a preinstalled system component on Fedora Workstation
+# (GNOME Software depends on it), so clean only removes the remote glimt added.
 clean_flatpak() {
-	echo "🧹 Removing Flatpak and Flathub..."
-	sudo flatpak remote-delete "$REMOTE_NAME" || true
-	sudo dnf remove -y flatpak || true
-	echo "✅ Flatpak removed."
+  log "🧹 Removing Flathub remote..."
+  if command -v flatpak >/dev/null 2>&1 && has_remote; then
+    if sudo flatpak remote-delete "$REMOTE_NAME"; then
+      log "✅ Flathub remote removed (flatpak itself is left installed)."
+    else
+      warn "Could not remove the $REMOTE_NAME remote (apps still installed from it?)"
+    fi
+  else
+    log "ℹ️  Flathub remote not configured — nothing to clean"
+  fi
 }
 
 # === Entry point ===
 case "$ACTION" in
 deps)
-	install_deps
-	;;
+  install_deps
+  ;;
 install)
-	install_flatpak
-	;;
+  install_flatpak
+  ;;
 config)
-	config_flatpak
-	;;
+  config_flatpak
+  ;;
 clean)
-	clean_flatpak
-	;;
+  clean_flatpak
+  ;;
 all)
-	install_deps
-	install_flatpak
-	config_flatpak
-	;;
+  install_deps
+  install_flatpak
+  config_flatpak
+  ;;
 *)
-	echo "Usage: $0 {deps|install|config|clean|all}"
-	exit 1
-	;;
+  die "Unknown action: $ACTION (use: all | deps | install | config | clean)"
+  ;;
 esac
-
-
