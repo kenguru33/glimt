@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to Codex when working with code in this repository.
 
 ## What this project is
 
-Glimt is a **Fedora-only** post-installation automation tool. It installs and configures a development environment (shell, GNOME, Kubernetes tooling, etc.) on a fresh Fedora install. There is no build step, no test suite, and no package manager — everything is bash.
+Glimt is a **Fedora-only** post-installation automation tool. It installs and configures a development environment (shell, GNOME, Kubernetes tooling, etc.) on a fresh Fedora install. There is no build step and no package manager — everything is bash, including the test suite in `tests/run.sh`.
 
 ## Running things
 
@@ -30,6 +30,14 @@ glimt clean <module>
 glimt update
 glimt module-selection
 ```
+
+Tests (plain bash, no dependencies; run before merging):
+```bash
+bash tests/run.sh          # all tests
+bash tests/run.sh zsh      # only tests whose name contains "zsh"
+bash tests/run.sh -v       # also show output of passing tests
+```
+Module functions run against stubbed `sudo`/`dnf`/`rpm`/`brew` with a throwaway `$HOME`, so the suite is safe on a dev machine (macOS or Fedora). Use `run_module_fn <os> <module> <function>` to test a module function; add a `test_*` function and the runner picks it up.
 
 Static analysis (no CI enforces this, but useful):
 ```bash
@@ -72,6 +80,8 @@ After sourcing, available globals and functions:
 - `deploy_config <src> <dest>` — copies a template to dest, **automatically backs up** any existing file with a timestamp before overwriting, then prunes old backups. Skips the backup when dest is already identical to src (the copy still runs, so mode/ownership are re-applied)
 - `prune_backups <dest>` — keeps only the newest `$GLIMT_BACKUP_RETENTION` (default 3) `<dest>.bak.<timestamp>` files. Called by `deploy_config`; set `GLIMT_BACKUP_RETENTION=N` to override, `0` to keep none
 - `verify_binary <bin> [args]` — warns (does not abort) if a binary isn't functional after install
+- `confirm <question>` — y/N prompt for optional steps (e.g. "also remove the package?" in `clean`). Answers "no" when there's no terminal (modules usually run behind the progress bar); `GLIMT_ASSUME_YES=1` answers "yes". Never use a bare `read -rp` in a module
+- `dnf_ensure <pkg>...` — installs missing packages and upgrades installed ones. Use it instead of `sudo dnf install -y` for package lists: plain `dnf install` leaves an installed package at its old version, so `glimt update` would never update it
 - `normalize_arch()` — maps `uname -m` to Go/Kubernetes naming (`x86_64`→`amd64`, `aarch64`→`arm64`); dies on unsupported arch. Use in any module that downloads architecture-specific binaries.
 
 ### Pinned versions — `versions.env`
@@ -95,7 +105,7 @@ Extras use `../../../versions.env`.
 - Then runs all remaining core modules via `find`, sorted alphabetically
 - Calls `setup-extras.sh` at the end for optional modules
 
-`setup-extras.sh` presents a `gum choose` UI and tracks selections in `~/.config/glimt/optional-extras.selected`. On re-run it installs newly selected modules and cleans deselected ones.
+`setup-extras.sh` presents a `gum choose` UI and tracks selections in `~/.config/glimt/optional-extras.selected`. On re-run it installs newly selected modules and cleans deselected ones. `glimt install <extra>` / `glimt clean <extra>` add/remove the module in that file, and `glimt update` only updates selected extras that are still installed (it asks `setup-extras.sh installed <module>...`, which reuses the picker's detection) — a missing one is dropped from the list instead of being reinstalled.
 
 ### Shell scripting conventions
 
@@ -104,7 +114,7 @@ Every module header must follow this pattern:
 ```bash
 #!/usr/bin/env bash
 set -Eeuo pipefail
-trap 'echo "❌ [$MODULE_NAME] Error on line $LINENO" >&2' ERR
+trap 'echo "[$MODULE_NAME] error on line $LINENO" >&2' ERR
 
 MODULE_NAME="my-module"
 ACTION="${1:-all}"
@@ -113,12 +123,16 @@ GLIMT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 source "$GLIMT_LIB"
 ```
 
+`glimt update` snapshots installed versions (brew/mas, rpm/flatpak, checksums of `~/.local/bin`) before and after the run and prints what was updated, installed or removed (`glimt_versions` / `glimt_changes` in `setup-lib.sh`). Modules should therefore skip work when the installed version is already current — no re-download, no reinstall.
+
 Rules enforced across the codebase:
-- `set -Eeuo pipefail` on every script — no exceptions
+- `set -Eeuo pipefail` on every module — no exceptions. The orchestrators `setup.sh` and `setup-macos.sh` deliberately use `set -Euo pipefail` (no `-e`) so one failing module can't stop the whole run; modules are run through `progress_run` (in `setup-lib.sh`), which records failures and always returns 0
 - `deploy_config` instead of bare `cp` for any config template deployment
 - `sudo dnf makecache -y` only in `setup.sh`, never in modules
 - Use `run_as_user` / `sudo -u "$REAL_USER"` for any file operations in user home — never write to `$HOME` directly when running under sudo
 - Post-install: call `verify_binary` for any binary the module downloads
+- Prompts (e.g. "also remove the package?" in `clean`) go through `confirm`, never a bare `read`: modules usually run behind the progress bar with no terminal. Any other prompt (e.g. asking for a name) must check `[[ -t 0 && -t 1 ]]` first and fall back to a default — never `read </dev/tty`, which still reaches the terminal behind the bar and hangs invisibly
+- Versions: only the binaries in `versions.env` are pinned. Everything else (kubectl, starship, zellij, Node, papirus, PowerShell, dnf/brew packages) deliberately tracks the latest release so `glimt update` keeps it current
 - Extras modules must include a `fedora_guard` call at the top (copy the pattern from `modules/fedora/extras/install-spotify.sh`) to abort gracefully on non-Fedora systems
 
 ### Creating new modules
@@ -147,7 +161,8 @@ After setup, `glimt.sh` is installed to `~/.local/bin/glimt` for ongoing managem
 `setup-macos.sh` is the macOS orchestrator. It installs terminal tooling only (no GNOME/desktop):
 - **Modules live in** `modules/macos/` with a matching `modules/macos/lib.sh`
 - **Key differences from Fedora lib.sh**: uses `dscl` instead of `getent` for `HOME_DIR`; `run_as_user` is a no-op wrapper when not running as root (brew must not run as root); `normalize_arch` handles both `arm64` (Apple Silicon) and `x86_64`
-- **Package manager**: Homebrew — no `sudo` needed for `brew install`
+- **Installing with brew**: use `brew_ensure [--cask] <name>...` / `brew_cask_install` / `mas_install` from the macOS lib, never a bare `brew install` — they install what is missing, upgrade only what is outdated and skip the rest. `glimt update` runs `brew update` once and exports `GLIMT_BREW_OUTDATED` + `HOMEBREW_NO_AUTO_UPDATE=1` so this is fast
+- **Package manager**: Homebrew — no `sudo` needed for `brew install`. Casks (`brew_cask_install`, `brew uninstall --cask`) and `mas` may run `sudo` themselves, so the orchestrators ask for the password up front for those modules (`glimt_needs_sudo` in `setup-lib.sh`) and hand it to brew via `SUDO_ASKPASS`
 - **Nerd fonts**: installed via `brew install --cask font-*-nerd-font` (no wget/unzip)
 - **Terminal theme**: `install-iterm2-theme.sh` downloads Catppuccin Mocha `.itermcolors` and imports it into iTerm2 via `open`
 - **Priority modules** (run first): `install-nerdfonts.sh`, `install-zsh.sh`, `install-starship.sh`
