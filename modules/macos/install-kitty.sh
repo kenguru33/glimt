@@ -24,6 +24,8 @@ install() {
 config() {
   mkdir -p "$KITTY_CONFIG_DIR"
   deploy_config "$SCRIPT_DIR/config/kitty.conf" "$KITTY_CONFIG_DIR/kitty.conf"
+  # draw_title() for tab_title_template "{custom}" (project + Claude Code title).
+  deploy_config "$SCRIPT_DIR/config/kitty-tab-bar.py" "$KITTY_CONFIG_DIR/tab_bar.py"
 
   # Default startup session, restored by the kitty() shell wrapper when kitty
   # is launched with no arguments and no project-local .kitty.session exists.
@@ -99,6 +101,7 @@ clean() {
   command -v fileicon &>/dev/null && fileicon rm /Applications/kitty.app 2>/dev/null || true
   brew uninstall --cask kitty 2>/dev/null || true
   rm -f "$KITTY_CONFIG_DIR/kitty.conf"
+  rm -f "$KITTY_CONFIG_DIR/tab_bar.py"
   rm -f "$KITTY_CONFIG_DIR/default.session"
   rm -f "$KITTY_CONFIG_DIR/save-session.sh"
   rm -f "$KITTY_CONFIG_DIR/open-session.sh"
