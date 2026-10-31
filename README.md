@@ -193,6 +193,12 @@ glimt update                # pull latest and re-run
 
 ---
 
+## ⌨️ Keyboard shortcuts
+
+Glimt adds shortcuts for kitty splits and sessions, fzf completion in the shell, and the Norwegian Mac keyboard on Fedora. See **[docs/SHORTCUTS.md](docs/SHORTCUTS.md)**.
+
+---
+
 ## 📝 Notes
 
 **Git credentials (Fedora)** — uses `git-credential-libsecret` backed by GNOME Keyring. Enable the socket if needed:
