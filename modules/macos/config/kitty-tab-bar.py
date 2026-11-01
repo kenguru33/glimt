@@ -8,6 +8,10 @@
 # tab running Claude stays recognisable. Shell titles that are just the cwd
 # path are dropped, since the project name already says that.
 #
+# A window running zellij reports "session | pane title" (zellij's own format).
+# zellij.zsh names sessions after the project, so the session becomes the
+# project and the focused zellij pane's title (e.g. Claude's) the title.
+#
 # Anything unexpected falls back to kitty's own title: an exception here would
 # otherwise leave the tab blank.
 import os
@@ -15,17 +19,20 @@ import os
 from kitty.fast_data_types import get_boss
 
 
-def _is_claude(window):
+def _foreground(window):
+    # 'claude', 'zellij' or None for the program running in the window.
     try:
         procs = window.child.foreground_processes
     except Exception:
-        return False
+        return None
     for proc in procs:
         for arg in (proc.get('cmdline') or [])[:2]:
             # Native installs run `claude`; npm installs run `node .../claude-code/cli.js`.
             if os.path.basename(arg) == 'claude' or '/claude-code/' in arg:
-                return True
-    return False
+                return 'claude'
+            if os.path.basename(arg) == 'zellij':
+                return 'zellij'
+    return None
 
 
 _repo_roots = {}
@@ -65,13 +72,22 @@ def _draw(data):
     tab = get_boss().tab_for_id(accessor.tab_id)
     title = data['title']
     cwd = accessor.active_oldest_wd
+    project = None
+    zellij = None
     if tab is not None:
         for window in tab:
-            if _is_claude(window):
+            kind = _foreground(window)
+            if kind == 'claude':
                 title = window.title
                 cwd = window.cwd_of_child or cwd
+                zellij = None
                 break
-    project = _project(cwd)
+            if kind == 'zellij' and zellij is None:
+                zellij = window
+    if zellij is not None:
+        project, _, title = zellij.title.partition(' | ')
+    if not project:
+        project = _project(cwd)
     if title.startswith(('~', '/')):
         title = ''
     session = data.get('session_name') or ''

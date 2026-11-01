@@ -48,6 +48,40 @@ Tabs are named automatically as `[session] project · title`:
 
 ---
 
+## 🪟 zellij (optional extra, macOS and Fedora)
+
+Configured in `~/.config/zellij/config.kdl` (from `modules/<os>/config/zellij.kdl`).
+
+zellij starts **locked**: every `Ctrl` key goes to the program in the pane, so Claude Code's own shortcuts (`Ctrl+T`, `Ctrl+O`, `Ctrl+B`, …) work. Unlock zellij first, then press one letter:
+
+| Shortcut | Action |
+|---|---|
+| `⌃ G` | **Unlock** zellij (press again, `Esc` or `Enter` to lock) |
+| `⌃ G` `p` | Pane mode — `n` new, `r` right, `d` down, `x` close, `f` fullscreen, `w` floating, `c` rename |
+| `⌃ G` `t` | Tab mode — `n` new, `r` rename, `x` close, `1`–`9` go to tab, `←` `→` previous/next |
+| `⌃ G` `r` | Resize mode — `←` `↓` `↑` `→` or `h` `j` `k` `l` |
+| `⌃ G` `m` | Move the pane — arrows or `h` `j` `k` `l` |
+| `⌃ G` `s` | Scroll mode — `f` search, `e` open scrollback in your editor |
+| `⌃ G` `o` | Session mode — `d` detach, `w` session manager, `c` settings |
+| `⌃ G` `⌃ Q` | Quit zellij |
+
+These also work while locked:
+
+| Shortcut | Action |
+|---|---|
+| `⌥ N` | New pane |
+| `⌥ ←` `→` `↑` `↓` (or `⌥ H` `J` `K` `L`) | Move focus between panes and tabs |
+| `⌥ F` | Show/hide floating panes |
+| `⌥ =` / `⌥ -` | Resize the pane |
+
+`⌃ G` is also Claude Code's "open in editor" key, so inside zellij that key unlocks zellij instead. To get the editor back, give it another key with `/keybindings` in Claude Code.
+
+**Sessions are named after the project.** A new terminal opens a session named after the git repository you are in (`.glimt` → `glimt`), or the folder name outside a repo. If that session is already open in another terminal, you get `glimt-2`, `glimt-3`, …; an exited session is brought back instead. Tabs are renamed after the project when you `cd` into another repo. Every pane shows its title in a title row, so a pane running Claude Code shows `✳` (idle) or a spinner (working) and the topic.
+
+To stop zellij from starting automatically, add `export GLIMT_ZELLIJ_AUTOSTART=0` to `~/.zshenv`.
+
+---
+
 ## 🐚 Shell (zsh, macOS and Fedora)
 
 | Shortcut | Action |

@@ -13,6 +13,7 @@ ZELLIJ_CONFIG_DIR="$HOME_DIR/.config/zellij"
 ZELLIJ_CONFIG_FILE="$ZELLIJ_CONFIG_DIR/config.kdl"
 ZSH_CONFIG_DIR="$HOME_DIR/.zsh/config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KDL_TEMPLATE="$SCRIPT_DIR/../config/zellij.kdl"
 
 macos_guard() {
   [[ "$(uname -s)" == "Darwin" ]] || die "macOS only."
@@ -26,43 +27,9 @@ install() {
 }
 
 config() {
-  log "Configuring Zellij theme..."
+  log "Configuring Zellij..."
   mkdir -p "$ZELLIJ_CONFIG_DIR"
-
-  cat > "$ZELLIJ_CONFIG_FILE" <<'EOF'
-theme "catppuccin-mocha"
-
-themes {
-  catppuccin-mocha {
-    fg "#cdd6f4"
-    bg "#1e1e2e"
-    black "#45475a"
-    red "#f38ba8"
-    green "#a6e3a1"
-    yellow "#f9e2af"
-    blue "#89b4fa"
-    magenta "#f5c2e7"
-    cyan "#94e2d5"
-    white "#bac2de"
-    orange "#fab387"
-  }
-}
-
-default_layout "compact"
-default_mode "normal"
-
-copy_on_select true
-copy_clipboard "system"
-copy_command "pbcopy"
-mouse_mode true
-
-// Forward OSC8 hyperlinks to the host terminal so shift+click opens file links
-// in kitty (shift bypasses zellij's mouse capture). Without this, zellij strips
-// the link and kitty sees only plain text — nothing happens on shift+click.
-osc8_hyperlinks true
-EOF
-
-  log "Theme written to $ZELLIJ_CONFIG_FILE"
+  deploy_config "$KDL_TEMPLATE" "$ZELLIJ_CONFIG_FILE"
 
   log "Deploying zellij.zsh config..."
   mkdir -p "$ZSH_CONFIG_DIR"
@@ -71,7 +38,17 @@ EOF
 
 clean() {
   brew uninstall zellij 2>/dev/null || true
-  rm -rf "$ZELLIJ_CONFIG_DIR"
+  # Only remove the config glimt deployed (unless the user edited it), and
+  # keep any layouts/themes the user added
+  if [[ -f "$ZELLIJ_CONFIG_FILE" ]]; then
+    if cmp -s "$ZELLIJ_CONFIG_FILE" "$KDL_TEMPLATE"; then
+      rm -f "$ZELLIJ_CONFIG_FILE"
+      log "Removed config: $ZELLIJ_CONFIG_FILE"
+    else
+      log "Kept edited config: $ZELLIJ_CONFIG_FILE"
+    fi
+  fi
+  rmdir "$ZELLIJ_CONFIG_DIR" 2>/dev/null || true
   rm -f "$ZSH_CONFIG_DIR/zellij.zsh"
 }
 

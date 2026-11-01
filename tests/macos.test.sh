@@ -231,3 +231,96 @@ test_brew_cask_install_upgrades_outdated_cask() {
   out="$(BREW_INSTALLED="discord" GLIMT_BREW_OUTDATED="" run_module_fn macos modules/macos/extras/install-discord.sh install 2>&1)" || fail "$out"
   assert_contains "$out" "discord is up to date"
 }
+
+# --- zellij ----------------------------------------------------------
+
+# Like fx_run_fn (fedora-extras.test.sh) for macOS extras: they resolve
+# templates as "$SCRIPT_DIR/../config", so load into $SB/extras with $SB/config
+# linked to the real macOS templates.
+mx_run_fn() { # <module file under modules/macos/extras> <function> [args...]
+  local file="$1" fn="$2"
+  shift 2
+  mkdir -p "$SB/extras"
+  [[ -e "$SB/config" ]] || ln -s "$ROOT/modules/macos/config" "$SB/config"
+  local loaded="$SB/extras/$(basename "$file")"
+  load_definitions "$ROOT/modules/macos/extras/$file" >"$loaded"
+  cat >"$SB/.mx-driver.sh" <<DRIVER
+set -Eeuo pipefail
+trap 'echo "ERR trap: line \$LINENO: \$BASH_COMMAND" >&2' ERR
+MODULE_NAME=test
+source "$ROOT/modules/macos/lib.sh"
+source "$ROOT/tests/trace-run-as-user.bash"
+[[ "\$HOME_DIR" == "$SB" ]] || { echo "SAFETY ABORT: HOME_DIR=\$HOME_DIR" >&2; exit 99; }
+source "$loaded"
+$fn "\$@"
+DRIVER
+  with_timeout 20 "$BASH" "$SB/.mx-driver.sh" "$@" </dev/null
+}
+
+test_zellij_macos_config_deploys_templates_with_backup() {
+  mkdir -p "$SB/.config/zellij"
+  echo 'theme "my-own"' >"$SB/.config/zellij/config.kdl"
+  local out
+  out="$(mx_run_fn install-zellij.sh config 2>&1)" || fail "$out"
+  cmp -s "$ROOT/modules/macos/config/zellij.kdl" "$SB/.config/zellij/config.kdl" || fail "config.kdl differs from template"
+  compgen -G "$SB/.config/zellij/config.kdl.bak.*" >/dev/null || fail "user's config.kdl should be backed up: $out"
+  cmp -s "$ROOT/modules/macos/config/zellij.zsh" "$SB/.zsh/config/zellij.zsh" || fail "zellij.zsh differs from template"
+}
+
+test_zellij_macos_clean_keeps_user_layouts_and_edited_config() {
+  mkdir -p "$SB/.config/zellij/layouts" "$SB/.zsh/config"
+  touch "$SB/.config/zellij/layouts/mine.kdl" "$SB/.zsh/config/zellij.zsh"
+  echo "edited" >"$SB/.config/zellij/config.kdl"
+  local out
+  out="$(mx_run_fn install-zellij.sh clean 2>&1)" || fail "$out"
+  assert_exists "$SB/.config/zellij/layouts/mine.kdl"
+  assert_exists "$SB/.config/zellij/config.kdl"
+  assert_missing "$SB/.zsh/config/zellij.zsh"
+  # an untouched config is removed, and the then-empty dir with it
+  cp "$ROOT/modules/macos/config/zellij.kdl" "$SB/.config/zellij/config.kdl"
+  rm -rf "$SB/.config/zellij/layouts"
+  out="$(mx_run_fn install-zellij.sh clean 2>&1)" || fail "$out"
+  assert_missing "$SB/.config/zellij"
+}
+
+# The macOS and Fedora zellij setups must stay identical apart from clipboard.
+test_zellij_templates_match_across_os() {
+  local strip='/^copy_command |^paste_command /d'
+  assert_eq "$(sed -E "$strip" "$ROOT/modules/macos/config/zellij.kdl")" \
+    "$(sed -E "$strip" "$ROOT/modules/fedora/config/zellij.kdl")" "zellij.kdl (minus clipboard lines):"
+  cmp -s "$ROOT/modules/macos/config/zellij.zsh" "$ROOT/modules/fedora/config/zellij.zsh" ||
+    fail "zellij.zsh differs between macOS and Fedora"
+  assert_contains "$(cat "$ROOT/modules/macos/config/zellij.kdl")" 'default_mode "locked"'
+  assert_not_contains "$(cat "$ROOT/modules/macos/config/zellij.kdl")" 'bind "Alt p"' "zellij.kdl (Claude's Alt+P)"
+}
+
+# Session/tab naming in zellij.zsh, with a stub `zellij` whose list-sessions
+# prints $FAKE_LS. Sourcing is safe: auto-start needs a terminal and a real
+# zellij on PATH.
+test_zellij_zsh_names_sessions_after_the_project() {
+  command -v zsh >/dev/null || skip "zsh not installed"
+  local h="$SB/home"
+  mkdir -p "$h/code/.glimt/.git" "$h/code/.glimt/modules/macos" "$h/My Proj.v2"
+  local out
+  out="$(HOME="$h" zsh -fc '
+    zellij() { print -r -- "$FAKE_LS"; }
+    source "$1"
+    cd ~/code/.glimt/modules/macos; print "subdir=$(_glimt_project_name)"
+    cd ~; print "home=$(_glimt_project_name)"
+    cd ~/"My Proj.v2"; print "odd=$(_glimt_project_name)"
+    cd ~/code/.glimt
+    FAKE_LS=""; print "free=$(_glimt_zellij_session)"
+    FAKE_LS="glimt [Created 1h ago] (current)"; print "live=$(_glimt_zellij_session)"
+    FAKE_LS="glimt [Created 1h ago] (EXITED - attach to resurrect)"; print "exited=$(_glimt_zellij_session)"
+    FAKE_LS=$'"'"'glimt [Created 1h ago]\nglimt-2 [Created 1m ago]'"'"'; print "two=$(_glimt_zellij_session)"
+    FAKE_LS="glimt-old [Created 1h ago]"; print "prefix=$(_glimt_zellij_session)"
+  ' _ "$ROOT/modules/macos/config/zellij.zsh" </dev/null 2>&1)" || fail "$out"
+  assert_contains "$out" "subdir=glimt"
+  assert_contains "$out" "home=home"
+  assert_contains "$out" "odd=My-Proj-v2"
+  assert_contains "$out" "free=glimt"
+  assert_contains "$out" "live=glimt-2"
+  assert_contains "$out" "exited=glimt"$'\n'
+  assert_contains "$out" "two=glimt-3"
+  assert_eq "${out##*$'\n'}" "prefix=glimt" "last line:"
+}
