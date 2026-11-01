@@ -161,7 +161,7 @@ Selecting text with the mouse copies it to the clipboard.
 
 `Alt P` is left out on purpose: it is Claude Code's model picker.
 
-On **macOS**, kitty sends `⌥` as a character (`⌥ 7` → `|` on the Norwegian keyboard), not as Alt, so these shortcuts don't reach zellij there. Use the `⌃ G` modes instead. On **Fedora** they work as listed.
+On **macOS**, `Alt` is the **right** `⌥` key: kitty sends it as Alt, while the left `⌥` still types characters (`⌥ 7` → `|` on the Norwegian keyboard). On **Fedora**, `Alt` works as listed.
 
 ### Sessions
 
