@@ -29,6 +29,9 @@ pane_frames true
 pane_frame_style "titles"
 
 show_startup_tips false
+// Every terminal starts a fresh session: an exited session is not kept to be
+// resurrected (it would bring back whatever ran last, e.g. `claude -r`).
+session_serialization false
 
 copy_on_select true                 // selecting text copies immediately
 copy_clipboard "system"             // use system clipboard (not PRIMARY)

@@ -76,7 +76,7 @@ Adapt Glimt's zellij setup (macOS and Fedora extras) for working with Claude Cod
 - **Two terminals, same project:** both attach to the same session; this is zellij's normal multi-client behavior.
 - **Same repo name, different paths** (e.g. two clones called `api`): sessions must not merge by accident. Disambiguate the name (e.g. with the parent folder) or ask.
 - **Invalid session names:** zellij rejects some characters, and repo names may start with a dot (e.g. `.glimt`). Names are sanitized so session creation never fails.
-- **Exited session with the same name:** the auto-start resurrects it or replaces it cleanly instead of failing.
+- **Exited session with the same name:** the auto-start replaces it cleanly instead of failing.
 - **SSH, VS Code terminal, tmux, non-interactive shells:** the auto-start stays off, as today.
 - **kitty splits and kitty sessions:** each kitty split today starts its own zellij via auto-start. Opening a kitty session that runs `claude -r` must not nest zellij or start duplicate sessions for the same project.
 - **Claude in a subfolder:** a Claude Code session started in a subfolder of a repo is named after the repo, not the subfolder.
@@ -109,7 +109,7 @@ Adapt Glimt's zellij setup (macOS and Fedora extras) for working with Claude Cod
 
 - **Status bar:** the built-in compact bar, plus pane title frames (`pane_frame_style "titles"`). No plugin.
 - **Keybindings:** zellij's Unlock-First preset with `Ctrl+G` to unlock. It is copied into the template from zellij v0.45.1, because no released zellij can pick a preset by name yet. `Alt+P` (pane groups) is left out because it is Claude Code's model picker.
-- **Second terminal in a project:** a live session is never shared. You get `name-2`, `name-3`, …, and an exited session is resurrected.
+- **Second terminal in a project:** a live session is never shared. You get `name-2`, `name-3`, …. Sessions are not resurrected (`session_serialization false`): a resurrected session brought back whatever ran last, e.g. `claude -r` in another project, which was confusing.
 - **Auto-start:** stays on, with `GLIMT_ZELLIJ_AUTOSTART=0` as the opt-out.
 - **Notifications:** zellij 0.44.1+ forwards OSC 99, and 0.45.0+ forwards OSC 9/777 and focus events, so no workaround is needed.
-- **Known limitation (duplicate repo names):** sessions are named only after the repo, so two clones called `api` share the name prefix. An exited `api` session may be resurrected from the other clone's folder.
+- **Known limitation (duplicate repo names):** sessions are named only after the repo, so two clones called `api` share the name prefix.

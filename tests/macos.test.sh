@@ -291,6 +291,7 @@ test_zellij_templates_match_across_os() {
   cmp -s "$ROOT/modules/macos/config/zellij.zsh" "$ROOT/modules/fedora/config/zellij.zsh" ||
     fail "zellij.zsh differs between macOS and Fedora"
   assert_contains "$(cat "$ROOT/modules/macos/config/zellij.kdl")" 'default_mode "locked"'
+  assert_contains "$(cat "$ROOT/modules/macos/config/zellij.kdl")" "session_serialization false"
   assert_not_contains "$(cat "$ROOT/modules/macos/config/zellij.kdl")" 'bind "Alt p"' "zellij.kdl (Claude's Alt+P)"
 }
 
@@ -302,8 +303,9 @@ test_zellij_zsh_names_sessions_after_the_project() {
   local h="$SB/home"
   mkdir -p "$h/code/.glimt/.git" "$h/code/.glimt/modules/macos" "$h/My Proj.v2"
   local out
+  export DELETED="$SB/deleted"
   out="$(HOME="$h" zsh -fc '
-    zellij() { print -r -- "$FAKE_LS"; }
+    zellij() { [[ $1 == delete-session ]] && print -r -- "$*" >>"$DELETED"; print -r -- "$FAKE_LS"; }
     source "$1"
     cd ~/code/.glimt/modules/macos; print "subdir=$(_glimt_project_name)"
     cd ~; print "home=$(_glimt_project_name)"
@@ -315,6 +317,8 @@ test_zellij_zsh_names_sessions_after_the_project() {
     FAKE_LS=$'"'"'glimt [Created 1h ago]\nglimt-2 [Created 1m ago]'"'"'; print "two=$(_glimt_zellij_session)"
     FAKE_LS="glimt-old [Created 1h ago]"; print "prefix=$(_glimt_zellij_session)"
   ' _ "$ROOT/modules/macos/config/zellij.zsh" </dev/null 2>&1)" || fail "$out"
+  # An exited session is deleted, not resurrected, so the terminal starts fresh.
+  assert_eq "$(cat "$DELETED")" "delete-session glimt" "deleted:"
   assert_contains "$out" "subdir=glimt"
   assert_contains "$out" "home=home"
   assert_contains "$out" "odd=My-Proj-v2"

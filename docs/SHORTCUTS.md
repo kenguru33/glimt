@@ -66,7 +66,7 @@ zellij starts **locked**: every key goes to the program in the pane, so Claude C
 | `⌃ G` `m` | Move mode |
 | `⌃ G` `s` | Scroll mode |
 | `⌃ G` `o` | Session mode |
-| `⌃ G` `⌃ Q` | Quit zellij (the session ends; it can be resurrected later) |
+| `⌃ G` `⌃ Q` | Quit zellij (the session ends) |
 
 Most actions lock zellij again by themselves, so `⌃ G` `p` `n` opens a pane and you are straight back in the program.
 
@@ -140,7 +140,7 @@ Selecting text with the mouse copies it to the clipboard.
 
 | Key | Action |
 |---|---|
-| `w` | Session manager: switch to, create or resurrect sessions |
+| `w` | Session manager: switch to or create sessions |
 | `d` | Detach (the session keeps running; reattach from the session manager or `zellij attach <name>`) |
 | `c` | Settings |
 | `l` | Layout manager |
@@ -165,13 +165,12 @@ On **macOS**, `Alt` is the **right** `⌥` key: kitty sends it as Alt, while the
 
 ### Sessions
 
-**Sessions are named after the project.** A new terminal opens a session named after the git repository you are in (`.glimt` → `glimt`), or the folder name outside a repo. If that session is already open in another terminal, you get `glimt-2`, `glimt-3`, …; an exited session is brought back instead, with its tabs and panes. Every pane shows its title in a title row, so a pane running Claude Code shows `✳` (idle) or a spinner (working) and the topic.
+**Sessions are named after the project.** A new terminal opens a session named after the git repository you are in (`.glimt` → `glimt`), or the folder name outside a repo. If that session is already open in another terminal, you get `glimt-2`, `glimt-3`, …. A session ends when you close its terminal, so every new terminal starts with a plain shell; nothing from last time comes back. Every pane shows its title in a title row, so a pane running Claude Code shows `✳` (idle) or a spinner (working) and the topic.
 
 | Command | Action |
 |---|---|
-| `zellij list-sessions` | List sessions, live and exited |
+| `zellij list-sessions` | List the running sessions |
 | `zellij attach <name>` | Attach to a session |
-| `zellij delete-session <name>` | Forget an exited session, so the next terminal starts blank |
 
 To stop zellij from starting automatically, add `export GLIMT_ZELLIJ_AUTOSTART=0` to `~/.zshenv`.
 

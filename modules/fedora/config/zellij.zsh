@@ -25,9 +25,11 @@ _glimt_project_name() {
   print -r -- ${name:-home}
 }
 
-# Session to start for this project: the project name if free or exited
-# (attach resurrects it), else the first free/exited of name-2, name-3, ...
-# A live session is never shared, so two terminals don't mirror each other.
+# Session to start for this project: the project name if free, else the first
+# free of name-2, name-3, ... A live session is never shared, so two terminals
+# don't mirror each other. An exited session (left from before
+# session_serialization was turned off) is deleted, so the terminal starts
+# fresh instead of resurrecting whatever ran there last.
 _glimt_zellij_session() {
   local base name n=1 sessions line
   base=$(_glimt_project_name)
@@ -35,7 +37,11 @@ _glimt_zellij_session() {
   name=$base
   while :; do
     line=${(M)${(f)sessions}:#${name} *}
-    [[ -z $line || $line == *EXITED* ]] && break
+    [[ -z $line ]] && break
+    if [[ $line == *EXITED* ]]; then
+      zellij delete-session "$name" &>/dev/null
+      break
+    fi
     (( n++ ))
     name=$base-$n
   done
